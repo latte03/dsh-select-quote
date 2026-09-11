@@ -1,5 +1,18 @@
-# Development / install layer for dsh-select-quote.
-# Local --patch overlay must use an absolute plugin path.
+# dsh-select-quote bundle patch: inserts this plugin into a profile's roster.
+#
+# Applied as a profile bundle layer (the `dsh.bundle.patch` manifest field) over
+# dsh-base. Activate with:
+#
+#   dsh plugin --profile web add dsh-select-quote
+#
+# The row addresses the plugin by PACKAGE NAME: the node half (exports ".") runs
+# in the host process, and the `dsh.client` declaration in package.json makes the
+# browser half (exports "./client", served at /plugins/<id>/client.js) load in
+# the web GUI.
+#
+# Local development from a checkout cannot use this file — the checkout is not
+# in the profile's node_modules, so the loader has no name to resolve. Use
+# `dev.patch.yml` (absolute path) with `dsh web --patch` instead.
 - insert:
     - id: select-quote
-      name: '/Users/agan/Documents/code-dev/dsh-select-quote/src/index.ts'
+      name: 'dsh-select-quote'

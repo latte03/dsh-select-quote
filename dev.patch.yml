@@ -1,0 +1,13 @@
+# Local development layer for dsh-select-quote — loaded with `dsh web --patch`.
+#
+# The loader resolves roster rows by package name, and a checkout is NOT
+# installed in the profile's node_modules, so this layer must point at the
+# host-half entry file by ABSOLUTE PATH. Update the path when the checkout
+# moves. This file is not shipped in the npm package; the published bundle uses
+# `cordis.patch.yml` (package name) instead.
+#
+#   npm run build
+#   dsh web --patch /absolute/path/to/dsh-select-quote/dev.patch.yml
+- insert:
+    - id: select-quote
+      name: '/Users/agan/Documents/code-dev/dsh-select-quote/src/index.ts'

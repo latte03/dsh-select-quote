@@ -28,17 +28,17 @@ git clone <repo> && cd dsh-select-quote
 npm install
 npm run build
 
-dsh web --patch "$PWD/cordis.patch.yml"
+dsh web --patch "$PWD/dev.patch.yml"
 ```
 
 打开 `http://127.0.0.1:3080`，在对话消息里划词即可看到工具条。
 
-> `cordis.patch.yml` 里的插件路径必须是**绝对路径**。仓库内该文件按 checkout 路径写死，换机器/换目录时改这一行。
+> `dev.patch.yml` 里的插件路径必须是**绝对路径**：checkout 不在 profile 的 `node_modules` 里，Loader 没有包名可解析。仓库内该文件按本机路径写死，换机器/换目录时改这一行；该文件不随 npm 包发布。
 
-### 方式二：作为 bundle 安装
+### 方式二：从 npm 安装（bundle）
 
 ```bash
-dsh plugin --profile web add /absolute/path/to/dsh-select-quote
+dsh plugin --profile web add dsh-select-quote   # 或本地目录的绝对路径
 dsh --profile web
 ```
 
@@ -133,7 +133,8 @@ src/client/styles.ts               # 全部 CSS（模板字符串注入）
 src/client/context.d.ts            # 客户端 Context 服务的类型补充
 scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装
 scripts/verify-bundle.mjs          # 无头 bundle 校验
-cordis.patch.yml                   # --patch 开发加载层
+cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
+dev.patch.yml                      # 本地 --patch 开发层（绝对路径，不发布）
 lib/                               # 构建产物（已提交，运行时直接读它）
 ```
 
