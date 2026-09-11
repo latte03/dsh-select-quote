@@ -2,3 +2,8 @@ node_modules/
 lib/.client-build/
 *.log
 .DS_Store
+
+# 本地凭证 / 环境：绝不提交（用户的 token 在 ~/.npmrc，仓库内也不允许出现）
+.npmrc
+.env
+.env.*
