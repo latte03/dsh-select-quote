@@ -1,0 +1,5 @@
+# Development / install layer for dsh-select-quote.
+# Local --patch overlay must use an absolute plugin path.
+- insert:
+    - id: select-quote
+      name: '/Users/agan/Documents/code-dev/dsh-select-quote/src/index.ts'
