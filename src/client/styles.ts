@@ -96,7 +96,7 @@ const CSS = `
   height: 64px;
   margin: 0;
   padding: 10px;
-  border: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   border-radius: 18px;
   background: var(--dsq-card-fill);
   color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
@@ -216,7 +216,7 @@ const CSS = `
   height: 64px;
   margin: 0 0 0 auto;
   padding: 10px;
-  border: 0.5px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.04));
+  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   border-radius: 18px;
   background: var(--dsq-card-fill);
   color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
