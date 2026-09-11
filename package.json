@@ -55,6 +55,10 @@
       "patch": "./cordis.patch.yml"
     }
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2"
   },
