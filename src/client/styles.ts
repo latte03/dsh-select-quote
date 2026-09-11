@@ -7,12 +7,12 @@ const CSS = `
   align-items: center;
   gap: 2px;
   padding: 4px;
-  border: 1px solid var(--dsw-alias-border-l4, rgba(0, 0, 0, 0.12));
+  /* 无边框：--dsw-elevation-soft 自带 0 0 0 .5px 的描边环，由它勾勒轮廓，
+     所以这里不要再画 border，否则描边会和环叠成两条线。 */
+  border: 0;
   border-radius: 999px;
   background: var(--dsw-alias-bg-layer-2, #fff);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.03),
-    0 6px 20px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--dsw-elevation-soft, 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 20px rgba(0, 0, 0, 0.06));
   pointer-events: auto;
 }
 
@@ -85,9 +85,6 @@ const CSS = `
 .dsq_card {
   --dsq-card-fill: var(--dsw-static-neutral-50, #fafafa);
   --dsq-card-hover: var(--dsw-static-neutral-100, #f5f5f5);
-  /* 卡片自身的 border-l2 已经是那条 hairline；elevation token 里还带一个
-     0 0 0 .5px 的描边环，不置空就会和边框叠成两条线。 */
-  --dsw-elevation-stroke-color: transparent;
   box-sizing: border-box;
   flex: 0 0 auto;
   display: flex;
@@ -102,7 +99,6 @@ const CSS = `
   border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   border-radius: 18px;
   background: var(--dsq-card-fill);
-  box-shadow: var(--dsw-elevation-soft, 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.045));
   color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
   transition: background-color 0.12s;
   position: relative;
@@ -210,8 +206,6 @@ const CSS = `
 .dsq_tCard {
   --dsq-card-fill: var(--dsw-static-neutral-50, #fafafa);
   --dsq-card-hover: var(--dsw-static-neutral-100, #f5f5f5);
-  /* 同 .dsq_card：hairline 由自身 border-l2 提供，去掉 elevation 的描边环。 */
-  --dsw-elevation-stroke-color: transparent;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -225,7 +219,6 @@ const CSS = `
   border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   border-radius: 18px;
   background: var(--dsq-card-fill);
-  box-shadow: var(--dsw-elevation-soft, 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.045));
   color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
   transition: background-color 0.12s;
   position: relative;
