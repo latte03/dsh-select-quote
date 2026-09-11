@@ -1,0 +1,261 @@
+<!--
+  screenshot-1.png 的源文件（不是应用截图，是按产品真实设计 token 渲染的示意图）。
+
+  渲染方式：
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless=new --disable-gpu --hide-scrollbars \
+      --force-device-scale-factor=2 --window-size=1200,760 \
+      --screenshot=assets/screenshot-1.png \
+      "file://$PWD/assets/screenshot-1.mock.html"
+
+  颜色与尺寸取自 dsh-client-ui-theme 的 design-platform token、composer/chat 的
+  CSS，以及本插件自己的 styles.ts，所以改动插件样式时应同步更新这里。
+-->
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  /* 颜色/尺寸取自产品真实 token（dsh-client-ui-theme 的 design-platform CSS）
+     与插件自身的 styles.ts，尽量贴近实际渲染结果。 */
+  :root {
+    --bg-base: #ffffff;
+    --label-primary: #0f1115;
+    --label-secondary: #61666b;
+    --label-tertiary: #81858c;
+    --link: #4176e6;
+    --border-l1: rgba(0, 0, 0, 0.04);
+    --border-l2: rgba(0, 0, 0, 0.10);
+    --border-l4: rgba(0, 0, 0, 0.16);
+    --card-fill: #fafafa;
+    --card-hover: #f5f5f5;
+    --bubble: #edf3fe;
+    --input-major: #ffffff;
+    --elevation-soft: 0 0 0 .5px rgba(0, 0, 0, 0.16), 0 4px 16px 0 rgba(0, 0, 0, 0.031), 0 0 24px 0 rgba(0, 0, 0, 0.031);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 1200px; height: 760px; overflow: hidden;
+    background: var(--bg-base); color: var(--label-primary);
+    font-family: var(--font); font-size: 14px; line-height: 22px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { position: relative; height: 100%; display: flex; flex-direction: column; }
+  .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; padding-top: 26px; }
+  .stream { width: 760px; display: flex; flex-direction: column; gap: 22px; }
+
+  /* ---------- 助手消息 ---------- */
+  .status { display: flex; align-items: center; gap: 8px; color: var(--label-tertiary); font-size: 12px; line-height: 18px; }
+  .status .n {
+    display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
+    border: .5px solid var(--border-l2); border-radius: 6px; font-size: 11px; color: var(--label-secondary);
+  }
+  .msg p { margin: 10px 0 0; color: var(--label-primary); }
+  .msg.spot { padding-top: 16px; }
+  .msg code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+    background: #f5f5f5; border-radius: 5px; padding: 1px 5px;
+  }
+  .sel { background: #b3d6fe; border-radius: 2px; padding: 1px 0; box-shadow: 0 0 0 1.5px #b3d6fe; }
+
+  /* ---------- 划词浮动工具条 ---------- */
+  .toolbar {
+    position: absolute; z-index: 30; display: flex; align-items: center; gap: 2px;
+    padding: 4px; border: 1px solid var(--border-l4); border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 20px rgba(0, 0, 0, 0.06);
+  }
+  .toolbar button {
+    appearance: none; border: 0; background: transparent; font: inherit; font-size: 13px; line-height: 20px;
+    color: var(--label-primary); padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .toolbar .divider { width: 1px; height: 14px; margin: 0 2px; background: var(--border-l4); }
+
+  /* ---------- 用户回合：引用卡片 + 气泡 ---------- */
+  .turn-user { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .tstack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .bubble {
+    max-width: 76%; padding: 10px 16px; border-radius: 22px; background: var(--bubble);
+    color: var(--label-primary); line-height: 22px;
+  }
+
+  /* ---------- 引用卡片（插件样式） ---------- */
+  .qcard {
+    display: flex; align-items: center; gap: 10px;
+    height: 64px; padding: 10px; width: fit-content; min-width: 0;
+    border: .5px solid var(--border-l1); border-radius: 18px; background: var(--card-fill);
+    color: var(--label-primary); position: relative; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.045);
+  }
+  .qcard .icon {
+    flex: none; width: 36px; height: 36px; border: .5px solid var(--border-l2); border-radius: 12px;
+    display: grid; place-items: center; background: var(--card-fill); color: var(--link);
+    font-size: 12px; font-weight: 600; letter-spacing: -0.02em;
+  }
+  .qcard .body { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+  .qcard .title {
+    font-size: 14px; font-weight: 500; line-height: 22px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .qcard .sub { font-size: 12px; line-height: 18px; color: var(--label-tertiary); white-space: nowrap; }
+  .qcard .close {
+    position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 6px;
+    display: grid; place-items: center; color: var(--label-tertiary); font-size: 14px; line-height: 1;
+    background: var(--card-hover);
+  }
+  .qcard.big .icon { width: 40px; height: 40px; font-size: 13px; }
+
+  /* ---------- 输入区 ---------- */
+  .composer { flex: none; display: flex; justify-content: center; padding: 0 0 10px; }
+  .composer-card {
+    width: 760px; padding-top: 8px; border-radius: 22px; background: var(--input-major);
+    box-shadow: var(--elevation-soft); display: flex; flex-direction: column; gap: 12px;
+  }
+  .qrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; padding: 12px 0 0 12px; }
+  .qrow .qcard { max-width: 190px; }
+  .qrow .qcard .icon { width: 36px; height: 36px; }
+  .editor { padding: 0 16px; min-height: 24px; color: var(--label-primary); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 8px 8px; }
+  .tools, .trailing { display: flex; align-items: center; gap: 12px; }
+  .iconbtn {
+    width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    color: var(--label-secondary); border: .5px solid var(--border-l2);
+  }
+  .mode {
+    display: inline-flex; align-items: center; gap: 5px; color: #dd8629;
+    font-size: 13px; padding: 3px 9px; border-radius: 999px; background: rgba(247, 173, 49, 0.10);
+  }
+  .picker { display: inline-flex; align-items: center; gap: 6px; color: var(--label-secondary); font-size: 13px; }
+  .picker .dot { width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, #4176e6, #7aa7ff); }
+  .send {
+    width: 32px; height: 32px; border-radius: 999px; background: #0f1115; color: #fff;
+    display: grid; place-items: center; margin-left: 2px;
+  }
+  .mic { color: var(--label-secondary); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="chat">
+    <div class="stream">
+
+      <div class="turn-user">
+        <div class="bubble">引用是怎么进到消息里的？</div>
+      </div>
+
+      <!-- 助手回答 1 -->
+      <div class="msg">
+        <div class="status"><span class="n">2</span> 已处理</div>
+        <p><code>QuoteCard.tsx</code> 持有待发的引用，<code>transcript-parse.ts</code> 负责把引用块从气泡里剥掉。</p>
+      </div>
+
+      <!-- 助手回答 2（含被划选的句子） -->
+      <div class="msg spot">
+        <div class="status"><span class="n">1</span> 已处理</div>
+        <p>关键在这：<span class="sel" id="target">引用只在发送瞬间折进消息，卡片本身从不写进草稿</span>。</p>
+      </div>
+
+      <!-- 用户回合：引用卡片在气泡上方 -->
+      <div class="turn-user">
+        <div class="tstack">
+          <div class="qcard big">
+            <div class="icon">AI</div>
+            <div class="body">
+              <div class="title">前者负责在发送瞬间把引用折进消息</div>
+              <div class="sub">选中的文本</div>
+            </div>
+          </div>
+          <div class="qcard big">
+            <div class="icon">AI</div>
+            <div class="body">
+              <div class="title">卡片外观只由 styles.ts 定义</div>
+              <div class="sub">选中的文本</div>
+            </div>
+          </div>
+        </div>
+        <div class="bubble">这两处的职责边界在哪？</div>
+      </div>
+
+      <!-- 助手回答 2 -->
+      <div class="msg">
+        <div class="status"><span class="n">1</span> 已处理</div>
+        <p>边界很干净：<code>QuoteCard.tsx</code> 只管生命周期（何时写入草稿、何时清除），<code>styles.ts</code> 只管视觉，改样式不会碰到注入逻辑。</p>
+        <div class="status" style="margin-top: 12px;"><span class="n">3</span> 执行工具 3 次，其中 1 次失败</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 划词浮动工具条：贴在选中行上方 -->
+  <div class="toolbar" id="toolbar" style="left: 0; top: 0;">
+    <button>复制</button>
+    <span class="divider"></span>
+    <button>添加到任务</button>
+  </div>
+
+  <!-- 输入区：引用卡片横向排列 + 正文 + 工具栏 -->
+  <div class="composer">
+    <div class="composer-card">
+      <div class="qrow">
+        <div class="qcard">
+          <div class="icon">AI</div>
+          <div class="body">
+            <div class="title">前者负责在发送瞬间…</div>
+            <div class="sub">选中的文本</div>
+          </div>
+          <div class="close">×</div>
+        </div>
+        <div class="qcard">
+          <div class="icon">AI</div>
+          <div class="body">
+            <div class="title">卡片外观只由 styles…</div>
+            <div class="sub">选中的文本</div>
+          </div>
+          <div class="close">×</div>
+        </div>
+      </div>
+      <div class="editor">帮我对比这两段引用的职责边界</div>
+      <div class="row">
+        <div class="tools">
+          <div class="iconbtn">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </div>
+          <div class="iconbtn">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M11.5 6.2 6.9 10.8a2 2 0 0 1-2.8-2.8l4.9-4.9a3.2 3.2 0 0 1 4.5 4.5l-5.2 5.2a4.4 4.4 0 0 1-6.2-6.2l4.4-4.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="mode">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M8 1.8 14.2 13H1.8L8 1.8Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.4v2.8M8 11.1v.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+            完全访问
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+        <div class="trailing">
+          <span class="picker">
+            <span class="dot"></span>
+            DeepSeek-V4-Flash
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="mic">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.6" y="1.6" width="4.8" height="8" rx="2.4" stroke="currentColor" stroke-width="1.3"/><path d="M3.2 7.6a4.8 4.8 0 0 0 9.6 0M8 12.4V14.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          </span>
+          <span class="send">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z" fill="currentColor"/></svg>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // 与真实实现一致：贴在被选中的那一行上方 12px，水平居中于选区
+  const target = document.getElementById('target');
+  const toolbar = document.getElementById('toolbar');
+  const rect = target.getBoundingClientRect();
+  toolbar.style.left = (rect.left + rect.width / 2 - toolbar.offsetWidth / 2) + 'px';
+  toolbar.style.top = (rect.top - 12 - toolbar.offsetHeight) + 'px';
+</script>
+</body>
+</html>

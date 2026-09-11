@@ -7,6 +7,10 @@
 - **随消息发送**：按 Enter 或点原来的发送按钮，引用块按卡片顺序折进消息，卡片消失
 - **对话记录**：同一条消息里的引用渲染为卡片，用户气泡里只剩你打的问题
 
+![screenshot](https://raw.githubusercontent.com/latte03/dsh-select-quote/main/assets/screenshot-1.png)
+
+<sub>示意图（按产品真实设计 token 渲染，源文件 `assets/screenshot-1.mock.html`）</sub>
+
 ---
 
 ## 兼容性
