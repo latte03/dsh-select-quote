@@ -158,4 +158,4 @@ lib/                               # 构建产物（已提交，运行时直接�
 
 ## License
 
-未指定。
+[MIT](LICENSE) © 2026 agan

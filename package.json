@@ -4,6 +4,7 @@
   "description": "DeepSeek Harness plugin: select text in conversation history, then copy or quote it into the agent input.",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "main": "./lib/index.js",
   "exports": {
     ".": {
@@ -20,7 +21,8 @@
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "LICENSE"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
