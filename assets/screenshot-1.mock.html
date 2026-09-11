@@ -31,7 +31,9 @@
     --card-hover: #f5f5f5;
     --bubble: #edf3fe;
     --input-major: #ffffff;
-    --elevation-soft: 0 0 0 .5px rgba(0, 0, 0, 0.16), 0 4px 16px 0 rgba(0, 0, 0, 0.031), 0 0 24px 0 rgba(0, 0, 0, 0.031);
+    --elevation-stroke-color: rgba(0, 0, 0, 0.16);
+    --elevation-stroke: 0 0 0 .5px var(--elevation-stroke-color);
+    --elevation-soft: var(--elevation-stroke), 0 4px 16px 0 rgba(0, 0, 0, 0.031), 0 0 24px 0 rgba(0, 0, 0, 0.031);
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   }
 
@@ -88,7 +90,8 @@
     height: 64px; padding: 10px; width: fit-content; min-width: 0;
     border: .5px solid var(--border-l2); border-radius: 18px; background: var(--card-fill);
     color: var(--label-primary); position: relative; overflow: hidden;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.045);
+    --elevation-stroke-color: transparent;
+    box-shadow: var(--elevation-soft);
   }
   .qcard .icon {
     flex: none; width: 36px; height: 36px; border: .5px solid var(--border-l2); border-radius: 12px;
