@@ -8,6 +8,11 @@ import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.t
 import { t } from '../i18n.ts'
 
 const DECO = 'dsq-ann-directive'
+// `dataset` keys must be valid JavaScript identifiers: the dashed attribute
+// name above throws `SyntaxError: ... is not a valid property name` the moment
+// it is assigned, so bracket access needs the camelCase spelling (which maps to
+// the same `data-dsq-ann-directive` attribute).
+const DECO_KEY = 'dsqAnnDirective'
 
 function decorateTextNode(node: Text): void {
   const value = node.nodeValue
@@ -32,8 +37,8 @@ function decorateTextNode(node: Text): void {
     const chip = document.createElement('button')
     chip.type = 'button'
     chip.className = 'dsq_annDirective'
-    chip.dataset[DECO] = String(index)
     chip.setAttribute('data-dsq-deco', 'true')
+    chip.dataset[DECO_KEY] = String(index)
     chip.textContent = t('chip.annotation', { index })
     chip.addEventListener('click', () => {
       // The annotation lives in the user turn that precedes this reply.
@@ -81,7 +86,7 @@ export function refreshDirectiveChips(root?: ParentNode): void {
   const el = root ?? (typeof document === 'undefined' ? undefined : document.body)
   if (!el) return
   for (const chip of el.querySelectorAll<HTMLElement>(`[data-${DECO}]`)) {
-    const index = Number(chip.dataset[DECO])
+    const index = Number(chip.dataset[DECO_KEY])
     if (Number.isFinite(index)) chip.textContent = t('chip.annotation', { index })
   }
 }
