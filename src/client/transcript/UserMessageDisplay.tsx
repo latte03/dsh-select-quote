@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { scanAnnotatedMessage } from '../protocol/annotation-protocol.ts'
 import { contentBlocksToText, displayTextWithoutQuote } from '../protocol/quote-protocol.ts'
-import { ensureToolbarStyles, styles } from '../styles.ts'
+import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
 import { TranscriptQuoteCard } from './TranscriptQuoteCard.tsx'
 
 export interface UserMessageDisplayProps {
@@ -36,7 +36,8 @@ function contentImages(content: unknown): unknown[] {
  * Replacement for the built-in `user` Chat node view.
  *
  * Strips the `<response-annotations>` protocol block from the bubble **and**
- * renders one card per annotation right under it.
+ * renders one card per annotation right above it — the same order the composer
+ * shows them in, so the sent message reads like the draft did.
  *
  * Why the cards live here instead of on a `select-quote` Chat node:
  * `conversation.chat.node` is gated by the shipped `TURN_PROCESS_INDEPENDENT_KINDS`
@@ -64,15 +65,15 @@ export function UserMessageDisplay({
   if (!text && images.length === 0 && quotes.length === 0) return null
 
   return jsx('div', {
-    className: styles.userRow,
+    className: cx(A.colEnd, styles.userRow),
     children: jsxs('div', {
-      className: styles.userStack,
+      className: cx(A.colEnd, styles.userStack),
       children: [
         images.length > 0 && renderMessageImages !== undefined
           ? jsx(
               'div',
               {
-                className: styles.userImages,
+                className: cx(A.colEnd, styles.userImages),
                 'data-message-attachments': true,
                 children: renderMessageImages({
                   images,
@@ -83,6 +84,13 @@ export function UserMessageDisplay({
               'images',
             )
           : null,
+        quotes.length > 0
+          ? jsx(
+              TranscriptQuoteCard,
+              { node: { data: { quotes } } },
+              'quotes',
+            )
+          : null,
         text
           ? jsx(
               'div',
@@ -91,13 +99,6 @@ export function UserMessageDisplay({
                 children: text,
               },
               'bubble',
-            )
-          : null,
-        quotes.length > 0
-          ? jsx(
-              TranscriptQuoteCard,
-              { node: { data: { quotes } } },
-              'quotes',
             )
           : null,
       ],

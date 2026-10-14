@@ -10,7 +10,7 @@ import {
 import { createPortal } from 'react-dom'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { placePopover } from '../dom/popoverPlacement.ts'
-import { styles } from '../styles.ts'
+import { A, cx, styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
 import { t } from '../i18n.ts'
 import { useLocale } from '../useLocale.ts'
@@ -48,25 +48,25 @@ export function AnnotationCardView({
       ? t('common.selectedText')
       : t('summary.noComment')
   return jsxs('div', {
-    className: composer ? styles.card : styles.tCard,
+    className: cx(A.box, A.row, styles.card, !composer && styles.tCard),
     role: 'group',
     'aria-label': index ? t('card.ariaIndexed', { index }) : t('card.ariaPlain'),
     children: [
       jsx('div', {
-        className: composer ? styles.cardIcon : styles.tCardIcon,
+        className: cx(A.keep, A.gridMid, styles.cardIcon, !composer && styles.tCardIcon),
         'aria-hidden': true,
         children: index ? String(index) : 'AI',
       }),
       jsxs('div', {
-        className: composer ? styles.cardBody : styles.tCardBody,
+        className: cx(A.grow, A.col, styles.cardBody),
         children: [
           jsx('div', {
-            className: composer ? styles.cardTitle : styles.tCardTitle,
+            className: cx(A.ell, styles.cardTitle),
             title: text,
             children: title,
           }),
           jsx('div', {
-            className: composer ? styles.cardSubtitle : styles.tCardSubtitle,
+            className: cx(A.ell, styles.cardSubtitle),
             // Transcript cards clamp the comment; keep the full text reachable
             // as a native tooltip, and let CSS tell a real comment apart from
             // the "no comment" placeholder.
@@ -78,7 +78,7 @@ export function AnnotationCardView({
       composer && onEditComment
         ? jsx('button', {
             type: 'button',
-            className: styles.cardAction,
+            className: cx(A.plain, A.gridMid, styles.cardAction),
             'aria-label': t('card.editComment'),
             onClick: onEditComment,
             children: '✎',
@@ -87,7 +87,7 @@ export function AnnotationCardView({
       composer && onRemove
         ? jsx('button', {
             type: 'button',
-            className: styles.cardClose,
+            className: cx(A.plain, A.gridMid, styles.cardClose),
             'aria-label': t('card.remove'),
             onClick: onRemove,
             children: '×',
@@ -319,7 +319,7 @@ export function AnnotationSummary({
         onPointerEnter: openPop,
         onPointerLeave: onPointerLeave,
         children: jsx('div', {
-          className: styles.summaryHoverInner,
+          className: cx(A.col, styles.summaryHoverInner),
           children: items.map((item, i) => {
             const isEditing = editing === i
             return jsxs(
@@ -328,10 +328,10 @@ export function AnnotationSummary({
                 className: styles.summaryItem,
                 children: [
                   jsxs('div', {
-                    className: styles.summaryItemHead,
+                    className: cx(A.row, styles.summaryItemHead),
                     children: [
                       jsx('div', {
-                        className: styles.summaryItemBadge,
+                        className: cx(A.keep, A.gridMid, styles.summaryItemBadge),
                         'aria-hidden': true,
                         children: String(i + 1),
                       }),
@@ -341,12 +341,12 @@ export function AnnotationSummary({
                       }),
                       !isEditing && (onItemRemove || onItemEdit)
                         ? jsxs('div', {
-                            className: styles.summaryItemActions,
+                            className: cx(A.row, styles.summaryItemActions),
                             children: [
                               onItemEdit
                                 ? jsx('button', {
                                     type: 'button',
-                                    className: styles.summaryItemAction,
+                                    className: cx(A.plain, A.gridMid, styles.summaryItemAction),
                                     'aria-label': t('summary.edit', { index: i + 1 }),
                                     onClick: () => startEdit(i),
                                     children: jsx(LucideIcon, { name: 'pencil' }),
@@ -355,7 +355,7 @@ export function AnnotationSummary({
                               onItemRemove
                                 ? jsx('button', {
                                     type: 'button',
-                                    className: styles.summaryItemAction,
+                                    className: cx(A.plain, A.gridMid, styles.summaryItemAction),
                                     'aria-label': t('summary.remove', { index: i + 1 }),
                                     onClick: () => onItemRemove(i, item),
                                     children: jsx(LucideIcon, { name: 'trash-2' }),
@@ -380,7 +380,7 @@ export function AnnotationSummary({
                           }),
                           jsx('textarea', {
                             ref: editInputRef,
-                            className: styles.annEditInput,
+                            className: cx(A.box, styles.annEditInput),
                             placeholder: t('common.commentPlaceholder'),
                             value: editDraft,
                             onChange: (e: { target: { value: string } }) => setEditDraft(e.target.value),
@@ -397,11 +397,11 @@ export function AnnotationSummary({
                             },
                           }),
                           jsxs('div', {
-                            className: styles.annEditActions,
+                            className: cx(A.row, styles.annEditActions),
                             children: [
                               jsx('button', {
                                 type: 'button',
-                                className: styles.annEditCancel,
+                                className: cx(A.plain, styles.annEditCancel),
                                 onClick: () => setEditing(null),
                                 children: t('common.cancel'),
                               }),
@@ -419,7 +419,7 @@ export function AnnotationSummary({
                         className: styles.summaryItemMain,
                         children: jsxs('button', {
                           type: 'button',
-                          className: styles.summaryItemButton,
+                          className: cx(A.plain, styles.summaryItemButton),
                           onClick: () => {
                             onItemSelect?.(i, item)
                             closePop()
@@ -453,7 +453,7 @@ export function AnnotationSummary({
 
   return jsxs('div', {
     ref: rootRef,
-    className: styles.summary,
+    className: cx(A.row, styles.summary),
     tabIndex: 0,
     'data-selection-annotation-summary': 'true',
     'aria-label': t('summary.aria', { count }),
@@ -465,12 +465,12 @@ export function AnnotationSummary({
     onKeyDown,
     children: [
       jsx('div', {
-        className: styles.summaryIcon,
+        className: cx(A.keep, A.gridMid, styles.summaryIcon),
         'aria-hidden': true,
         children: String(count),
       }),
       jsxs('div', {
-        className: styles.summaryBody,
+        className: cx(A.grow, styles.summaryBody),
         children: [
           jsx('div', {
             className: styles.summaryTitle,
@@ -485,7 +485,7 @@ export function AnnotationSummary({
       onRemoveAll
         ? jsx('button', {
             type: 'button',
-            className: styles.cardClose,
+            className: cx(A.plain, A.gridMid, styles.cardClose),
             'aria-label': t('summary.removeAll'),
             onClick: onRemoveAll,
             children: jsx(LucideIcon, { name: 'x', size: 13 }),

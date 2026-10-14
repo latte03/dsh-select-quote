@@ -12,7 +12,7 @@ import {
   updateAnnotationComment,
   type SelectionAnnotation,
 } from '../state/annotation-store.ts'
-import { ensureToolbarStyles, styles } from '../styles.ts'
+import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
 import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
 import { clearDraftMarker, useDraftMarker } from './useDraftMarker.ts'
 import { useSendIntercept } from './useSendIntercept.ts'
@@ -133,7 +133,7 @@ export function AnnotationPanel({
 
   return jsx('div', {
     ref: stackRef,
-    className: styles.cardStack,
+    className: cx(A.col, styles.cardStack),
     children: jsx(AnnotationSummary, {
       count: items.length,
       items: items.map((item) => ({

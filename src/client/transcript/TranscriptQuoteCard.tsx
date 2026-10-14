@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { jsx } from 'react/jsx-runtime'
 import { upsertAnnotationJobs } from '../dom/annotate-text.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
-import { ensureToolbarStyles, styles } from '../styles.ts'
+import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
 import type { ParsedAnnotation } from '../protocol/annotation-protocol.ts'
 import { AnnotationCardView } from '../ui/AnnotationCardView.tsx'
 
@@ -69,7 +69,7 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
       jsx(
         'div',
         {
-          className: styles.tCardButton,
+          className: cx(A.plain, styles.tCardButton),
           role: 'button',
           tabIndex: 0,
           'aria-label': quote.title,

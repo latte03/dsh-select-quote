@@ -6,6 +6,7 @@
 import { ANNOTATION_DIRECTIVE_RE } from '../protocol/annotation-protocol.ts'
 import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.ts'
 import { t } from '../i18n.ts'
+import { A, cx, styles } from '../styles.ts'
 
 const DECO = 'dsq-ann-directive'
 // `dataset` keys must be valid JavaScript identifiers: the dashed attribute
@@ -36,7 +37,7 @@ function decorateTextNode(node: Text): void {
     const index = Number(m[1])
     const chip = document.createElement('button')
     chip.type = 'button'
-    chip.className = 'dsq_annDirective'
+    chip.className = cx(styles.annDirective, A.inlineRow)
     chip.setAttribute('data-dsq-deco', 'true')
     chip.dataset[DECO_KEY] = String(index)
     chip.textContent = t('chip.annotation', { index })

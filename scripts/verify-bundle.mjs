@@ -233,6 +233,39 @@ function checkDictionaries(dicts) {
   return problems
 }
 
+/**
+ * Reject `dataset[<dashed>]` writes.
+ *
+ * Assigning a key that is not a valid JavaScript identifier throws
+ * `SyntaxError: ... is not a valid property name` out of DOMStringMap. That
+ * aborts the caller, so one such write inside the chip decoration used to
+ * silently kill the whole feature (and the `data-dsq-deco` marker set right
+ * after it, which `message-text.ts` relies on to skip decorated nodes) — with
+ * no DOM here, only this static read of the artifact catches it.
+ */
+function checkDatasetKeys(code) {
+  const problems = []
+  const validKey = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+  const reported = new Set()
+  for (const match of code.matchAll(/\.dataset\[("([^"]*)"|'([^']*)'|([A-Za-z_$][A-Za-z0-9_$]*))\]/g)) {
+    const literal = match[2] ?? match[3]
+    let value = literal
+    let label = match[1]
+    if (literal === undefined) {
+      // Bracket access through a constant: resolve the literal it is bound to.
+      const definition = new RegExp(`(?:const|var|let)\\s+${match[4]}\\s*=\\s*["'\`]([^"'\`]+)["'\`]`).exec(code)
+      // A dynamic or non-literal key cannot be judged statically.
+      if (!definition) continue
+      value = definition[1]
+      label = match[4]
+    }
+    if (validKey.test(value) || reported.has(label)) continue
+    reported.add(label)
+    problems.push(`dataset[${label}] is "${value}" — DOMStringMap needs a valid identifier`)
+  }
+  return problems
+}
+
 const code = readFileSync(resolve(root, 'lib/client.js'), 'utf8')
 const bundle = loadFactory(code)
 console.log(`bundle id: ${bundle.id}`)
@@ -252,13 +285,15 @@ const missing = EXPECTED.filter(
 )
 const broken = record.filter((entry) => entry.kind === 'slots.register' && typeof entry.component !== 'function')
 const dictionaryProblems = checkDictionaries(dicts)
+const datasetProblems = checkDatasetKeys(code)
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
-if (missing.length > 0 || broken.length > 0 || dictionaryProblems.length > 0) {
+if (missing.length > 0 || broken.length > 0 || dictionaryProblems.length > 0 || datasetProblems.length > 0) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
   for (const problem of dictionaryProblems) console.error(`DICTIONARY: ${problem}`)
+  for (const problem of datasetProblems) console.error(`DATASET KEY: ${problem}`)
   process.exit(1)
 }
 const languages = new Set()

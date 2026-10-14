@@ -24,7 +24,7 @@ import { useLocale } from './useLocale.ts'
 import { placePopover } from './dom/popoverPlacement.ts'
 import { setRuntimeSession } from './runtime.ts'
 import { getAnnotations, saveAnnotation } from './state/annotation-store.ts'
-import { ensureToolbarStyles, styles } from './styles.ts'
+import { ensureToolbarStyles, A, cx, styles } from './styles.ts'
 import { LucideIcon } from './ui/icons.tsx'
 
 export interface SelectionToolbarProps {
@@ -264,7 +264,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       children: [
         jsx('div', {
           ref: toolbarRef,
-          className: styles.toolbar,
+          className: cx(A.row, styles.toolbar),
           style: toolbarStyle,
           role: 'toolbar',
           'aria-label': t('toolbar.aria'),
@@ -284,7 +284,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                   children: [
                     jsx('button', {
                       type: 'button',
-                      className: styles.button,
+                      className: cx(A.plain, A.inlineRow, styles.button),
                       onClick: () => void handleCopy(),
                       children: [
                         jsx(LucideIcon, { name: 'copy', size: 14 }),
@@ -294,7 +294,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                     jsx('span', { className: styles.divider, 'aria-hidden': true }),
                     jsx('button', {
                       type: 'button',
-                      className: styles.button,
+                      className: cx(A.plain, A.inlineRow, styles.button),
                       onClick: openComment,
                       children: [
                         jsx(LucideIcon, { name: 'plus', size: 14 }),
@@ -307,7 +307,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         phase === 'comment'
           ? jsxs('div', {
               ref: commentWrapRef,
-              className: styles.commentPop,
+              className: cx(A.col, styles.commentPop),
               style: undefined,
               role: 'dialog',
               'aria-label': t('toolbar.commentDialogAria'),
@@ -315,7 +315,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
               children: [
                 jsx('textarea', {
                   ref: commentRef,
-                  className: styles.commentInput,
+                  className: cx(A.box, styles.commentInput),
                   placeholder: t('common.commentPlaceholder'),
                   value: comment,
                   onChange: (e: ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value),
@@ -336,13 +336,13 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                   children: [
                     jsx('button', {
                       type: 'button',
-                      className: styles.button,
+                      className: cx(A.plain, A.inlineRow, styles.button),
                       onClick: () => commitAnnotation(undefined),
                       children: t('toolbar.skipComment'),
                     }),
                     jsx('button', {
                       type: 'button',
-                      className: styles.button,
+                      className: cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment),
                       disabled: !comment.trim(),
                       onClick: () => commitAnnotation(comment),
                       children: t('toolbar.addComment'),

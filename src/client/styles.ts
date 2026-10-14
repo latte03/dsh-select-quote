@@ -1,57 +1,129 @@
+/**
+ * Every style the plugin ships, in four layers.
+ *
+ *   1. tokens   — product design tokens, aliased once with their fallbacks
+ *   2. atoms    — shared shapes (`.dsq_a_*`), no numbers, no colors
+ *   3. components — one block per UI piece; everything measurable lives here
+ *   4. host     — rules that reach into product DOM, theme flips, keyframes
+ *
+ * Injection order is the cascade order, so a component rule always wins over an
+ * atom on the same element — which is what lets atoms stay shape-only and the
+ * component blocks stay the single source of numbers.
+ */
+
+/** Layer 2 — atoms. Shape only: adding a number here is a layering violation. */
+const ATOMS = {
+  row: 'display: flex; align-items: center;',
+  inlineRow: 'display: inline-flex; align-items: center;',
+  col: 'display: flex; flex-direction: column;',
+  colEnd: 'display: flex; flex-direction: column; align-items: flex-end;',
+  gridMid: 'display: grid; place-items: center;',
+  ell: 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;',
+  plain: 'appearance: none; border: none; background: transparent; cursor: pointer;',
+  keep: 'flex: none;',
+  grow: 'flex: 1; min-width: 0;',
+  box: 'box-sizing: border-box;',
+} as const
+
+const toKebab = (name: string): string => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+
+const atomRules = Object.entries(ATOMS)
+  .map(([name, declarations]) => `.dsq_a_${toKebab(name)} { ${declarations} }`)
+  .join('\n')
+
+/** Atom class names, for `cx(styles.card, A.row)`. */
+export const A = Object.fromEntries(
+  Object.keys(ATOMS).map((name) => [name, `dsq_a_${toKebab(name)}`]),
+) as Record<keyof typeof ATOMS, string>
+
+/** Join class parts, dropping the falsy ones so a variant can be `cond && A.x`. */
+export function cx(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(' ')
+}
+
 const CSS = `
+/* Layer 1 — tokens. Every product token this plugin reads is aliased here once,
+   with the fallback it used to repeat inline at each use site. Scoped to \`body\`,
+   not \`:root\`: the product flips its palette on body[data-ds-dark-theme], so an
+   alias computed on the root element would freeze the light values and inherit
+   them into the dark page. */
+body {
+  --dsq-chat-width: var(--dsh-chat-content-width, 748px);
+  --dsq-font-size: var(--dsh-content-font-size, 14px);
+  --dsq-font-delta: var(--dsh-content-font-delta, 0px);
+  --dsq-bg-raised: var(--dsw-alias-bg-layer-1, #fff);
+  --dsq-bg-panel: var(--dsw-alias-bg-layer-2, #fff);
+  --dsq-bg-toast: var(--dsw-alias-bg-layer-3, rgba(0, 0, 0, 0.78));
+  --dsq-line: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  --dsq-line-divider: var(--dsw-alias-border-l4, rgba(0, 0, 0, 0.12));
+  --dsq-focus-ring: var(--dsw-alias-button-primary-fill, #1677ff);
+  --dsq-fill-hover: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  --dsq-label: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  --dsq-label-inverted: var(--dsw-alias-label-primary-inverted, #fff);
+  --dsq-label-2: var(--dsw-alias-label-secondary, rgba(0, 0, 0, 0.65));
+  --dsq-label-3: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
+  --dsq-link: var(--dsw-alias-link, rgba(0, 0, 0, 0.65));
+  --dsq-shadow-pop: var(--dsw-elevation-prominent, 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
+  --dsq-shadow-soft: var(--dsw-elevation-soft, 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 20px rgba(0, 0, 0, 0.06));
+  --dsq-bubble: var(--dsw-specific-bubble, rgba(0, 0, 0, 0.05));
+  --dsq-menu: var(--dsw-specific-menu, #fff);
+  --dsq-accent-400: var(--dsw-static-blue-400, #1677ff);
+  --dsq-accent: var(--dsw-static-blue-500, #3b82f6);
+  --dsq-accent-tint: var(--dsw-static-blue-50p, #eaf3ff);
+  --dsq-accent-tint-hover: var(--dsw-static-blue-75, #e5f0ff);
+  --dsq-accent-tint-dark: var(--dsw-static-blue-950, #172554);
+  --dsq-neutral-50: var(--dsw-static-neutral-50, #fafafa);
+  --dsq-neutral-100: var(--dsw-static-neutral-100, #f5f5f5);
+  --dsq-neutral-800: var(--dsw-static-neutral-800, #292929);
+  --dsq-neutral-850: var(--dsw-static-neutral-850, #212123);
+}
+
+/* Layer 2 — atoms (generated from ATOMS above; the class names and the rules
+   cannot drift apart because both come from the same table). */
+${atomRules}
+
+/* Layer 3 — components. Floating selection toolbar. */
 .dsq_toolbar {
   position: fixed;
   z-index: 10060;
   transform: translate(-50%, -100%);
-  display: flex;
-  align-items: center;
   gap: 2px;
   padding: 4px;
-  /* 无边框：--dsw-elevation-soft 自带 0 0 0 .5px 的描边环，由它勾勒轮廓，
+  /* 无边框：--dsq-shadow-soft 自带 0 0 0 .5px 的描边环，由它勾勒轮廓，
      所以这里不要再画 border，否则描边会和环叠成两条线。 */
   border: 0;
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-2, #fff);
-  box-shadow: var(--dsw-elevation-soft, 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 20px rgba(0, 0, 0, 0.06));
+  border-radius: 12px;
+  background: var(--dsq-bg-panel);
+  box-shadow: var(--dsq-shadow-soft);
   pointer-events: auto;
   /* Mounts once per selection, after the drag ends: soft rise + fade. */
   animation: dsq-toolbar-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@keyframes dsq-toolbar-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -100%) translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -100%);
-  }
-}
-
 .dsq_button {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  color: var(--dsq-label);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 20px;
-  cursor: pointer;
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 4px 10px;
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
   white-space: nowrap;
 }
-
 .dsq_button:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_buttonAddComment {
+  background: var(--dsq-accent);
+  color:#fff;
+}
+.dsq_buttonAddComment:hover {
+  background: var(--dsq-accent-400);
 }
 
 .dsq_button:focus-visible {
-  outline: 2px solid var(--dsw-alias-button-primary-fill, #1677ff);
+  outline: 2px solid var(--dsq-focus-ring);
   outline-offset: 1px;
 }
 
@@ -62,7 +134,7 @@ const CSS = `
 .dsq_divider {
   width: 1px;
   height: 14px;
-  background: var(--dsw-alias-border-l4, rgba(0, 0, 0, 0.12));
+  background: var(--dsq-line-divider);
   margin: 0 2px;
 }
 
@@ -72,8 +144,8 @@ const CSS = `
   transform: translate(-50%, 8px);
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--dsw-alias-bg-layer-3, rgba(0, 0, 0, 0.78));
-  color: var(--dsw-alias-label-primary-inverted, #fff);
+  background: var(--dsq-bg-toast);
+  color: var(--dsq-label-inverted);
   font-size: 12px;
   line-height: 18px;
   pointer-events: none;
@@ -89,23 +161,20 @@ const CSS = `
   width: 20%;
   min-width: 148px;
   max-width: 220px;
-  display: flex;
-  flex-direction: column;
   align-items: stretch;
   gap: 6px;
   pointer-events: auto;
 }
 
-/* One quote card. Geometry mirrors the product's own file card
-   (.nyYjTG_file in ui-deliverables): hairline border, neutral fill,
-   18px radius, fixed 72px row, centered content, background transition. */
+/* One annotation card, shared by the composer and the transcript: the base
+   carries the shape, and \`.dsq_tCard\` / \`.dsq_tCardIcon\` override only the
+   numbers where the transcript really differs.
+   Geometry mirrors the product's own file card (\`.nyYjTG_file\` in
+   ui-deliverables): hairline border, neutral fill, 18px radius, fixed 72px row. */
 .dsq_card {
-  --dsq-card-fill: var(--dsw-static-neutral-50, #fafafa);
-  --dsq-card-hover: var(--dsw-static-neutral-100, #f5f5f5);
-  box-sizing: border-box;
+  --dsq-card-fill: var(--dsq-neutral-50);
+  --dsq-card-hover: var(--dsq-neutral-100);
   flex: 0 0 auto;
-  display: flex;
-  align-items: center;
   gap: 10px;
   width: fit-content;
   max-width: calc(25% - 5px);
@@ -113,10 +182,10 @@ const CSS = `
   height: 64px;
   margin: 0;
   padding: 10px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  border: 0.5px solid var(--dsq-line);
   border-radius: 18px;
   background: var(--dsq-card-fill);
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  color: var(--dsq-label);
   transition: background-color 0.12s;
   position: relative;
   overflow: hidden;
@@ -132,15 +201,12 @@ const CSS = `
    quarter of the input, so 48px would leave no room for the quote text. */
 .dsq_cardIcon {
   z-index: 2;
-  flex: none;
   width: 36px;
   height: 36px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  border: 0.5px solid var(--dsq-line);
   border-radius: 12px;
-  display: grid;
-  place-items: center;
   background: var(--dsq-card-fill);
-  color: var(--dsw-alias-link, rgba(0, 0, 0, 0.65));
+  color: var(--dsq-link);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -148,13 +214,13 @@ const CSS = `
 
 .dsq_cardBody {
   z-index: 2;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
   justify-content: center;
   gap: 2px;
-  /* Keeps the ellipsised title clear of the corner remove button. */
+}
+
+/* Keeps the ellipsised title clear of the corner remove button, which only the
+   composer stack renders. */
+.dsq_cardStack .dsq_cardBody {
   padding-right: 14px;
 }
 
@@ -162,19 +228,13 @@ const CSS = `
   font-size: 14px;
   font-weight: 500;
   line-height: 22px;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--dsq-label);
 }
 
 .dsq_cardSubtitle {
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--dsq-label-3);
 }
 
 /* Corner remove button: hidden until the card is hovered or focused. */
@@ -183,16 +243,10 @@ const CSS = `
   top: 4px;
   right: 4px;
   z-index: 3;
-  appearance: none;
-  border: none;
-  background: transparent;
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  cursor: pointer;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
-  display: grid;
-  place-items: center;
+  color: var(--dsq-label-3);
   font-size: 14px;
   line-height: 1;
   opacity: 0;
@@ -209,8 +263,8 @@ const CSS = `
 }
 
 .dsq_cardClose:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label);
 }
 
 /* Secondary corner action (edit comment). */
@@ -219,16 +273,10 @@ const CSS = `
   top: 4px;
   right: 28px;
   z-index: 3;
-  appearance: none;
-  border: none;
-  background: transparent;
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  cursor: pointer;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
-  display: grid;
-  place-items: center;
+  color: var(--dsq-label-3);
   font-size: 12px;
   line-height: 1;
   opacity: 0;
@@ -243,42 +291,35 @@ const CSS = `
 }
 
 .dsq_cardAction:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
+  background: var(--dsq-fill-hover);
 }
 
 /* Qoder-style annotation summary (“N 条批注”) inside the composer. */
 .dsq_summary {
   position: relative;
   z-index: 10040;
-  display: flex;
-  align-items: center;
   gap: 10px;
   width: 100%;
   max-width: 100%;
   padding: 8px 10px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  border: 0.5px solid var(--dsq-line);
   border-radius: 18px;
-  background: var(--dsw-static-neutral-50, #fafafa);
+  background: var(--dsq-neutral-50);
   pointer-events: auto;
   user-select: none;
 }
 
 .dsq_summaryIcon {
-  flex: none;
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
-  color: var(--dsw-alias-link, rgba(0, 0, 0, 0.65));
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-link);
   font-size: 13px;
   font-weight: 600;
 }
 
 .dsq_summaryBody {
-  flex: 1;
-  min-width: 0;
   position: relative;
 }
 
@@ -286,16 +327,18 @@ const CSS = `
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  color: var(--dsq-label);
 }
 
 .dsq_summaryHint {
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
+  color: var(--dsq-label-3);
 }
 
 .dsq_summaryHover {
+  /* \`display: none\` here is the closed state, so this rule must not take the
+     flex atoms — the open class below turns display back on. */
   display: none;
   position: fixed;
   z-index: 10050;
@@ -325,63 +368,47 @@ const CSS = `
   transform-origin: bottom center;
 }
 
-@keyframes dsq-panel-in {
-  from {
-    transform: scale(0.96);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-
 .dsq_summaryHoverInner {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
   max-height: min(420px, calc(100vh - 120px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px;
-  border-radius: 14px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
+  padding: 4px;
+  border-radius: 12px;
+  border: 0.5px solid var(--dsq-line);
   /* Frosted panel: the menu token at partial alpha over a blur. */
-  background: color-mix(in srgb, var(--dsw-specific-menu, #fff) 82%, transparent);
+  background: color-mix(in srgb, var(--dsq-bg-raised) 50%, transparent);
   backdrop-filter: blur(14px) saturate(1.4);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  box-shadow: var(--dsw-elevation-prominent, 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
+  box-shadow: var(--dsq-shadow-pop);
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .dsq_summaryHoverInner {
-    background: var(--dsw-specific-menu, #fff);
+    background: var(--dsq-menu);
   }
 }
 
 .dsq_summaryItem {
   display: block;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: 8px;
   transition: background-color 0.12s;
 }
 
 .dsq_summaryItem:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  background: color-mix(in srgb, var(--dsq-fill-hover) 50%, transparent) ;
 }
 
 .dsq_summaryItemHead {
-  display: flex;
-  align-items: center;
   gap: 6px;
 }
 
 .dsq_summaryItemBadge {
-  flex: none;
-  display: grid;
-  place-items: center;
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: var(--dsw-static-blue-500, #3b82f6);
+  background: var(--dsq-accent);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -389,8 +416,6 @@ const CSS = `
 }
 
 .dsq_summaryItemActions {
-  display: flex;
-  align-items: center;
   gap: 2px;
   margin-left: auto;
   opacity: 0.5;
@@ -403,21 +428,15 @@ const CSS = `
 }
 
 .dsq_summaryItemAction {
-  appearance: none;
-  border: none;
-  background: transparent;
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  cursor: pointer;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
-  display: grid;
-  place-items: center;
+  color: var(--dsq-label-3);
 }
 
 .dsq_summaryItemAction:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label);
 }
 
 .dsq_summaryItemMain {
@@ -425,14 +444,10 @@ const CSS = `
 }
 
 .dsq_summaryItemButton {
-  appearance: none;
   display: block;
   width: 100%;
   text-align: left;
   font: inherit;
-  border: none;
-  background: transparent;
-  cursor: pointer;
   border-radius: 8px;
   padding: 2px 0 0;
 }
@@ -448,13 +463,13 @@ const CSS = `
 .dsq_summaryItemLabel {
   font-size: 11px;
   line-height: 16px;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
+  color: var(--dsq-label-3);
 }
 
 .dsq_summaryItemText {
   font-size: 13px;
   line-height: 18px;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  color: var(--dsq-label);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -464,14 +479,14 @@ const CSS = `
 }
 
 .dsq_summaryItemTextEmpty {
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
+  color: var(--dsq-label-3);
 }
 
 /* Inline edit form rendered inside the hover panel item (no extra layer). */
 .dsq_annEditText {
   font-size: 13px;
   line-height: 20px;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
+  color: var(--dsq-label);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 132px;
@@ -480,7 +495,6 @@ const CSS = `
 }
 
 .dsq_annEditInput {
-  box-sizing: border-box;
   width: 100%;
   min-height: 72px;
   resize: vertical;
@@ -490,54 +504,49 @@ const CSS = `
   font: inherit;
   font-size: 13px;
   line-height: 20px;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.04));
+  color: var(--dsq-label);
+  background: var(--dsq-fill-hover);
   outline: none;
 }
 
 .dsq_annEditInput::placeholder {
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
+  color: var(--dsq-label-3);
 }
 
 .dsq_annEditActions {
-  display: flex;
   justify-content: flex-end;
-  align-items: center;
   gap: 8px;
+  margin-top: 4px;
 }
 
 .dsq_annEditCancel {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, rgba(0, 0, 0, 0.65));
+  color: var(--dsq-label-2);
   font: inherit;
   font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 10px;
 }
 
 .dsq_annEditCancel:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  background: var(--dsq-fill-hover);
 }
 
 .dsq_annEditSave {
   appearance: none;
   border: none;
-  background: var(--dsw-static-blue-500, #3b82f6);
+  background: var(--dsq-accent);
   color: #fff;
   font: inherit;
   font-size: 13px;
   font-weight: 500;
-  padding: 6px 16px;
-  border-radius: 999px;
+  padding: 4px 12px;
+  border-radius: 10px;
   cursor: pointer;
   transition: filter 0.12s;
 }
 
 .dsq_annEditSave:hover {
-  filter: brightness(1.06);
+  background: var(--dsq-accent-400);
 }
 
 .dsq_annEditSave:disabled {
@@ -551,36 +560,32 @@ const CSS = `
   z-index: 10050;
   transform: translate(-50%, 4px);
   width: min(320px, calc(100vw - 24px));
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  padding: 10px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--dsw-specific-menu, #fff) 88%, transparent);
-  backdrop-filter: blur(14px) saturate(1.4);
+  padding: 8px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--dsq-bg-raised) 75%, transparent);
+  backdrop-filter: blur(10px) saturate(1.4);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  box-shadow: var(--dsw-elevation-prominent, 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
+  box-shadow: var(--dsq-shadow-pop);
 }
 
 .dsq_commentInput {
-  box-sizing: border-box;
   width: 100%;
   min-height: 64px;
   resize: none;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 8px 10px;
   font: inherit;
   font-size: 13px;
   line-height: 20px;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.04));
+  color: var(--dsq-label);
+  background: var(--dsq-fill-hover);
   outline: none;
 }
 
 .dsq_commentInput::placeholder {
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
+  color: var(--dsq-label-3);
 }
 
 .dsq_commentActions {
@@ -606,104 +611,38 @@ const CSS = `
   margin-right: 0;
 }
 
+/* Transcript-only differences from the shared card. Unlike the composer
+   summary (one collapsed row per message) each history card shows its own
+   comment, so the fixed height and single-line clamps are lifted on \`.dsq_tCardButton\`. */
 .dsq_tCard {
-  --dsq-card-fill: var(--dsw-static-neutral-50, #fafafa);
-  --dsq-card-hover: var(--dsw-static-neutral-100, #f5f5f5);
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.72), 520px);
-  min-width: 0;
-  height: 64px;
-  margin: 0 0 0 auto;
-  padding: 10px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
-  border-radius: 18px;
-  background: var(--dsq-card-fill);
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
-  transition: background-color 0.12s;
-  position: relative;
-  overflow: hidden;
-  user-select: none;
-}
-
-.dsq_tCard:hover {
-  background: var(--dsq-card-hover);
+  max-width: min(calc(var(--dsq-chat-width) * 0.72), 520px);
+  margin-left: auto;
 }
 
 .dsq_tCardIcon {
-  z-index: 2;
-  flex: none;
   width: 40px;
   height: 40px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--dsq-card-fill);
-  color: var(--dsw-alias-link, rgba(0, 0, 0, 0.65));
   font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
 }
 
-.dsq_tCardBody {
-  z-index: 2;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-}
-
-.dsq_tCardTitle {
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dsq_tCardSubtitle {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Transcript card wrapper: the card itself is a click target that scrolls back
-   to the marked text. Unlike the composer summary (one collapsed row per
-   message) each history card shows its own comment, so the fixed 64px height
-   and the single-line clamps are lifted here. */
 .dsq_tCardButton {
-  appearance: none;
-  display: block;
   /* Compact cards: several fit in one row before wrapping. */
+  display: block;
   flex: 0 1 auto;
   width: 230px;
   max-width: 100%;
   padding: 0;
-  border: none;
-  background: transparent;
   font: inherit;
   text-align: left;
-  cursor: pointer;
   border-radius: 14px;
 }
 
 .dsq_tCardButton:focus-visible {
-  outline: 2px solid var(--dsw-static-blue-500, #3b82f6);
+  outline: 2px solid var(--dsq-accent);
   outline-offset: 2px;
 }
 
-.dsq_tCardButton .dsq_tCard {
+.dsq_tCardButton .dsq_card {
   height: auto;
   min-height: 0;
   align-items: flex-start;
@@ -713,14 +652,14 @@ const CSS = `
   border-radius: 14px;
 }
 
-.dsq_tCardButton .dsq_tCardIcon {
+.dsq_tCardButton .dsq_cardIcon {
   width: 22px;
   height: 22px;
   border-radius: 8px;
   font-size: 11px;
 }
 
-.dsq_tCardButton .dsq_tCardTitle {
+.dsq_tCardButton .dsq_cardTitle {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -731,7 +670,7 @@ const CSS = `
   line-height: 18px;
 }
 
-.dsq_tCardButton .dsq_tCardSubtitle {
+.dsq_tCardButton .dsq_cardSubtitle {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -745,24 +684,18 @@ const CSS = `
 
 /* A comment is the user's own words — give it more presence than the neutral
    "no comment" placeholder. */
-.dsq_tCardButton .dsq_tCardSubtitle[data-dsq-has-comment='true'] {
-  color: var(--dsw-alias-label-secondary, rgba(0, 0, 0, 0.65));
+.dsq_cardSubtitle[data-dsq-has-comment='true'] {
+  color: var(--dsq-label-2);
 }
 
 /* Replacement user bubble (quote block stripped from display). */
 .dsq_userRow {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
   gap: 6px;
 }
 
 .dsq_userStack {
   min-width: 0;
-  max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  max-width: min(calc(var(--dsq-chat-width) * 0.702), 82%);
   gap: 8px;
 }
 
@@ -770,48 +703,28 @@ const CSS = `
   max-width: 100%;
   padding: 10px 16px;
   border-radius: 22px;
-  background: var(--dsw-specific-bubble, rgba(0, 0, 0, 0.05));
-  color: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
-  font-size: var(--dsh-content-font-size, 14px);
-  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  background: var(--dsq-bubble);
+  color: var(--dsq-label);
+  font-size: var(--dsq-font-size);
+  line-height: calc(22px + var(--dsq-font-delta));
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* Reserve room for the floating quote cards inside the composer card, so the
-   attachment rail and the editor flow below them instead of being covered. */
-.dsq_cardPad {
-  padding-top: var(--dsq-quote-pad, 88px) !important;
-}
-
 /* Durable message images of a replacement user bubble. */
 .dsq_userImages {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
   max-width: 100%;
-}
-
-/* Dark theme: the product flips its palette on body[data-ds-dark-theme], and
-   every --dsw-alias-* token follows it. Only the card fill is ours. */
-body[data-ds-dark-theme] .dsq_card,
-body[data-ds-dark-theme] .dsq_tCard {
-  --dsq-card-fill: var(--dsw-static-neutral-850, #212123);
-  --dsq-card-hover: var(--dsw-static-neutral-800, #292929);
 }
 
 /* Model-written :dsh-annotation{index="N"} chips. */
 .dsq_annDirective {
   appearance: none;
-  display: inline-flex;
-  align-items: center;
   margin: 0 2px;
   padding: 0 6px;
-  border: 0.5px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12));
+  border: 0.5px solid var(--dsq-line);
   border-radius: 6px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
-  color: var(--dsw-alias-link, #1677ff);
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-link);
   font: inherit;
   font-size: 12px;
   line-height: 18px;
@@ -819,14 +732,10 @@ body[data-ds-dark-theme] .dsq_tCard {
   vertical-align: baseline;
 }
 
-.dsq_annDirective:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.08));
-}
-
 /* Inline annotation mark in message bodies: highlight underline + ordinal badge. */
 .dsq_annMark {
-  --dsq-mark-color: var(--dsw-static-blue-500, #3b82f6);
-  --dsq-mark-tint: var(--dsw-static-blue-50p, #eaf3ff);
+  --dsq-mark-color: var(--dsq-accent);
+  --dsq-mark-tint: var(--dsq-accent-tint);
   background: var(--dsq-mark-tint);
   text-decoration: underline;
   text-decoration-style: dashed;
@@ -859,11 +768,34 @@ body[data-ds-dark-theme] .dsq_tCard {
 }
 
 .dsq_annMark:hover {
-  background: var(--dsw-static-blue-75, #e5f0ff);
+  background: var(--dsq-accent-tint-hover);
 }
 
 .dsq_annMarkFlash {
   animation: dsq-ann-flash 1.4s ease-out;
+}
+
+/* Layer 4 — host surface: keyframes, theme flips, and the two rules that reach
+   into product-owned DOM. */
+
+@keyframes dsq-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
+@keyframes dsq-panel-in {
+  from {
+    transform: scale(0.96);
+  }
+  to {
+    transform: scale(1);
+  }
 }
 
 @keyframes dsq-ann-flash {
@@ -877,8 +809,22 @@ body[data-ds-dark-theme] .dsq_tCard {
   }
 }
 
+/* The product flips its palette on body[data-ds-dark-theme], and every
+   --dsq-* alias follows it. Only values we own ourselves need restating — the
+   transcript card carries .dsq_card too, so one selector covers both. */
+body[data-ds-dark-theme] .dsq_card {
+  --dsq-card-fill: var(--dsq-neutral-850);
+  --dsq-card-hover: var(--dsq-neutral-800);
+}
+
 body[data-ds-dark-theme] .dsq_annMark {
-  --dsq-mark-tint: var(--dsw-static-blue-950, #172554);
+  --dsq-mark-tint: var(--dsq-accent-tint-dark);
+}
+
+/* Reserve room for the floating quote cards inside the composer card, so the
+   attachment rail and the editor flow below them instead of being covered. */
+.dsq_cardPad {
+  padding-top: var(--dsq-quote-pad, 88px) !important;
 }
 `
 
@@ -896,6 +842,7 @@ export function ensureToolbarStyles(): void {
 export const styles = {
   toolbar: 'dsq_toolbar',
   button: 'dsq_button',
+  buttonAddComment: 'dsq_buttonAddComment',
   divider: 'dsq_divider',
   status: 'dsq_status',
   cardStack: 'dsq_cardStack',
@@ -941,9 +888,6 @@ export const styles = {
   tCardButton: 'dsq_tCardButton',
   tCard: 'dsq_tCard',
   tCardIcon: 'dsq_tCardIcon',
-  tCardBody: 'dsq_tCardBody',
-  tCardTitle: 'dsq_tCardTitle',
-  tCardSubtitle: 'dsq_tCardSubtitle',
   userRow: 'dsq_userRow',
   userStack: 'dsq_userStack',
   userImages: 'dsq_userImages',
