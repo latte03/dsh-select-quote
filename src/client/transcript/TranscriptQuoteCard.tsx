@@ -3,17 +3,29 @@ import { jsx } from 'react/jsx-runtime'
 import { upsertAnnotationJobs } from '../dom/annotate-text.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
 import { ensureToolbarStyles, styles } from '../styles.ts'
-import {
-  AnnotationSummary,
-  type AnnotationSummaryItem,
-} from '../ui/AnnotationCardView.tsx'
-import type { SelectQuoteNodeData } from './transcript-node.ts'
+import type { ParsedAnnotation } from '../protocol/annotation-protocol.ts'
+import { AnnotationCardView } from '../ui/AnnotationCardView.tsx'
+
+/** View payload a user message's cards are rendered from. */
+export interface SelectQuoteNodeData {
+  readonly quotes: readonly ParsedAnnotation[]
+  readonly seq: number
+}
 
 export interface TranscriptQuoteCardProps {
   node: { data: SelectQuoteNodeData }
 }
 
-/** History-side annotation summary — same chrome as the composer. */
+/**
+ * History-side cards for one user message's annotations.
+ *
+ * One card per annotation, each showing the selected text **and** the user's
+ * comment. The comment is how the user recognizes their own annotation, so it
+ * belongs on the visible card — not behind a hover panel that has to be
+ * discovered. Clicking a card scrolls back to the marked text in the source
+ * message; the ordinal badge matches the `:dsh-annotation{index="N"}` the model
+ * refers to.
+ */
 export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNode {
   ensureToolbarStyles()
   const stackRef = useRef<HTMLDivElement | null>(null)
@@ -36,14 +48,17 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
     )
   }, [quotes])
 
-  const onItemSelect = useCallback((index: number, item: AnnotationSummaryItem) => {
-    scrollToAnnotation(index + 1, item.text, item.id)
-  }, [])
-
   const markIdOf = useCallback((index: number): string | undefined => {
     const ownerKey = stackRef.current?.closest('[data-chat-flow-key]')?.getAttribute('data-chat-flow-key')
     return ownerKey ? `dqsm_${ownerKey}_${index}` : undefined
   }, [])
+
+  const onSelect = useCallback(
+    (index: number, text: string) => {
+      scrollToAnnotation(index + 1, text, markIdOf(index))
+    },
+    [markIdOf],
+  )
 
   if (quotes.length === 0) return null
 
@@ -51,15 +66,30 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
     ref: stackRef,
     className: styles.tCardStack,
     'data-dsq-deco': 'true',
-    children: jsx(AnnotationSummary, {
-      count: quotes.length,
-      items: quotes.map((quote, index) => ({
-        id: markIdOf(index),
-        title: quote.title,
-        text: quote.text,
-        comment: quote.comment || undefined,
-      })),
-      onItemSelect,
-    }),
+    children: quotes.map((quote, index) =>
+      jsx(
+        'div',
+        {
+          className: styles.tCardButton,
+          role: 'button',
+          tabIndex: 0,
+          'aria-label': quote.title,
+          onClick: () => onSelect(index, quote.text),
+          onKeyDown: (event: { key: string; preventDefault: () => void }) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return
+            event.preventDefault()
+            onSelect(index, quote.text)
+          },
+          children: jsx(AnnotationCardView, {
+            variant: 'transcript',
+            title: quote.title,
+            text: quote.text,
+            comment: quote.comment || undefined,
+            index: index + 1,
+          }),
+        },
+        `ann-${index}`,
+      ),
+    ),
   })
 }

@@ -19,6 +19,7 @@ import {
   type SelectionSnapshot,
 } from './dom/selection.ts'
 import { focusComposer } from './dom/composer-host.ts'
+import { t } from './i18n.ts'
 import { placePopover } from './dom/popoverPlacement.ts'
 import { setRuntimeSession } from './runtime.ts'
 import { getAnnotations, saveAnnotation } from './state/annotation-store.ts'
@@ -30,6 +31,9 @@ export interface SelectionToolbarProps {
 }
 
 type Phase = 'idle' | 'comment'
+
+/** Cap for the auto-growing comment box; beyond this it scrolls internally. */
+const COMMENT_MAX_HEIGHT = 220
 
 export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNode {
   const toolbarRef = useRef<HTMLDivElement | null>(null)
@@ -117,12 +121,28 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       schedule()
     }
 
+    // Scroll inside our own popover must not count as a page scroll: a long
+    // comment scrolls its textarea, and closing here would throw away what the
+    // user just typed. The capture listener fires for descendants too, so the
+    // origin has to be checked instead of relying on bubbling.
+    const onScroll = (event: Event) => {
+      const target = event.target
+      if (
+        target instanceof Node &&
+        (toolbarRef.current?.contains(target) === true ||
+          commentWrapRef.current?.contains(target) === true)
+      ) {
+        return
+      }
+      hide()
+    }
+
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('pointerup', onPointerUp, true)
     document.addEventListener('keyup', schedule, true)
     document.addEventListener('selectionchange', onSelectionChange)
     window.addEventListener('resize', hide)
-    document.addEventListener('scroll', hide, true)
+    document.addEventListener('scroll', onScroll, true)
 
     return () => {
       document.removeEventListener('pointerdown', onPointerDown, true)
@@ -130,7 +150,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       document.removeEventListener('keyup', schedule, true)
       document.removeEventListener('selectionchange', onSelectionChange)
       window.removeEventListener('resize', hide)
-      document.removeEventListener('scroll', hide, true)
+      document.removeEventListener('scroll', onScroll, true)
     }
   }, [hide, refresh])
 
@@ -162,6 +182,19 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     }
   }, [phase, placeCommentPop])
 
+  // Grow the comment box with its content (up to a cap) instead of letting it
+  // scroll internally: a fixed 64px box starts scrolling after a few wrapped
+  // lines, which reads as a character limit. Re-place the popover afterwards so
+  // a taller box still flips and clamps correctly.
+  useEffect(() => {
+    if (phase !== 'comment') return
+    const area = commentRef.current
+    if (!area) return
+    area.style.height = 'auto'
+    area.style.height = `${Math.min(area.scrollHeight, COMMENT_MAX_HEIGHT)}px`
+    placeCommentPop()
+  }, [phase, comment, placeCommentPop])
+
   const handleToolbarPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -175,7 +208,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       clearNativeSelection()
       hide()
     } catch {
-      setStatus('复制失败')
+      setStatus(t('toolbar.copyFailed'))
     }
   }, [hide])
 
@@ -186,7 +219,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     setStatus(null)
   }, [])
 
-  /** Quick-add without opening the comment step (double-tap / “暂不评论”). */
+  /** Quick-add without opening the comment step (double-tap / “Skip comment”). */
   const commitAnnotation = useCallback(
     (body: string | undefined) => {
       const snapshot = activeRef.current
@@ -232,7 +265,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           className: styles.toolbar,
           style: toolbarStyle,
           role: 'toolbar',
-          'aria-label': '划词操作',
+          'aria-label': t('toolbar.aria'),
           'data-dsq-toolbar': 'true',
           onPointerDown: handleToolbarPointerDown,
           children:
@@ -241,7 +274,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                   style: { display: 'inline-flex', alignItems: 'center', gap: 2 },
                   children: jsx('span', {
                     style: { padding: '0 8px', fontSize: 13, opacity: 0.8 },
-                    children: '添加批注…',
+                    children: t('toolbar.commentHint'),
                   }),
                 })
               : jsxs('div', {
@@ -253,7 +286,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                       onClick: () => void handleCopy(),
                       children: [
                         jsx(LucideIcon, { name: 'copy', size: 14 }),
-                        '复制',
+                        t('toolbar.copy'),
                       ],
                     }),
                     jsx('span', { className: styles.divider, 'aria-hidden': true }),
@@ -263,7 +296,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                       onClick: openComment,
                       children: [
                         jsx(LucideIcon, { name: 'plus', size: 14 }),
-                        '添加到任务',
+                        t('toolbar.addToTask'),
                       ],
                     }),
                   ],
@@ -275,13 +308,13 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
               className: styles.commentPop,
               style: undefined,
               role: 'dialog',
-              'aria-label': '添加可选评论',
+              'aria-label': t('toolbar.commentDialogAria'),
               onPointerDown: handleToolbarPointerDown,
               children: [
                 jsx('textarea', {
                   ref: commentRef,
                   className: styles.commentInput,
-                  placeholder: '添加可选评论…',
+                  placeholder: t('common.commentPlaceholder'),
                   value: comment,
                   onChange: (e: ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value),
                   onKeyDown: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -303,14 +336,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                       type: 'button',
                       className: styles.button,
                       onClick: () => commitAnnotation(undefined),
-                      children: '暂不评论',
+                      children: t('toolbar.skipComment'),
                     }),
                     jsx('button', {
                       type: 'button',
                       className: styles.button,
                       disabled: !comment.trim(),
                       onClick: () => commitAnnotation(comment),
-                      children: '添加评论',
+                      children: t('toolbar.addComment'),
                     }),
                   ],
                 }),

@@ -8,9 +8,7 @@ import {
   watchAnnotationMarks,
 } from './dom/annotate-text.ts'
 import { ensureToolbarStyles } from './styles.ts'
-import { TranscriptQuoteCard } from './transcript/TranscriptQuoteCard.tsx'
 import { UserMessageDisplay } from './transcript/UserMessageDisplay.tsx'
-import { registerSelectQuoteNode } from './transcript/transcript-node.ts'
 import { getAnnotations, subscribeAnnotations } from './state/annotation-store.ts'
 
 /**
@@ -18,12 +16,19 @@ import { getAnnotations, subscribeAnnotations } from './state/annotation-store.t
  *
  * Selection toolbar is root-scoped (`shell.overlay`) so transcript selections
  * are always observed. Annotation summary stays on the session composer.
+ *
+ * History cards render **inside** the `user` Chat node view, not on a
+ * `select-quote` Chat node. `conversation.chat.node` is gated by the shipped
+ * `TURN_PROCESS_INDEPENDENT_KINDS` allowlist (system-prompt, user, steering,
+ * turn-trigger, turn-process, turn-error, turn-max-tokens, turn-tail): any other
+ * kind is classified as a turn-process member and `hidden` when the completed
+ * turn's process disclosure is folded — mounted, but invisible. `user` is on
+ * that allowlist, so the bubble is the only placement that is reliably visible.
  */
-export const inject = ['slots', 'sessions', 'uiConversation']
+export const inject = ['slots', 'sessions']
 
 export function apply(ctx: Context): void {
   ensureToolbarStyles()
-  registerSelectQuoteNode(ctx)
   // Assistant replies may echo :dsh-annotation{index="N"}; decorate them as chips.
   ctx.effect(() => watchAnnotationDirectives(), 'dsh-select-quote: annotation directives')
   // Underline + ordinal badges on annotated text; survive transcript re-renders.
@@ -70,15 +75,8 @@ export function apply(ctx: Context): void {
     )
   })
 
-  // History: annotation cards + protocol-stripped user bubbles.
+  // History: protocol-stripped user bubbles that carry their own cards.
   ctx.slots.inject('conversation.chat.node', () => {
-    ctx.slots.register(
-      {
-        name: 'conversation.chat.node',
-        key: 'select-quote',
-      },
-      TranscriptQuoteCard,
-    )
     ctx.slots.register(
       {
         name: 'conversation.chat.node',

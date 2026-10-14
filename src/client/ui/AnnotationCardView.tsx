@@ -12,6 +12,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 import { placePopover } from '../dom/popoverPlacement.ts'
 import { styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
+import { t } from '../i18n.ts'
 
 export interface AnnotationCardViewProps {
   readonly title: string
@@ -33,11 +34,21 @@ export function AnnotationCardView({
   onEditComment,
 }: AnnotationCardViewProps): ReactNode {
   const composer = variant === 'composer'
-  const subtitle = comment ? `评论 · ${comment}` : '选中的文本'
+  // Composer cards summarise a pending selection, so the comment gets a label
+  // ("Comment · …"). Transcript cards already show the selected text as the
+  // card title, so the line below it is the comment itself — no label needed.
+  // Their no-comment state says so instead of repeating the title.
+  const subtitle = comment
+    ? composer
+      ? t('card.commentSubtitle', { comment })
+      : comment
+    : composer
+      ? t('common.selectedText')
+      : t('summary.noComment')
   return jsxs('div', {
     className: composer ? styles.card : styles.tCard,
     role: 'group',
-    'aria-label': index ? `批注 ${index}` : '划词批注',
+    'aria-label': index ? t('card.ariaIndexed', { index }) : t('card.ariaPlain'),
     children: [
       jsx('div', {
         className: composer ? styles.cardIcon : styles.tCardIcon,
@@ -54,6 +65,10 @@ export function AnnotationCardView({
           }),
           jsx('div', {
             className: composer ? styles.cardSubtitle : styles.tCardSubtitle,
+            // Transcript cards clamp the comment; keep the full text reachable
+            // as a native tooltip, and let CSS tell a real comment apart from
+            // the "no comment" placeholder.
+            ...(comment ? { title: comment, 'data-dsq-has-comment': 'true' } : {}),
             children: subtitle,
           }),
         ],
@@ -62,7 +77,7 @@ export function AnnotationCardView({
         ? jsx('button', {
             type: 'button',
             className: styles.cardAction,
-            'aria-label': '编辑评论',
+            'aria-label': t('card.editComment'),
             onClick: onEditComment,
             children: '✎',
           })
@@ -71,7 +86,7 @@ export function AnnotationCardView({
         ? jsx('button', {
             type: 'button',
             className: styles.cardClose,
-            'aria-label': '移除批注',
+            'aria-label': t('card.remove'),
             onClick: onRemove,
             children: '×',
           })
@@ -122,7 +137,7 @@ export function AnnotationSummary({
   onItemSelect,
   onItemRemove,
   onItemEdit,
-  hint = '悬停查看批注',
+  hint = t('summary.hint'),
 }: AnnotationSummaryProps): ReactNode {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const popRef = useRef<HTMLDivElement | null>(null)
@@ -299,7 +314,7 @@ export function AnnotationSummary({
         ref: popRef,
         className: `${styles.summaryHover} ${styles.summaryHoverOpen}`,
         role: 'dialog',
-        'aria-label': `${count} 条划词批注详情`,
+        'aria-label': t('summary.dialogAria', { count }),
         onPointerEnter: openPop,
         onPointerLeave: onPointerLeave,
         children: jsx('div', {
@@ -321,7 +336,7 @@ export function AnnotationSummary({
                       }),
                       jsx('div', {
                         className: styles.summaryItemLabel,
-                        children: '选中的文本',
+                        children: t('common.selectedText'),
                       }),
                       !isEditing && (onItemRemove || onItemEdit)
                         ? jsxs('div', {
@@ -331,7 +346,7 @@ export function AnnotationSummary({
                                 ? jsx('button', {
                                     type: 'button',
                                     className: styles.summaryItemAction,
-                                    'aria-label': `编辑批注 ${i + 1}`,
+                                    'aria-label': t('summary.edit', { index: i + 1 }),
                                     onClick: () => startEdit(i),
                                     children: jsx(LucideIcon, { name: 'pencil' }),
                                   })
@@ -340,7 +355,7 @@ export function AnnotationSummary({
                                 ? jsx('button', {
                                     type: 'button',
                                     className: styles.summaryItemAction,
-                                    'aria-label': `移除批注 ${i + 1}`,
+                                    'aria-label': t('summary.remove', { index: i + 1 }),
                                     onClick: () => onItemRemove(i, item),
                                     children: jsx(LucideIcon, { name: 'trash-2' }),
                                   })
@@ -360,12 +375,12 @@ export function AnnotationSummary({
                           }),
                           jsx('div', {
                             className: styles.summaryItemLabel,
-                            children: '用户评论',
+                            children: t('summary.userComment'),
                           }),
                           jsx('textarea', {
                             ref: editInputRef,
                             className: styles.annEditInput,
-                            placeholder: '添加可选评论…',
+                            placeholder: t('common.commentPlaceholder'),
                             value: editDraft,
                             onChange: (e: { target: { value: string } }) => setEditDraft(e.target.value),
                             onKeyDown: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -387,13 +402,13 @@ export function AnnotationSummary({
                                 type: 'button',
                                 className: styles.annEditCancel,
                                 onClick: () => setEditing(null),
-                                children: '取消',
+                                children: t('common.cancel'),
                               }),
                               jsx('button', {
                                 type: 'button',
                                 className: styles.annEditSave,
                                 onClick: commitEdit,
-                                children: '保存',
+                                children: t('common.save'),
                               }),
                             ],
                           }),
@@ -415,13 +430,13 @@ export function AnnotationSummary({
                             }),
                             jsx('div', {
                               className: styles.summaryItemLabel,
-                              children: '用户评论',
+                              children: t('summary.userComment'),
                             }),
                             jsx('div', {
                               className: item.comment
                                 ? styles.summaryItemText
                                 : `${styles.summaryItemText} ${styles.summaryItemTextEmpty}`,
-                              children: item.comment || '未添加评论',
+                              children: item.comment || t('summary.noComment'),
                             }),
                           ],
                         }),
@@ -440,7 +455,7 @@ export function AnnotationSummary({
     className: styles.summary,
     tabIndex: 0,
     'data-selection-annotation-summary': 'true',
-    'aria-label': `${count} 条划词批注。悬停查看详情。`,
+    'aria-label': t('summary.aria', { count }),
     'aria-expanded': open,
     onPointerEnter,
     onPointerLeave,
@@ -458,7 +473,7 @@ export function AnnotationSummary({
         children: [
           jsx('div', {
             className: styles.summaryTitle,
-            children: `${count} 条批注`,
+            children: t('summary.title', { count }),
           }),
           jsx('div', {
             className: styles.summaryHint,
@@ -470,7 +485,7 @@ export function AnnotationSummary({
         ? jsx('button', {
             type: 'button',
             className: styles.cardClose,
-            'aria-label': '移除全部划词批注',
+            'aria-label': t('summary.removeAll'),
             onClick: onRemoveAll,
             children: jsx(LucideIcon, { name: 'x', size: 13 }),
           })

@@ -1,10 +1,10 @@
 /**
  * Ambient faces for the client services this plugin injects.
  *
- * `ctx.slots`, `ctx.sessions` and `ctx.uiConversation` are owned by the running
- * dsh deployment (the `@deepseek-ai/dsh-client-*` web packages), which are not
- * dependencies of this repository. Their `Context` augmentation is restated
- * here so `npm run typecheck` works without the full client install.
+ * `ctx.slots` and `ctx.sessions` are owned by the running dsh deployment (the
+ * `@deepseek-ai/dsh-client-*` web packages), which are not dependencies of this
+ * repository. Their `Context` augmentation is restated here so
+ * `npm run typecheck` works without the full client install.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -29,10 +29,6 @@ declare module '@deepseek-ai/cordis' {
     }
     sessions: {
       scope(id: string): Context | undefined
-    }
-    uiConversation: {
-      events: { register(definition: unknown): () => void }
-      views: { register(definition: unknown): () => void }
     }
   }
 }

@@ -8,7 +8,7 @@
 npm run typecheck   # tsc --noEmit，应无输出
 npm run build       # 产出 lib/index.js 与 lib/client.js
 npm run watch       # 增量重建
-npm run verify      # 无头执行 lib/client.js，断言 6 项贡献都注册上了
+npm run verify      # 无头执行 lib/client.js，断言 4 项贡献都注册上了
 npm run check       # typecheck + build + verify（提交前跑这个）
 ```
 
@@ -41,14 +41,15 @@ Each item contains text selected from an earlier message ...
 
 旧版把引用写成 Markdown 引用块。现在**不再写入**，只在 `quote-protocol.ts` 里保留读取与剥离能力（`parseQuoteMessage()` / `displayTextWithoutQuote()`），用于渲染历史消息。新消息一律走上面的 JSON 块。
 
-## 客户端贡献（共 6 项）
+## 客户端贡献（共 4 项）
 
 | 位置 | 类型 | 说明 |
 |---|---|---|
 | `shell.overlay` | list slot | `select-quote-toolbar`（order 100）：划词工具条 + 评论气泡。挂 root 级，切会话/看历史都不会失去观察 |
 | `conversation.input.overlay` | list slot | `select-quote-card`（order 20）：输入框内的批注摘要；`select-quote-session-bridge`（order 1）：只负责把 `sessionId` 发布给 root 工具条 |
-| `conversation.chat.node` | keyed slot | `select-quote`：对话记录里的批注摘要卡片；`user`（`priority: -10`）：替换内置用户气泡 |
-| Conversation Definition | `uiConversation.events.register` | `select-quote`：把含批注块的 `user/message` 变成一个 Chat 节点 |
+| `conversation.chat.node` | keyed slot | `user`（`priority: -10`）：替换内置用户气泡，剥掉协议块并渲染批注卡片 |
+
+不再注册 `select-quote` Chat 节点，也不再注册 Conversation Definition——卡片内联在 `user` 节点里，原因见下面第 4 节。
 
 ## 关键机制
 
@@ -72,11 +73,25 @@ Each item contains text selected from an earlier message ...
 
 绝对定位子元素相对**padding box** 定位，所以卡片仍在顶部，而附件栏与编辑器一起被推到它下方——这也顺带修掉了"传图时图片被卡片盖住"。
 
-**4. 对话记录：Definition + 节点 + 气泡替换**
+**4. 对话记录：气泡替换 + 卡片内联在 `user` 节点里**
 
-- Definition（`transcript-node.ts`）匹配 `type === "user/message"` 且文本含批注块的消息，产出一个 `select-quote` 节点；
-- `TranscriptQuoteCard.tsx` 渲染该节点（每段批注一张卡片，纵向堆叠、与气泡同侧）；
-- `UserMessageDisplay.tsx` 以 `priority: -10` 替换内置的 `user` 节点，把协议块从气泡里剥掉，**同时自己渲染消息携带的图片**——只批注、没有正文的消息气泡文本为空，若不接管图片渲染，整条消息（含图片）会消失。
+- `UserMessageDisplay.tsx` 以 `priority: -10` 替换内置的 `user` 节点，把协议块从气泡里剥掉，**同时自己渲染消息携带的图片**——只批注、没有正文的消息气泡文本为空，若不接管图片渲染，整条消息（含图片）会消失；
+- 卡片**由该组件自己渲染**（`<TranscriptQuoteCard>`），而不是注册一个独立的 `select-quote` Chat 节点；
+- `TranscriptQuoteCard.tsx` 负责卡片本身：**每段批注一张 `AnnotationCardView`（`variant: 'transcript'`）**，纵向堆叠、与气泡同侧。卡片上直接显示**选中文本 + 用户评论**，点卡片滚回正文对应 mark——评论是用户认出自己那条批注的唯一凭据，不能只藏在悬停面板里（曾经用过 `AnnotationSummary`，折叠态只显示「N 条批注」，评论必须悬停才看得到）。
+
+> **为什么卡片必须挂在 `user` 节点上**（2026-10-08 定位）：`conversation.chat.node` 虽然能注册任意 key，但 `ui-chat` 用 allowlist `TURN_PROCESS_INDEPENDENT_KINDS` 决定一个节点能否脱离「Turn 过程折叠块」：
+>
+> ```js
+> // dsh-client-ui-chat, ChatNodeSeat
+> const TURN_PROCESS_INDEPENDENT_KINDS = new Set([
+>   "system-prompt", "user", "steering", "turn-trigger", "turn-process",
+>   "turn-error", "turn-max-tokens", "turn-tail"
+> ])
+> const processMember = ... && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind) && ...
+> const processHidden  = controllerInactive || foldable && processMember && !processOpen
+> ```
+>
+> `select-quote` 不在表里，于是被判定为 turn-process 成员；已结束的 Turn 折叠 `process` 区块后 `processHidden = true`，`useSearchableHidden` 给外层加 `hidden`。**节点挂载了、然后被隐藏**——外部表现就是「卡片不存在」，而且不报错、不写 crash log。`user` 在表里，所以只有挂在 `user` 节点上才稳定可见。诊断方法：注册的节点永远先查这张表，再怀疑注册/匹配/解析链路。
 
 **5. 正文 Mark：虚线下划线 + 末尾序号角标**
 
@@ -98,7 +113,7 @@ Each item contains text selected from an earlier message ...
 
 ```
 src/index.ts                       # Node 半：占位，让包被 Loader 挂载
-src/client/index.tsx               # Client 半入口：注册 Slot、Conversation Definition 与装饰观察者
+src/client/index.tsx               # Client 半入口：注册 Slot 与装饰观察者
 src/client/SelectionToolbar.tsx    # 划词浮动条（复制 / 添加到任务）+ 评论气泡
 src/client/composer/AnnotationPanel.tsx      # 输入框内批注摘要 + 发送动作拦截
 src/client/composer/useSendIntercept.ts      # 发送手势时把待发批注折进草稿
@@ -113,16 +128,15 @@ src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 
 src/client/state/annotation-store.ts # 每会话待发批注状态（内存 Map）
 src/client/protocol/annotation-protocol.ts # 批注 wire 格式（含 source 定位）
 src/client/protocol/quote-protocol.ts      # 旧 > 引用块协议 / U+200B 标记 / 文本工具
-src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注摘要
-src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡（隐藏协议块、保留图片）
-src/client/transcript/transcript-node.ts      # select-quote Conversation Definition
+src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注卡片（由 UserMessageDisplay 渲染）
+src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡（隐藏协议块、保留图片、内联批注卡片）
 src/client/ui/AnnotationCardView.tsx  # 批注卡片与悬停列表面板（portal 到 body、内联编辑）
 src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus）
 src/client/styles.ts               # 全部 CSS（模板字符串注入）
 src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId）
 src/client/context.d.ts            # 客户端 Context 服务的类型补充
 scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装
-scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 6 项）
+scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 4 项）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
 dev.patch.yml                      # 本地 --patch 开发层（绝对路径，不发布）
 lib/                               # 构建产物（已提交，运行时直接读它）
