@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.1](https://github.com/latte03/dsh-select-quote/compare/v0.3.0...v0.3.1) (2026-10-14)
+
+### Features
+
+* 界面语言改由 dsh 的语言设置决定 ([4a6c39f](https://github.com/latte03/dsh-select-quote/commit/4a6c39f2bed30c03c18227dc96eb733f8a6747a9))
 
 ## [0.3.0](https://github.com/latte03/dsh-select-quote/compare/v0.2.0...v0.3.0) (2026-10-14)
 
