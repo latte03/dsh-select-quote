@@ -109,6 +109,24 @@ Each item contains text selected from an earlier message ...
 - 颜色一律用会随主题翻转的 `--dsw-alias-*` / `--dsw-static-*` token，只自己定义 `--dsq-card-fill` / `--dsq-card-hover` 两个填充变量；
 - 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）。
 
+**8. 装饰观察者会自我触发：一条 `return` 挡住了渲染进程楔死**
+
+`decorateTextNode()` 的退出条件是文本不含字面量 `:dsh-annotation{`。协议头部原文里就带着这个字面量（`# Response annotations:` 那段指令在描述内联标记时逐字写出了 `:dsh-annotation{index="N"}`，`N` 是字母），而严格正则 `/:dsh-annotation\{index="([1-9]\d*)"\}/g` 只接受数字，于是「含字面量、零匹配」成立：`while` 一次都不进，`last` 停在 `0`，末尾仍然执行了
+
+```js
+if (last < value.length) frag.append(document.createTextNode(value.slice(last)))
+parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text 节点
+```
+
+`watchAnnotationDirectives()` 监听 `{childList: true, subtree: true, characterData: true}`，回调对新节点再调 `decorateTextNode()`，于是它一直在装饰自己刚产出的节点。`MutationObserver` 回调是微任务，队列永远排不空：**宏任务、定时器、`Runtime.evaluate` 全都得不到执行**，表现为主线程单核 100%、输入区不可点，连 `Debugger.pause` 都进不去（中断同样排不上队）。 [#1](https://github.com/latte03/dsh-select-quote/issues/1) 报告时只在 Electron 路径复现，是因为桌面端恰好把毒串送进了 Text 节点；缺陷与加载路径无关，在插件自己的装饰器里。
+
+两道防线（`src/client/dom/decorateAnnotationDirectives.ts`）：
+
+1. 严格正则一次都没匹配上就在碰 DOM 之前 `return`（`if (!matched) return`）；
+2. composer 全程不碰：跳过列表加入 `textarea` / `input` / `[data-lexical-editor="true"]`，因为发送瞬间草稿里会短暂出现带该字面量的协议原文。
+
+> 凡是"改写 DOM 的观察者"都要自检这两条：**没有实际命中就不要写 DOM**，以及**别把自己输出的节点当成新输入**。
+
 ## 目录结构
 
 ```
@@ -156,7 +174,7 @@ lib/                               # 构建产物（已提交，运行时直接�
 |---|---|
 | 划词没有工具条 / 卡片不出现 | 跑 `npm run check`；确认页面已刷新；Host 的 boot 图里应包含 `dsh-select-quote`（`/plugins` 路由由 `ctx.clientModules` 提供） |
 | 输入框里出现协议原文 | 发送前的注入没生效：确认草稿里存在 U+200B（发送按钮应可用），以及 composer 结构未变（`[data-composer-card]`） |
-| 对话记录里没有卡片 | 该 `user/message` 事件的 `data.content` 是否含批注块；`conversation.chat.node` 的 `select-quote` 单元是否注册 |
+| 对话记录里没有卡片 | 该 `user/message` 事件的 `data.content` 是否含批注块；卡片由 `user` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 的 `user` 单元是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
 | 带图片的消息在记录里只剩卡片、图片没了 | `UserMessageDisplay` 是否拿到了 `renderMessageImages` |
 | 改了 CSS 不生效 | `<style>` 只注入一次，刷新页面 |
 | 按 Backspace 删不掉 / 中文输入被打断 | 检查是否有代码在响应草稿变化时调用 `setDraft()`（见关键机制 2） |

@@ -9,7 +9,6 @@ import { AnnotationCardView } from '../ui/AnnotationCardView.tsx'
 /** View payload a user message's cards are rendered from. */
 export interface SelectQuoteNodeData {
   readonly quotes: readonly ParsedAnnotation[]
-  readonly seq: number
 }
 
 export interface TranscriptQuoteCardProps {

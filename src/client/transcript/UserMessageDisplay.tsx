@@ -1,9 +1,6 @@
 import type { ReactNode } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
-import {
-  parseAnnotatedMessage,
-  scanAnnotatedMessage,
-} from '../protocol/annotation-protocol.ts'
+import { scanAnnotatedMessage } from '../protocol/annotation-protocol.ts'
 import { contentBlocksToText, displayTextWithoutQuote } from '../protocol/quote-protocol.ts'
 import { ensureToolbarStyles, styles } from '../styles.ts'
 import { TranscriptQuoteCard } from './TranscriptQuoteCard.tsx'
@@ -12,7 +9,6 @@ export interface UserMessageDisplayProps {
   node: {
     data: {
       content?: unknown
-      seq?: number
       time?: number
     }
   }
@@ -63,7 +59,7 @@ export function UserMessageDisplay({
     scanned.annotations.length > 0
       ? scanned.rest
       : displayTextWithoutQuote(raw).trim()
-  const quotes = scanned.annotations.length > 0 ? parseAnnotatedMessage(raw) : []
+  const quotes = scanned.annotations
   const images = contentImages(node.data?.content)
   if (!text && images.length === 0 && quotes.length === 0) return null
 
@@ -100,7 +96,7 @@ export function UserMessageDisplay({
         quotes.length > 0
           ? jsx(
               TranscriptQuoteCard,
-              { node: { data: { quotes, seq: node.data?.seq ?? 0 } } },
+              { node: { data: { quotes } } },
               'quotes',
             )
           : null,
