@@ -69,6 +69,23 @@ export function decorateAnnotationDirectives(root?: ParentNode): void {
   for (const node of hits) decorateTextNode(node)
 }
 
+/**
+ * Re-label chips that are already on screen after the language changed.
+ *
+ * Chip text is plain DOM, not React state, so a switch would otherwise leave
+ * old-language chips next to new-language popovers. Writing `textContent` here
+ * is safe for the observer: the new text node never contains the directive
+ * literal, so `decorateTextNode()` returns before it can touch the DOM.
+ */
+export function refreshDirectiveChips(root?: ParentNode): void {
+  const el = root ?? (typeof document === 'undefined' ? undefined : document.body)
+  if (!el) return
+  for (const chip of el.querySelectorAll<HTMLElement>(`[data-${DECO}]`)) {
+    const index = Number(chip.dataset[DECO])
+    if (Number.isFinite(index)) chip.textContent = t('chip.annotation', { index })
+  }
+}
+
 /** Observe chat DOM and decorate new directive text. Returns disposer. */
 export function watchAnnotationDirectives(root?: ParentNode): () => void {
   const el = root ?? (typeof document === 'undefined' ? undefined : document.body)

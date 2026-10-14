@@ -39,7 +39,8 @@
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify": "node scripts/verify-bundle.mjs",
-    "check": "npm run typecheck && npm run build && npm run verify"
+    "check": "npm run typecheck && npm run build && npm run verify",
+    "release": "npm run check && commit-and-tag-version"
   },
   "dsh": {
     "client": {
@@ -66,6 +67,7 @@
   "devDependencies": {
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3",
+    "commit-and-tag-version": "^13.2.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tsdown": "0.23.0",

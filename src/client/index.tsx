@@ -2,11 +2,22 @@ import type { Context } from '@deepseek-ai/cordis'
 import { QuoteCard } from './composer/AnnotationPanel.tsx'
 import { SelectionToolbar } from './SelectionToolbar.tsx'
 import { setRuntimeSession } from './runtime.ts'
-import { watchAnnotationDirectives } from './dom/decorateAnnotationDirectives.ts'
+import {
+  refreshDirectiveChips,
+  watchAnnotationDirectives,
+} from './dom/decorateAnnotationDirectives.ts'
 import {
   syncPendingAnnotationJobs,
   watchAnnotationMarks,
 } from './dom/annotate-text.ts'
+import {
+  bindLocale,
+  DICTIONARIES,
+  LANGUAGE_RU,
+  LOCALE_NS,
+  SHIPPED_DICTS,
+  subscribeLocale,
+} from './i18n.ts'
 import { ensureToolbarStyles } from './styles.ts'
 import { UserMessageDisplay } from './transcript/UserMessageDisplay.tsx'
 import { getAnnotations, subscribeAnnotations } from './state/annotation-store.ts'
@@ -24,11 +35,41 @@ import { getAnnotations, subscribeAnnotations } from './state/annotation-store.t
  * kind is classified as a turn-process member and `hidden` when the completed
  * turn's process disclosure is folded — mounted, but invisible. `user` is on
  * that allowlist, so the bubble is the only placement that is reliably visible.
+ *
+ * Language is the host's decision, never this plugin's: dictionaries go to
+ * `ctx.locale`, and `t()` resolves against whatever language the user picked in
+ * Settings. Self-detecting from `navigator` would disagree with the host on the
+ * desktop shell, where Electron pins the document language (`--lang`) to its own
+ * value while the host preference comes through `__DSH_LOCALE__`.
  */
-export const inject = ['slots', 'sessions']
+export const inject = ['slots', 'sessions', 'locale']
 
 export function apply(ctx: Context): void {
   ensureToolbarStyles()
+
+  // Dictionary registrations are owned effects; the fallback chain must end at
+  // `en`, and both shipped host locales are required in one typed call.
+  ctx.effect(() => ctx.locale.addLanguage(LANGUAGE_RU), 'dsh-select-quote: ru language')
+  ctx.effect(
+    () => ctx.locale.register(LOCALE_NS, SHIPPED_DICTS),
+    'dsh-select-quote: dictionaries (zh, en)',
+  )
+  ctx.effect(
+    () => ctx.locale.register(LOCALE_NS, LANGUAGE_RU.id, DICTIONARIES.ru),
+    'dsh-select-quote: dictionary (ru)',
+  )
+  bindLocale({
+    translate: ctx.locale.bind(LOCALE_NS),
+    getActive: () => ctx.locale.getLocale().active,
+    getRevision: () => ctx.locale.getSnapshot().revision,
+    subscribe: (listener) => ctx.locale.subscribe(listener),
+  })
+  // Chips are direct DOM rather than React state, so they need their own pass.
+  ctx.effect(
+    () => subscribeLocale(() => refreshDirectiveChips()),
+    'dsh-select-quote: chip language',
+  )
+
   // Assistant replies may echo :dsh-annotation{index="N"}; decorate them as chips.
   ctx.effect(() => watchAnnotationDirectives(), 'dsh-select-quote: annotation directives')
   // Underline + ordinal badges on annotated text; survive transcript re-renders.

@@ -20,6 +20,7 @@ import {
 } from './dom/selection.ts'
 import { focusComposer } from './dom/composer-host.ts'
 import { t } from './i18n.ts'
+import { useLocale } from './useLocale.ts'
 import { placePopover } from './dom/popoverPlacement.ts'
 import { setRuntimeSession } from './runtime.ts'
 import { getAnnotations, saveAnnotation } from './state/annotation-store.ts'
@@ -36,6 +37,7 @@ type Phase = 'idle' | 'comment'
 const COMMENT_MAX_HEIGHT = 220
 
 export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNode {
+  useLocale()
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const commentWrapRef = useRef<HTMLDivElement | null>(null)
   const commentRef = useRef<HTMLTextAreaElement | null>(null)

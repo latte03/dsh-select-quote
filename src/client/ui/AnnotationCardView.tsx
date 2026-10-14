@@ -13,6 +13,7 @@ import { placePopover } from '../dom/popoverPlacement.ts'
 import { styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
 import { t } from '../i18n.ts'
+import { useLocale } from '../useLocale.ts'
 
 export interface AnnotationCardViewProps {
   readonly title: string
@@ -33,6 +34,7 @@ export function AnnotationCardView({
   onRemove,
   onEditComment,
 }: AnnotationCardViewProps): ReactNode {
+  useLocale()
   const composer = variant === 'composer'
   // Composer cards summarise a pending selection, so the comment gets a label
   // ("Comment · …"). Transcript cards already show the selected text as the
@@ -111,7 +113,6 @@ export interface AnnotationSummaryProps {
   readonly onItemRemove?: (index: number, item: AnnotationSummaryItem) => void
   /** Composer only: persist one pending annotation's new comment. */
   readonly onItemEdit?: (index: number, item: AnnotationSummaryItem, comment: string) => void
-  readonly hint?: string
 }
 
 /** Grace period so pointer transit between the summary and the panel never closes it. */
@@ -137,8 +138,8 @@ export function AnnotationSummary({
   onItemSelect,
   onItemRemove,
   onItemEdit,
-  hint = t('summary.hint'),
 }: AnnotationSummaryProps): ReactNode {
+  useLocale()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const popRef = useRef<HTMLDivElement | null>(null)
   const closeTimerRef = useRef<number | null>(null)
@@ -477,7 +478,7 @@ export function AnnotationSummary({
           }),
           jsx('div', {
             className: styles.summaryHint,
-            children: hint,
+            children: t('summary.hint'),
           }),
         ],
       }),

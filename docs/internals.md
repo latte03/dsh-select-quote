@@ -8,8 +8,9 @@
 npm run typecheck   # tsc --noEmit，应无输出
 npm run build       # 产出 lib/index.js 与 lib/client.js
 npm run watch       # 增量重建
-npm run verify      # 无头执行 lib/client.js，断言 4 项贡献都注册上了
+npm run verify      # 无头执行 lib/client.js：8 项贡献都注册上，且三种语言的词典键与占位符齐备
 npm run check       # typecheck + build + verify（提交前跑这个）
+npm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
 
 **为什么有 `verify`**：`tsdown` 不做类型检查，一个语法坏掉的 bundle 也能构建"成功"。最典型的一次事故是 CSS 模板字符串里出现了反引号（`` `.nyYjTG_file` ``），字符串被提前截断，产出的 JS 无法执行，但 build 输出一切正常。`verify` 把 `lib/client.js` 放进假的 `window.__ModuleLoader__` 里跑一遍，用 mock ctx 调 `apply()`，逐项核对注册结果——这是唯一能在浏览器之外发现这类错误的手段。改动 `src/client/index.tsx` 的注册项时，记得同步 `scripts/verify-bundle.mjs` 里的 `EXPECTED`。
@@ -41,13 +42,14 @@ Each item contains text selected from an earlier message ...
 
 旧版把引用写成 Markdown 引用块。现在**不再写入**，只在 `quote-protocol.ts` 里保留读取与剥离能力（`parseQuoteMessage()` / `displayTextWithoutQuote()`），用于渲染历史消息。新消息一律走上面的 JSON 块。
 
-## 客户端贡献（共 4 项）
+## 客户端贡献（共 8 项）
 
 | 位置 | 类型 | 说明 |
 |---|---|---|
 | `shell.overlay` | list slot | `select-quote-toolbar`（order 100）：划词工具条 + 评论气泡。挂 root 级，切会话/看历史都不会失去观察 |
 | `conversation.input.overlay` | list slot | `select-quote-card`（order 20）：输入框内的批注摘要；`select-quote-session-bridge`（order 1）：只负责把 `sessionId` 发布给 root 工具条 |
 | `conversation.chat.node` | keyed slot | `user`（`priority: -10`）：替换内置用户气泡，剥掉协议块并渲染批注卡片 |
+| `ctx.locale` | 语言服务 | `addLanguage(ru)` + `register('select-quote', {zh,en})` + `register('select-quote','ru',…)` + `bind('select-quote')`，见下面第 9 节 |
 
 不再注册 `select-quote` Chat 节点，也不再注册 Conversation Definition——卡片内联在 `user` 节点里，原因见下面第 4 节。
 
@@ -127,11 +129,29 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 
 > 凡是"改写 DOM 的观察者"都要自检这两条：**没有实际命中就不要写 DOM**，以及**别把自己输出的节点当成新输入**。
 
+**9. 界面语言由宿主决定，插件只提供词典**
+
+文案语言来自 `@deepseek-ai/dsh-client-locale` 的服务 `ctx.locale`，插件不再自行判断：
+
+| 调用 | 用途 |
+|---|---|
+| `register(ns, {zh, en})` | 一次注册全部内置语言的词典；宿主强制要求两种都在 |
+| `addLanguage({id:'ru', label:'Русский', fallback:'en'})` | 把非内置语言加进设置里的候选；回退链必须以 `en` 结束，否则注册即抛 |
+| `register(ns, 'ru', dict)` | 三参形式，给外部语言补词典 |
+| `bind(ns)` | 拿到稳定的 `t(key, params)`，每次调用都按当前 active 语言解析 |
+| `subscribe(fn)` | 语言或词典变化时通知（注册本身也会推进 `revision`） |
+
+**为什么必须由宿主说了算**：桌面版是 Electron 外壳，渲染进程带着 `--lang=en-US` 启动，`navigator.language` 因此报 en，而用户在设置里选的是中文——插件若自查 `navigator`，界面会和产品反着来。宿主自己在 Client 挂载前通过 `__DSH_LOCALE__` 拿到 Host preference 与有序 OS 语言列表，这条通道只有 `ctx.locale` 能读；偏好本身持久化在 profile 的 `cordis.patch.yml` 里（`- id: locale / config.preference`）。
+
+**即时切换**：React 侧经 `useLocale()`（`useSyncExternalStore` 挂在 `subscribe` 与 `revision` 上）重渲染；chip 是直接写 DOM 的，所以在 `apply()` 里订阅一次 `refreshDirectiveChips()` 重写文案。写 DOM 的订阅不会触发第 8 节那个循环——新文本不含指令字面量，`decorateTextNode()` 在入口就返回。
+
+**复数**：宿主的词典是「键 → 单个模板字符串」，没有复数概念。带 `{count}` 的文案因此拆成 `key.one` / `key.few` / `key.many` / `key.other`，由 `i18n.ts` 按语言挑形式，挑不到就退 `key.other`。`npm run verify` 按复数组比对三种语言：组必须都存在，且**每组必须有 `.other`**，占位符名也不允许漂移——漏一个键会渲染出键名本身，漏一个占位符会把 `{count}` 直接印在界面上。
+
 ## 目录结构
 
 ```
 src/index.ts                       # Node 半：占位，让包被 Loader 挂载
-src/client/index.tsx               # Client 半入口：注册 Slot 与装饰观察者
+src/client/index.tsx               # Client 半入口：注册 Slot、语言词典与装饰观察者
 src/client/SelectionToolbar.tsx    # 划词浮动条（复制 / 添加到任务）+ 评论气泡
 src/client/composer/AnnotationPanel.tsx      # 输入框内批注摘要 + 发送动作拦截
 src/client/composer/useSendIntercept.ts      # 发送手势时把待发批注折进草稿
@@ -150,11 +170,13 @@ src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注卡片�
 src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡（隐藏协议块、保留图片、内联批注卡片）
 src/client/ui/AnnotationCardView.tsx  # 批注卡片与悬停列表面板（portal 到 body、内联编辑）
 src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus）
+src/client/i18n.ts                   # 三份词典（zh / en / ru）、复数形式挑选、把 t() 转给宿主 bind 结果
+src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
 src/client/styles.ts               # 全部 CSS（模板字符串注入）
 src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId）
 src/client/context.d.ts            # 客户端 Context 服务的类型补充
 scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装
-scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 4 项）
+scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 8 项，另查三种语言词典齐备）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
 dev.patch.yml                      # 本地 --patch 开发层（绝对路径，不发布）
 lib/                               # 构建产物（已提交，运行时直接读它）
@@ -166,6 +188,7 @@ lib/                               # 构建产物（已提交，运行时直接�
 - `user/message` 事件的内容在 `data.content`（不是 `data.message.content`）；
 - 深色属性 `data-ds-dark-theme` 由 `dsh-client-ui-layout` 挂在 `body`；
 - 槽位名 `shell.overlay` / `conversation.input.overlay` / `conversation.chat.node` 及其 props（`useInput`、`inputActions.setDraft`）；
+- `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
 - 类名 `.nyYjTG_file`、`.I17U7q_follow` 只是几何与层叠参照，产品改版不影响功能，但会影响观感。
 
 ## 排错
@@ -177,4 +200,5 @@ lib/                               # 构建产物（已提交，运行时直接�
 | 对话记录里没有卡片 | 该 `user/message` 事件的 `data.content` 是否含批注块；卡片由 `user` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 的 `user` 单元是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
 | 带图片的消息在记录里只剩卡片、图片没了 | `UserMessageDisplay` 是否拿到了 `renderMessageImages` |
 | 改了 CSS 不生效 | `<style>` 只注入一次，刷新页面 |
+| 界面语言不跟着 dsh 变 | `npm run verify` 是否列出 4 项 `locale.*` 贡献；宿主是否提供 `ctx.locale`（没有则文案退到 English）；用户在设置里选的语言是否已注册 |
 | 按 Backspace 删不掉 / 中文输入被打断 | 检查是否有代码在响应草稿变化时调用 `setDraft()`（见关键机制 2） |
