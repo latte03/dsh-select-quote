@@ -37,10 +37,12 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
+    "sync:desktop": "node scripts/sync-desktop.mjs",
+    "dev:desktop": "node scripts/dev-desktop.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify": "node scripts/verify-bundle.mjs",
-    "check": "npm run typecheck && npm run build && npm run verify",
-    "release": "npm run check && commit-and-tag-version"
+    "check": "pnpm run typecheck && pnpm run build && pnpm run verify",
+    "release": "pnpm run check && commit-and-tag-version"
   },
   "dsh": {
     "client": {
