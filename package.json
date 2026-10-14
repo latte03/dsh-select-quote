@@ -1,6 +1,6 @@
 {
   "name": "dsh-select-quote",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "DeepSeek Harness web plugin: annotate text selected in the conversation — the selection rides along with your next message, is marked in the source text, and the model points back at it.",
   "keywords": [
     "deepseek",

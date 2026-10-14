@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.2](https://github.com/latte03/dsh-select-quote/compare/v0.3.1...v0.3.2) (2026-10-14)
+
+### Features
+
+* 桌面端热更新脚本 ([a69b634](https://github.com/latte03/dsh-select-quote/commit/a69b634ada08e2797259adaf7b6c8bf73918aedb))
+
+### Bug Fixes
+
+* 回指 chip 的 dataset 键不是合法标识符 ([afaeb11](https://github.com/latte03/dsh-select-quote/commit/afaeb112cf4b3302b223f848df441a0cf50479f9))
+
 ## [0.3.1](https://github.com/latte03/dsh-select-quote/compare/v0.3.0...v0.3.1) (2026-10-14)
 
 ### Features
