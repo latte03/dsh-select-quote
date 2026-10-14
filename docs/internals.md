@@ -5,17 +5,22 @@
 ## 开发命令
 
 ```bash
-npm run typecheck   # tsc --noEmit，应无输出
-npm run build       # 产出 lib/index.js 与 lib/client.js
-npm run watch       # 增量重建
-npm run verify      # 无头执行 lib/client.js：8 项贡献都注册上，且三种语言的词典键与占位符齐备
-npm run check       # typecheck + build + verify（提交前跑这个）
-npm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
+pnpm run typecheck   # tsc --noEmit，应无输出
+pnpm run build       # 产出 lib/index.js 与 lib/client.js
+pnpm run watch       # 增量重建
+pnpm run sync:desktop        # 把 lib/ 推给桌面客户端已安装的副本（热更新）
+pnpm run sync:desktop -- --watch
+pnpm run dev:desktop         # 上面两个一起开：增量重建 + 推送（scripts/dev-desktop.mjs 拉起两个子进程）
+pnpm run verify      # 无头执行 lib/client.js：8 项贡献都注册上，且三种语言的词典键与占位符齐备
+pnpm run check       # typecheck + build + verify（提交前跑这个）
+pnpm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
 
 **为什么有 `verify`**：`tsdown` 不做类型检查，一个语法坏掉的 bundle 也能构建"成功"。最典型的一次事故是 CSS 模板字符串里出现了反引号（`` `.nyYjTG_file` ``），字符串被提前截断，产出的 JS 无法执行，但 build 输出一切正常。`verify` 把 `lib/client.js` 放进假的 `window.__ModuleLoader__` 里跑一遍，用 mock ctx 调 `apply()`，逐项核对注册结果——这是唯一能在浏览器之外发现这类错误的手段。改动 `src/client/index.tsx` 的注册项时，记得同步 `scripts/verify-bundle.mjs` 里的 `EXPECTED`。
 
 **本地跑起来**：`dev.patch.yml` 里的插件路径必须是**绝对路径**（checkout 不在 profile 的 `node_modules` 里，Loader 没有包名可解析）。换机器/换目录时改那一行；该文件不随 npm 包发布，发布版走 `cordis.patch.yml`（按包名）。
+
+**桌面客户端的热更新（`sync:desktop`）**：宿主把 `@deepseek-ai/dsh-client-hmr` 挂在 web 组合包里（`dsh-web-app/cordis.patch.yml` 注明 always mounted，没有产物变化时静默）。它的 node 半每 500ms `statSync` 每个 roster 行 client 产物的 `mtimeMs/ctimeMs/size`，签名一变就调 `clientModules.rebuilt(id)` 重算 revision，并经 SSE `/plugins/events` 广播 `{type:"rebuilt",id,rev}`；浏览器半收到即 `ctx.modules.entries.reload(id, rev)`，只重载这一个插件模块。产物按 `?rev=<hash>` 取，新 revision 天然绕过 immutable 缓存。因此 `scripts/sync-desktop.mjs` 要做的只有一件事：**让被监听的那个文件内容变化**——它按 `$DSH_HOME`（默认 `~/.dsh`）+ profile（`--profile` / `$DSH_PROFILE`，默认 `desktop`）定位已安装副本，只在字节不同的时候写，避免空重载。换 package 版本（`pnpm add` / 市场更新）仍然必须重启客户端，热路径只覆盖产物字节。
 
 ## 数据契约
 
@@ -78,7 +83,7 @@ Each item contains text selected from an earlier message ...
 **4. 对话记录：气泡替换 + 卡片内联在 `user` 节点里**
 
 - `UserMessageDisplay.tsx` 以 `priority: -10` 替换内置的 `user` 节点，把协议块从气泡里剥掉，**同时自己渲染消息携带的图片**——只批注、没有正文的消息气泡文本为空，若不接管图片渲染，整条消息（含图片）会消失；
-- 卡片**由该组件自己渲染**（`<TranscriptQuoteCard>`），而不是注册一个独立的 `select-quote` Chat 节点；
+- 卡片**由该组件自己渲染**（`<TranscriptQuoteCard>`），而不是注册一个独立的 `select-quote` Chat 节点；竖排顺序是 附件 → 卡片 → 气泡文本，与输入框里「卡片在草稿上方」保持一致；
 - `TranscriptQuoteCard.tsx` 负责卡片本身：**每段批注一张 `AnnotationCardView`（`variant: 'transcript'`）**，纵向堆叠、与气泡同侧。卡片上直接显示**选中文本 + 用户评论**，点卡片滚回正文对应 mark——评论是用户认出自己那条批注的唯一凭据，不能只藏在悬停面板里（曾经用过 `AnnotationSummary`，折叠态只显示「N 条批注」，评论必须悬停才看得到）。
 
 > **为什么卡片必须挂在 `user` 节点上**（2026-10-08 定位）：`conversation.chat.node` 虽然能注册任意 key，但 `ui-chat` 用 allowlist `TURN_PROCESS_INDEPENDENT_KINDS` 决定一个节点能否脱离「Turn 过程折叠块」：
@@ -108,8 +113,14 @@ Each item contains text selected from an earlier message ...
 卡片几何对齐产品自带的文件卡片（`ui-deliverables` 的 `.nyYjTG_file`）：`.5px` 发丝边框、18px 圆角、64px 固定高、10px 内边距、hover 背景过渡；删除按钮绝对定位右上角，仅 hover / 键盘聚焦时淡入。
 
 - 深色模式用产品自己的 `body[data-ds-dark-theme]`（由 `dsh-client-ui-layout` 挂在 body 上），**不是** `prefers-color-scheme`；
-- 颜色一律用会随主题翻转的 `--dsw-alias-*` / `--dsw-static-*` token，只自己定义 `--dsq-card-fill` / `--dsq-card-hover` 两个填充变量；
-- 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）。
+- 颜色一律走产品 token，但**不直接写 token 名**：`styles.ts` 的分层是
+  1. **token 层**：产品 token 各包一次成 `--dsq-*` 别名（`--dsq-label`、`--dsq-line`、`--dsq-shadow-pop`…），兜底值只在这里出现一遍；别名块挂在 `body` 而不是 `:root`，因为产品在 `body[data-ds-dark-theme]` 上翻转调色板，挂在根元素会把亮色值冻结后继承进深色页；
+  2. **原子层**：`.dsq_a_*`（`row` / `col` / `col-end` / `grid-mid` / `ell` / `plain` / `keep` / `grow` / `box` / `inline-row`），由 `ATOMS` 表同时生成 CSS 规则和 `A` 常量，两边不可能对不上；**只放形状，不放数字和颜色**；
+  3. **组件层**：带数字的取值都留在这里，注入顺序在原子之后，所以组件规则总能盖住原子；
+  4. **宿主层**：`@keyframes`、深色覆写、以及伸进产品 DOM 的那两条规则（`.dsq_cardPad` 给 composer 让位）。
+  JSX 里用 `cx(styles.card, A.row)` 组合；`A.x` 和 `styles.x` 都是字面量类型，写错名字过不了 `pnpm run typecheck`；
+- 同一段卡片几何在输入框和对话记录里不再各写一份：`.dsq_card` / `.dsq_cardIcon` / `.dsq_cardBody` / `.dsq_cardTitle` / `.dsq_cardSubtitle` 是共用基底，`.dsq_tCard` / `.dsq_tCardIcon` 只留真正不同的数字（宽度、40px 图标），基底里那些对 `position` / `display` 无意义的属性（如 `flex`）在 transcript 侧是惰性的；
+- 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）；桌面端可用 `pnpm run sync:desktop` 热更新（见「桌面客户端的热更新」）。
 
 **8. 装饰观察者会自我触发：一条 `return` 挡住了渲染进程楔死**
 
@@ -145,7 +156,7 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 
 **即时切换**：React 侧经 `useLocale()`（`useSyncExternalStore` 挂在 `subscribe` 与 `revision` 上）重渲染；chip 是直接写 DOM 的，所以在 `apply()` 里订阅一次 `refreshDirectiveChips()` 重写文案。写 DOM 的订阅不会触发第 8 节那个循环——新文本不含指令字面量，`decorateTextNode()` 在入口就返回。
 
-**复数**：宿主的词典是「键 → 单个模板字符串」，没有复数概念。带 `{count}` 的文案因此拆成 `key.one` / `key.few` / `key.many` / `key.other`，由 `i18n.ts` 按语言挑形式，挑不到就退 `key.other`。`npm run verify` 按复数组比对三种语言：组必须都存在，且**每组必须有 `.other`**，占位符名也不允许漂移——漏一个键会渲染出键名本身，漏一个占位符会把 `{count}` 直接印在界面上。
+**复数**：宿主的词典是「键 → 单个模板字符串」，没有复数概念。带 `{count}` 的文案因此拆成 `key.one` / `key.few` / `key.many` / `key.other`，由 `i18n.ts` 按语言挑形式，挑不到就退 `key.other`。`pnpm run verify` 按复数组比对三种语言：组必须都存在，且**每组必须有 `.other`**，占位符名也不允许漂移——漏一个键会渲染出键名本身，漏一个占位符会把 `{count}` 直接印在界面上。
 
 ## 目录结构
 
@@ -172,10 +183,12 @@ src/client/ui/AnnotationCardView.tsx  # 批注卡片与悬停列表面板（port
 src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus）
 src/client/i18n.ts                   # 三份词典（zh / en / ru）、复数形式挑选、把 t() 转给宿主 bind 结果
 src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
-src/client/styles.ts               # 全部 CSS（模板字符串注入）
+src/client/styles.ts               # 全部 CSS，四层：token / 原子 / 组件 / 宿主（模板字符串注入）
 src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId）
 src/client/context.d.ts            # 客户端 Context 服务的类型补充
-scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装
+scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装（--watch 时每次重建都重新包装）
+scripts/sync-desktop.mjs           # 把 lib/ 写进桌面 profile 已安装副本，借宿主热更新（--watch 常驻）
+scripts/dev-desktop.mjs            # 拉起 build --watch + sync --watch 两个子进程，任一退出就收摊
 scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 8 项，另查三种语言词典齐备）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
 dev.patch.yml                      # 本地 --patch 开发层（绝对路径，不发布）
@@ -189,16 +202,18 @@ lib/                               # 构建产物（已提交，运行时直接�
 - 深色属性 `data-ds-dark-theme` 由 `dsh-client-ui-layout` 挂在 `body`；
 - 槽位名 `shell.overlay` / `conversation.input.overlay` / `conversation.chat.node` 及其 props（`useInput`、`inputActions.setDraft`）；
 - `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
+- 开发期依赖：`client-hmr` 挂在 web 组合包里，按 500ms 轮询 client 产物并经 `/plugins/events` 推 `rebuilt`（`sync:desktop` 的热更新路径）；
 - 类名 `.nyYjTG_file`、`.I17U7q_follow` 只是几何与层叠参照，产品改版不影响功能，但会影响观感。
 
 ## 排错
 
 | 现象 | 先查 |
 |---|---|
-| 划词没有工具条 / 卡片不出现 | 跑 `npm run check`；确认页面已刷新；Host 的 boot 图里应包含 `dsh-select-quote`（`/plugins` 路由由 `ctx.clientModules` 提供） |
+| 划词没有工具条 / 卡片不出现 | 跑 `pnpm run check`；确认页面已刷新；Host 的 boot 图里应包含 `dsh-select-quote`（`/plugins` 路由由 `ctx.clientModules` 提供） |
 | 输入框里出现协议原文 | 发送前的注入没生效：确认草稿里存在 U+200B（发送按钮应可用），以及 composer 结构未变（`[data-composer-card]`） |
 | 对话记录里没有卡片 | 该 `user/message` 事件的 `data.content` 是否含批注块；卡片由 `user` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 的 `user` 单元是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
 | 带图片的消息在记录里只剩卡片、图片没了 | `UserMessageDisplay` 是否拿到了 `renderMessageImages` |
 | 改了 CSS 不生效 | `<style>` 只注入一次，刷新页面 |
-| 界面语言不跟着 dsh 变 | `npm run verify` 是否列出 4 项 `locale.*` 贡献；宿主是否提供 `ctx.locale`（没有则文案退到 English）；用户在设置里选的语言是否已注册 |
+| `sync:desktop` 推了但客户端没变 | 报 `already matches` 说明 `lib/` 还没重建（先跑 `pnpm run watch`）；报 `no installed bundle` 说明 profile 名不对（`--profile <name>`）；都正常仍不重载，看宿主 boot 日志里有没有 `client-hmr` |
+| 界面语言不跟着 dsh 变 | `pnpm run verify` 是否列出 4 项 `locale.*` 贡献；宿主是否提供 `ctx.locale`（没有则文案退到 English）；用户在设置里选的语言是否已注册 |
 | 按 Backspace 删不掉 / 中文输入被打断 | 检查是否有代码在响应草稿变化时调用 `setDraft()`（见关键机制 2） |

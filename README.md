@@ -30,7 +30,7 @@ dsh --profile web
 
 ```bash
 git clone https://github.com/latte03/dsh-select-quote && cd dsh-select-quote
-npm install && npm run build
+pnpm install && pnpm run build
 dsh web --patch "$PWD/dev.patch.yml"
 ```
 
@@ -58,7 +58,7 @@ dsh web --patch "$PWD/dev.patch.yml"
 
 ## 常见问题
 
-**升级 dsh 之后功能不对？** 先 `npm run check`；产物没问题就对照 [`docs/internals.md`](docs/internals.md) 的「依赖的产品内部约定」逐条复核，那里列了所有产品内部名。
+**升级 dsh 之后功能不对？** 先 `pnpm run check`；产物没问题就对照 [`docs/internals.md`](docs/internals.md) 的「依赖的产品内部约定」逐条复核，那里列了所有产品内部名。
 
 **划词没有工具条？** 确认选区在对话区而不是编辑器里；刷新页面（样式与观察者是幂等注入的）；宿主 boot 日志里应出现 `dsh-select-quote`。
 
@@ -73,22 +73,36 @@ dsh web --patch "$PWD/dev.patch.yml"
 ## 开发
 
 ```bash
-npm install
-npm run check     # typecheck + build + verify
-npm run watch     # 增量重建
+pnpm install
+pnpm run check     # typecheck + build + verify
+pnpm run watch     # 增量重建
 ```
 
-`npm run verify` 无头执行产物，断言 8 项贡献都注册上，并检查三份词典的键与 `{placeholder}` 在每种语言里都齐备（复数消息必须有 `.other` 兜底）。
+依赖用 pnpm 管理（锁文件 `pnpm-lock.yaml`）；构建产物 `lib/` 随源码一起提交，运行时直接读它。
+
+`pnpm run verify` 无头执行产物，断言 8 项贡献都注册上，并检查三份词典的键与 `{placeholder}` 在每种语言里都齐备（复数消息必须有 `.other` 兜底）。
+
+### 热更新到桌面客户端
+
+宿主每半秒比较一次各插件 client 产物的文件状态，一旦变化就通过 `/plugins/events` 让页面只重载这个模块，所以运行中的客户端不用重启：
+
+```bash
+pnpm run sync:desktop             # 把 lib/ 推给已安装的副本
+pnpm run sync:desktop -- --watch  # 常驻：lib/ 一变就推
+pnpm dev:desktop                  # 增量重建 + 推送，一条命令
+```
+
+目标路径按 `$DSH_HOME`（默认 `~/.dsh`）与 profile 名推导，profile 用 `--profile <name>` 或 `$DSH_PROFILE` 指定，默认 `desktop`。字节没变就不写，避免空重载。重载会重置插件的内存状态，未发送的批注会丢。
 
 发布：先把源码与产物 `lib/` 一起提交，再跑
 
 ```bash
-npm run release   # check → 追加 CHANGELOG.md → 提升版本号并打 tag
+pnpm run release   # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
 
 ## 贡献
 
-fork 后开分支，提交前跑 `npm run check`。一个 PR 只讲一件事，功能与文档分开，方便追溯。PR 里写清复现方式（环境、dsh 版本、操作步骤）。
+fork 后开分支，提交前跑 `pnpm run check`。一个 PR 只讲一件事，功能与文档分开，方便追溯。PR 里写清复现方式（环境、dsh 版本、操作步骤）。
 
 ## 致谢
 
