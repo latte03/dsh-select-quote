@@ -108,7 +108,11 @@ Each item contains text selected from an earlier message ...
 
 面板 **portal 到 `document.body`**：对话区的 `.I17U7q_follow` 带 `contain: layout`、滚动容器带 `container-type`，它们都是 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群有 320ms 宽限；resize / 滚动时面板重新定位而非失效。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
 
-**7. 样式与主题**
+**7. 划词只在对话区生效**
+
+工具条的唯一入口是 `readSelectionSnapshot()`（`SelectionToolbar.tsx` 的 refresh 调它）：选区的 anchor 与 focus 都必须在 `[data-chat-flow-key]` 消息里（`isInsideTranscript()`），且不在输入框 / 工具条自身里。侧边栏、设置、模型选择等其它面板划词不会有任何反应——这几处没有 flow item。宿主侧确认：`ChatView` 给每条消息的 div 写 `data-chat-flow-key: routedNode.key`，分组座位也带同一个属性（属于对话区，允许划词）。
+
+**8. 样式与主题**
 
 卡片几何对齐产品自带的文件卡片（`ui-deliverables` 的 `.nyYjTG_file`）：`.5px` 发丝边框、18px 圆角、64px 固定高、10px 内边距、hover 背景过渡；删除按钮绝对定位右上角，仅 hover / 键盘聚焦时淡入。
 
@@ -122,7 +126,7 @@ Each item contains text selected from an earlier message ...
 - 同一段卡片几何在输入框和对话记录里不再各写一份：`.dsq_card` / `.dsq_cardIcon` / `.dsq_cardBody` / `.dsq_cardTitle` / `.dsq_cardSubtitle` 是共用基底，`.dsq_tCard` / `.dsq_tCardIcon` 只留真正不同的数字（宽度、40px 图标），基底里那些对 `position` / `display` 无意义的属性（如 `flex`）在 transcript 侧是惰性的；
 - 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）；桌面端可用 `pnpm run sync:desktop` 热更新（见「桌面客户端的热更新」）。
 
-**8. 装饰观察者会自我触发：一条 `return` 挡住了渲染进程楔死**
+**9. 装饰观察者会自我触发：一条 `return` 挡住了渲染进程楔死**
 
 `decorateTextNode()` 的退出条件是文本不含字面量 `:dsh-annotation{`。协议头部原文里就带着这个字面量（`# Response annotations:` 那段指令在描述内联标记时逐字写出了 `:dsh-annotation{index="N"}`，`N` 是字母），而严格正则 `/:dsh-annotation\{index="([1-9]\d*)"\}/g` 只接受数字，于是「含字面量、零匹配」成立：`while` 一次都不进，`last` 停在 `0`，末尾仍然执行了
 
@@ -140,7 +144,7 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 
 > 凡是"改写 DOM 的观察者"都要自检这两条：**没有实际命中就不要写 DOM**，以及**别把自己输出的节点当成新输入**。
 
-**9. 界面语言由宿主决定，插件只提供词典**
+**10. 界面语言由宿主决定，插件只提供词典**
 
 文案语言来自 `@deepseek-ai/dsh-client-locale` 的服务 `ctx.locale`，插件不再自行判断：
 

@@ -52,10 +52,19 @@ export function collectCleanText(root: HTMLElement): TextEntry[] {
   return entries
 }
 
-function flowItemOf(node: Node): HTMLElement | null {
-  const el = node instanceof Element ? node : node.parentElement
+function flowItemOf(node: Node | null): HTMLElement | null {
+  const el = node instanceof Element ? node : node?.parentElement
   const item = el?.closest(FLOW_ITEM)
   return item instanceof HTMLElement ? item : null
+}
+
+/**
+ * True when the node lives inside a conversation message. Selections in the
+ * sidebar, settings, model picker or any other app chrome are not quotes, so
+ * the toolbar must stay away from them.
+ */
+export function isInsideTranscript(node: Node | null): boolean {
+  return flowItemOf(node) !== null
 }
 
 function pointOffset(entries: readonly TextEntry[], container: Node, offset: number): number | null {

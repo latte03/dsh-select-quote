@@ -1,5 +1,5 @@
 /** Selection snapshot used by the floating toolbar. */
-import { rangeOffsetsInFlowItem, type MessageLocator } from './message-text.ts'
+import { isInsideTranscript, rangeOffsetsInFlowItem, type MessageLocator } from './message-text.ts'
 
 export interface SelectionSnapshot {
   /** Trimmed selected text. */
@@ -66,7 +66,8 @@ function toolbarPosition(rect: DOMRect): { left: number; top: number } {
 }
 
 /**
- * Read the live selection when it is a non-empty range outside the composer.
+ * Read the live selection when it is a non-empty range inside a conversation
+ * message and outside the composer / our own chrome.
  */
 export function readSelectionSnapshot(toolbarRoot?: HTMLElement | null): SelectionSnapshot | null {
   const selection = window.getSelection()
@@ -76,6 +77,9 @@ export function readSelectionSnapshot(toolbarRoot?: HTMLElement | null): Selecti
   if (!anchorNode || !focusNode) return null
   if (isInsideComposerInput(anchorNode) || isInsideComposerInput(focusNode)) return null
   if (toolbarRoot?.contains(anchorNode) || toolbarRoot?.contains(focusNode)) return null
+  // Only quotes taken from the transcript qualify: selecting the sidebar,
+  // settings or any other app chrome must not raise the toolbar.
+  if (!isInsideTranscript(anchorNode) || !isInsideTranscript(focusNode)) return null
 
   const text = selection.toString().replace(/\r\n/g, '\n').trim()
   if (!text) return null
