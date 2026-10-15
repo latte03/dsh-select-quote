@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.3](https://github.com/latte03/dsh-select-quote/compare/v0.3.2...v0.3.3) (2026-10-15)
+
+### Features
+
+* 待发批注按会话持久化 ([85bec59](https://github.com/latte03/dsh-select-quote/commit/85bec59feb4664d51a4f989a7d50e78f2a221a64))
+
+### Bug Fixes
+
+* 划词工具条只在对话区生效 ([b2ae7ad](https://github.com/latte03/dsh-select-quote/commit/b2ae7adadc08eecfb657dd4509a4b5ad5aa8bea3))
+
 ## [0.3.2](https://github.com/latte03/dsh-select-quote/compare/v0.3.1...v0.3.2) (2026-10-14)
 
 ### Features
