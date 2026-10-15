@@ -22,8 +22,7 @@ import { focusComposer } from './dom/composer-host.ts'
 import { t } from './i18n.ts'
 import { useLocale } from './useLocale.ts'
 import { placePopover } from './dom/popoverPlacement.ts'
-import { setRuntimeSession } from './runtime.ts'
-import { getAnnotations, saveAnnotation } from './state/annotation-store.ts'
+import { bindAnnotationSession, getAnnotations, saveAnnotation } from './state/annotation-store.ts'
 import { ensureToolbarStyles, A, cx, styles } from './styles.ts'
 import { LucideIcon } from './ui/icons.tsx'
 
@@ -50,7 +49,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
 
   useEffect(() => {
     ensureToolbarStyles()
-    if (sessionId) setRuntimeSession(sessionId)
+    if (sessionId) bindAnnotationSession(sessionId)
   }, [sessionId])
 
   const hide = useCallback(() => {

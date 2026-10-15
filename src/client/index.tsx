@@ -1,7 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { QuoteCard } from './composer/AnnotationPanel.tsx'
 import { SelectionToolbar } from './SelectionToolbar.tsx'
-import { setRuntimeSession } from './runtime.ts'
 import {
   refreshDirectiveChips,
   watchAnnotationDirectives,
@@ -20,7 +19,13 @@ import {
 } from './i18n.ts'
 import { ensureToolbarStyles } from './styles.ts'
 import { UserMessageDisplay } from './transcript/UserMessageDisplay.tsx'
-import { getAnnotations, subscribeAnnotations } from './state/annotation-store.ts'
+import {
+  bindAnnotationSession,
+  getAnnotations,
+  setAnnotationPersistence,
+  subscribeAnnotations,
+} from './state/annotation-store.ts'
+import { createAnnotationPersistence } from './state/annotation-storage.ts'
 
 /**
  * Browser half of dsh-select-quote.
@@ -80,6 +85,15 @@ export function apply(ctx: Context): void {
     return subscribeAnnotations(() => syncPendingAnnotationJobs(getAnnotations()))
   }, 'dsh-select-quote: pending annotation marks')
 
+  // Pending annotations survive a refresh the way the draft does: the port is
+  // the host store when the platform offers it, plain localStorage otherwise.
+  ctx.effect(() => {
+    const port = createAnnotationPersistence()
+    setAnnotationPersistence(port)
+    port.prune()
+    return () => setAnnotationPersistence(null)
+  }, 'dsh-select-quote: annotation persistence')
+
   // Root: always mounted selection toolbar + comment popover.
   ctx.slots.inject('shell.overlay', () => {
     ctx.slots.register(
@@ -131,6 +145,6 @@ export function apply(ctx: Context): void {
 
 /** Invisible session-scoped bridge that publishes sessionId for the root toolbar. */
 function SessionBridge({ sessionId }: { sessionId?: string }): null {
-  setRuntimeSession(sessionId)
+  bindAnnotationSession(sessionId)
   return null
 }

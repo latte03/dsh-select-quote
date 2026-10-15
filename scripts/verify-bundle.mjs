@@ -8,6 +8,10 @@
  * `window.__ModuleLoader__` plus a `require` shim — then calls `apply()` with a
  * mock Cordis context and asserts every registration landed.
  *
+ * It then replays the annotation persistence cycle against the real source
+ * modules (save → drop the in-memory store → reload → reconcile → clear →
+ * retention), on both storage backends, with no DOM involved.
+ *
  * Usage: npm run verify   (after npm run build)
  */
 
@@ -35,9 +39,226 @@ const EXPECTED = [
 /** Languages the host ships; a namespace must carry both in one typed call. */
 const SHIPPED_LOCALES = ['en', 'zh']
 
-const SEEDS = new Set(['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'])
+const SEEDS = new Set([
+  'react',
+  'react/jsx-runtime',
+  'react-dom',
+  'react-dom/client',
+  '@deepseek-ai/dsh-client-store',
+])
 
-function loadFactory(code) {
+/**
+ * Replay the annotation persistence cycle headlessly (Q9).
+ *
+ * The store layer is DOM-free and takes its storage as a port, so the real
+ * source modules can be imported straight into Node. A query-busted import
+ * gives a second, independent store instance — that is the "reload": fresh
+ * in-memory map, same storage underneath. (`runtime.ts` is a shared
+ * dependency, so it survives the reload exactly as it does in the browser;
+ * the reload phase therefore drives `adoptPersistedAnnotations` directly,
+ * which is what the deferred bind call ends up invoking.)
+ */
+let moduleRevision = 0
+
+async function freshStore() {
+  moduleRevision += 1
+  const url = new URL(
+    `../src/client/state/annotation-store.ts?revision=${moduleRevision}`,
+    import.meta.url,
+  )
+  return import(url.href)
+}
+
+const flush = () => new Promise((done) => setTimeout(done, 0))
+
+/** One backend: save → reload → reconcile → clear → retention. */
+async function replay(portFactory, storage, problems, label) {
+  const key = (sessionId) => `dsh.select-quote.annotations.${sessionId}`
+  const source = { text: '第一段被划中的原文', messageId: 'flow-1', startOffset: 4, endOffset: 12 }
+
+  const before = await freshStore()
+  before.setAnnotationPersistence(portFactory())
+  before.bindAnnotationSession('session-1')
+  before.saveAnnotation(undefined, { text: source.text, sources: [source] })
+  await flush()
+
+  const raw = storage.getItem(key('session-1'))
+  if (raw === null || !raw.includes(source.text)) {
+    problems.push(`${label}: save did not reach storage`)
+  }
+
+  // Reload: a fresh store over the same storage must see the annotation, with
+  // its id intact — the id is the mark id, so a changed one orphans the mark.
+  const after = await freshStore()
+  after.setAnnotationPersistence(portFactory())
+  after.adoptPersistedAnnotations('session-1')
+  await flush()
+  const restored = after.getAnnotations()
+  if (restored.length !== 1 || restored[0].text !== source.text) {
+    problems.push(`${label}: reload lost the annotation (got ${restored.length})`)
+  }
+  if (restored[0]?.id !== before.getAnnotations()[0]?.id) {
+    problems.push(`${label}: annotation id changed across reload — marks would orphan`)
+  }
+
+  // Send gesture: clearing empties both memory and storage.
+  after.clearAnnotations()
+  await flush()
+  if (storage.getItem(key('session-1')) !== null || after.getAnnotations().length !== 0) {
+    problems.push(`${label}: clear left state behind`)
+  }
+
+  // Retention: sessions past the 7-day window go, newest N stay.
+  const port = portFactory()
+  const stale = Date.now() - 8 * 24 * 60 * 60 * 1000
+  const freshAt = Date.now()
+  for (const [sessionId, at] of [
+    ['session-a', stale],
+    ['session-b', stale],
+    ['session-c', freshAt],
+  ]) {
+    const store = await freshStore()
+    store.setAnnotationPersistence(port)
+    store.bindAnnotationSession(sessionId)
+    store.saveAnnotation(undefined, { text: `kept ${sessionId}`, sources: [{ text: 'x' }] })
+    await flush()
+    storage.setItem(key(sessionId), JSON.stringify({ v: 1, updatedAt: at, items: [] }))
+  }
+  const removed = port.prune(Date.now())
+  for (const sessionId of ['session-a', 'session-b']) {
+    if (storage.getItem(key(sessionId)) !== null) {
+      problems.push(`${label}: retention kept stale ${sessionId}`)
+    }
+  }
+  if (storage.getItem(key('session-c')) === null) {
+    problems.push(`${label}: retention dropped a fresh session`)
+  }
+  if (removed.length !== 2) {
+    problems.push(`${label}: retention removed ${removed.length} sessions, expected 2`)
+  }
+}
+
+/** Binding a session publishes it synchronously and adopts on a microtask. */
+async function checkBinding(problems) {
+  const loaded = []
+  const port = {
+    load: (sessionId) => {
+      loaded.push(sessionId)
+      return sessionId === 'session-bound'
+        ? [{ id: 'ann_bound', text: 'bound text', sources: [{ text: 'bound text' }] }]
+        : []
+    },
+    save: () => {},
+    clear: () => {},
+    prune: () => [],
+  }
+  const store = await freshStore()
+  store.setAnnotationPersistence(port)
+  store.bindAnnotationSession('session-bound')
+  if (loaded.length !== 0) {
+    problems.push(`binding adopted synchronously (${loaded.length} loads before the microtask)`)
+  }
+  await flush()
+  if (loaded.length !== 1 || loaded[0] !== 'session-bound') {
+    problems.push(`binding did not adopt on the microtask (loaded: ${loaded.join(', ')})`)
+  }
+  const items = store.getAnnotations()
+  if (items.length !== 1 || items[0].id !== 'ann_bound') {
+    problems.push('binding did not surface the adopted annotation')
+  }
+}
+
+async function checkPersistence() {
+  const problems = []
+  const { createHostStorePersistence, createStoragePersistence } = await import(
+    new URL('../src/client/state/annotation-persistence.ts', import.meta.url).href
+  )
+  const hostStorage = memoryStorage()
+  await replay(
+    () => createHostStorePersistence(mockDefineStore(hostStorage), hostStorage),
+    hostStorage,
+    problems,
+    'host store',
+  )
+  const plainStorage = memoryStorage()
+  await replay(() => createStoragePersistence(plainStorage), plainStorage, problems, 'localStorage')
+  await checkBinding(problems)
+  return problems
+}
+
+/**
+ * In-memory stand-in for the host's `@deepseek-ai/dsh-client-store`.
+ *
+ * Mirrors the parts the plugin relies on: `defineStore(decl).create(scopeKey)`
+ * hydrates from `<persist>.<scopeKey>` at construction, actions mutate the
+ * snapshot, and every mutation rewrites the whole payload.
+ */
+function mockDefineStore(storage) {
+  return (decl) => ({
+    create(scopeKey) {
+      const name =
+        decl.persist === undefined
+          ? undefined
+          : scopeKey === undefined
+            ? decl.persist
+            : `${decl.persist}.${scopeKey}`
+      let state = decl.init()
+      if (name !== undefined) {
+        const raw = storage.getItem(name)
+        if (raw !== null) {
+          try {
+            state = JSON.parse(raw)
+          } catch {
+            state = decl.init()
+          }
+        }
+      }
+      const write = () => {
+        if (name !== undefined) storage.setItem(name, JSON.stringify(state))
+      }
+      const actions = {}
+      for (const [key, mutate] of Object.entries(decl.actions)) {
+        actions[key] = (...params) => {
+          mutate(state, ...params)
+          write()
+        }
+      }
+      return {
+        getSnapshot: () => state,
+        actions,
+        clearPersisted: () => {
+          if (name !== undefined) storage.removeItem(name)
+        },
+      }
+    },
+  })
+}
+
+/** Map-backed `KeyValueStorage`: the injected port both backends run on. */
+function memoryStorage() {
+  const map = new Map()
+  return {
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key),
+    keys: () => [...map.keys()],
+  }
+}
+
+/** localStorage facade for the bundle sandbox, sharing one Map. */
+function localStorageFacade(storage) {
+  return {
+    getItem: (key) => storage.getItem(key),
+    setItem: (key, value) => storage.setItem(key, value),
+    removeItem: (key) => storage.removeItem(key),
+    get length() {
+      return storage.keys().length
+    },
+    key: (index) => storage.keys()[index] ?? null,
+  }
+}
+
+function loadFactory(code, storage) {
   let definition
   const sandbox = {
     window: {
@@ -47,9 +268,11 @@ function loadFactory(code) {
         },
       },
     },
+    localStorage: localStorageFacade(storage),
     console,
     setTimeout,
     clearTimeout,
+    queueMicrotask,
     Symbol,
     Object,
     Array,
@@ -266,12 +489,16 @@ function checkDatasetKeys(code) {
   return problems
 }
 
+const storage = memoryStorage()
 const code = readFileSync(resolve(root, 'lib/client.js'), 'utf8')
-const bundle = loadFactory(code)
+const bundle = loadFactory(code, storage)
 console.log(`bundle id: ${bundle.id}`)
 
 const module = bundle.factory((name) => {
   if (!SEEDS.has(name)) throw new Error(`require("${name}") is not a platform seed word`)
+  if (name === '@deepseek-ai/dsh-client-store') {
+    return { defineStore: mockDefineStore(storage) }
+  }
   return require(name)
 })
 
@@ -289,16 +516,28 @@ const datasetProblems = checkDatasetKeys(code)
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
-if (missing.length > 0 || broken.length > 0 || dictionaryProblems.length > 0 || datasetProblems.length > 0) {
+const languages = new Set()
+for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) languages.add(locale)
+
+const persistenceProblems = await checkPersistence()
+
+for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
+
+if (
+  missing.length > 0 ||
+  broken.length > 0 ||
+  dictionaryProblems.length > 0 ||
+  datasetProblems.length > 0 ||
+  persistenceProblems.length > 0
+) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
   for (const problem of dictionaryProblems) console.error(`DICTIONARY: ${problem}`)
   for (const problem of datasetProblems) console.error(`DATASET KEY: ${problem}`)
+  for (const problem of persistenceProblems) console.error(`PERSISTENCE: ${problem}`)
   process.exit(1)
 }
-const languages = new Set()
-for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) languages.add(locale)
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
-    `copy complete for ${[...languages].sort().join('/')}`,
+    `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed`,
 )

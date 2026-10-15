@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react'
 import { jsx } from 'react/jsx-runtime'
 import { composerCardOf } from '../dom/composer-host.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
-import { setRuntimeSession } from '../runtime.ts'
 import {
   annotationTitle,
+  bindAnnotationSession,
   clearAnnotations,
   getAnnotations,
   removeAnnotation,
@@ -13,6 +20,11 @@ import {
   type SelectionAnnotation,
 } from '../state/annotation-store.ts'
 import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
+import {
+  DRAFT_MARKER,
+  stripDraftMarker,
+  withDraftMarker,
+} from '../protocol/quote-protocol.ts'
 import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
 import { clearDraftMarker, useDraftMarker } from './useDraftMarker.ts'
 import { useSendIntercept } from './useSendIntercept.ts'
@@ -26,6 +38,32 @@ export interface AnnotationPanelProps {
 }
 
 const EMPTY: readonly SelectionAnnotation[] = []
+
+/**
+ * True while an IME composition is in flight.
+ *
+ * Composition events bubble, so a capture listener on the document sees them
+ * wherever the composer lives. Anything that writes the draft must check this:
+ * replacing editor content mid-composition drops the composing text.
+ */
+function useComposing(): MutableRefObject<boolean> {
+  const composing = useRef(false)
+  useEffect(() => {
+    const onStart = (): void => {
+      composing.current = true
+    }
+    const onEnd = (): void => {
+      composing.current = false
+    }
+    document.addEventListener('compositionstart', onStart, true)
+    document.addEventListener('compositionend', onEnd, true)
+    return () => {
+      document.removeEventListener('compositionstart', onStart, true)
+      document.removeEventListener('compositionend', onEnd, true)
+    }
+  }, [])
+  return composing
+}
 
 /**
  * Composer annotation summary (`conversation.input.overlay`).
@@ -45,6 +83,7 @@ export function AnnotationPanel({
   const draftRef = useRef(draft)
   const actionsRef = useRef(inputActions)
   const sessionRef = useRef(sessionId)
+  const composing = useComposing()
   draftRef.current = draft
   actionsRef.current = inputActions
   sessionRef.current = sessionId
@@ -58,7 +97,7 @@ export function AnnotationPanel({
   }, [])
 
   useEffect(() => {
-    if (sessionId) setRuntimeSession(sessionId)
+    bindAnnotationSession(sessionId)
   }, [sessionId])
 
   useEffect(() => {
@@ -94,6 +133,25 @@ export function AnnotationPanel({
     setDraft,
     onFolded: () => setItems(EMPTY),
   })
+
+  // Reconcile the invisible marker with the annotation list. The host persists
+  // the draft — marker included — so a refresh used to come back with an orphan
+  // U+200B and no annotations: an empty-looking composer with a live send
+  // button. Both directions are idempotent with useDraftMarker's own write.
+  //
+  // Never write while an IME composition is in flight: the host store's draft
+  // goes transiently empty when composition starts (the composing text is not
+  // in it yet), and a programmatic setDraft at that moment replaces the editor
+  // content — the first pinyin character disappears. Composition ends, the
+  // committed text lands as a draft change, and this runs again.
+  useEffect(() => {
+    if (composing.current) return
+    if (items.length === 0) {
+      if (draft.includes(DRAFT_MARKER)) setDraft(stripDraftMarker(draft))
+      return
+    }
+    if (!draft.includes(DRAFT_MARKER) && draft.trim() === '') setDraft(withDraftMarker(draft))
+  }, [items, draft, setDraft, composing])
 
   const onRemoveAll = useCallback(() => {
     clearAnnotations()
