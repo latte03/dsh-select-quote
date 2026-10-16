@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.4](https://github.com/latte03/dsh-select-quote/compare/v0.3.3...v0.3.4) (2026-10-16)
+
+### Features
+
+* 划中的是链接时，工具条给出「打开链接」 ([f093f02](https://github.com/latte03/dsh-select-quote/commit/f093f026a84610a817e8dd9c324aeecf180840fb))
+
+### Bug Fixes
+
+* 回指 chip 接住 characterData，流式期间就能渲染 ([607fdf7](https://github.com/latte03/dsh-select-quote/commit/607fdf748a53780896abac53ca3e8bac3dca8fa0))
+* 窗口变化时工具条跟着选区重定位，不再就地消失 ([938d667](https://github.com/latte03/dsh-select-quote/commit/938d667a8ab4f44abacbeffb41d7dc8de9acadbe))
+
 ## [0.3.3](https://github.com/latte03/dsh-select-quote/compare/v0.3.2...v0.3.3) (2026-10-15)
 
 ### Features
