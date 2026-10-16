@@ -490,6 +490,23 @@ function checkDatasetKeys(code) {
 }
 
 const storage = memoryStorage()
+/**
+ * The directives observer must react to characterData records.
+ *
+ * A streaming reply lands as an in-place text mutation, and such records carry
+ * no added nodes — a callback that only walks `addedNodes` leaves the raw
+ * `:dsh-annotation{index="N"}` on screen until the message DOM is re-created
+ * (session switch, remount). Verified live: with the branch missing, a
+ * `nodeValue` write never produced a chip.
+ */
+function checkDirectiveObserver(code) {
+  const problems = []
+  if (!/record\.type\s*===\s*['"]characterData['"]/.test(code)) {
+    problems.push('directives observer ignores characterData records — streaming text is never decorated')
+  }
+  return problems
+}
+
 const code = readFileSync(resolve(root, 'lib/client.js'), 'utf8')
 const bundle = loadFactory(code, storage)
 console.log(`bundle id: ${bundle.id}`)
@@ -513,6 +530,7 @@ const missing = EXPECTED.filter(
 const broken = record.filter((entry) => entry.kind === 'slots.register' && typeof entry.component !== 'function')
 const dictionaryProblems = checkDictionaries(dicts)
 const datasetProblems = checkDatasetKeys(code)
+const observerProblems = checkDirectiveObserver(code)
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -528,12 +546,14 @@ if (
   broken.length > 0 ||
   dictionaryProblems.length > 0 ||
   datasetProblems.length > 0 ||
+  observerProblems.length > 0 ||
   persistenceProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
   for (const problem of dictionaryProblems) console.error(`DICTIONARY: ${problem}`)
   for (const problem of datasetProblems) console.error(`DATASET KEY: ${problem}`)
+  for (const problem of observerProblems) console.error(`DIRECTIVE OBSERVER: ${problem}`)
   for (const problem of persistenceProblems) console.error(`PERSISTENCE: ${problem}`)
   process.exit(1)
 }

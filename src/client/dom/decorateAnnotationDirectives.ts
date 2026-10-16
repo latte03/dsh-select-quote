@@ -99,6 +99,14 @@ export function watchAnnotationDirectives(root?: ParentNode): () => void {
   decorateAnnotationDirectives(el)
   const observer = new MutationObserver((records) => {
     for (const record of records) {
+      // Streaming lands as an in-place text mutation, and such records carry no
+      // added nodes — walking only addedNodes leaves the raw directive on
+      // screen until something re-creates the message DOM (a session switch,
+      // say), which is exactly the "it works after I switch sessions" report.
+      if (record.type === 'characterData') {
+        if (record.target instanceof Text) decorateTextNode(record.target)
+        continue
+      }
       for (const node of record.addedNodes) {
         if (node instanceof Text) decorateTextNode(node)
         else if (node instanceof Element) decorateAnnotationDirectives(node)
