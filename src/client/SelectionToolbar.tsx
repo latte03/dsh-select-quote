@@ -142,7 +142,10 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     document.addEventListener('pointerup', onPointerUp, true)
     document.addEventListener('keyup', schedule, true)
     document.addEventListener('selectionchange', onSelectionChange)
-    window.addEventListener('resize', hide)
+    // A resize moves the selection's rect, so the toolbar must follow it rather
+    // than vanish mid-annotation. Re-reading the live selection re-places it,
+    // and drops it only when the selection itself is gone.
+    window.addEventListener('resize', schedule)
     document.addEventListener('scroll', onScroll, true)
 
     return () => {
@@ -150,7 +153,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       document.removeEventListener('pointerup', onPointerUp, true)
       document.removeEventListener('keyup', schedule, true)
       document.removeEventListener('selectionchange', onSelectionChange)
-      window.removeEventListener('resize', hide)
+      window.removeEventListener('resize', schedule)
       document.removeEventListener('scroll', onScroll, true)
     }
   }, [hide, refresh])
@@ -182,6 +185,13 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       commentRef.current?.focus()
     }
   }, [phase, placeCommentPop])
+
+  // The popover is anchored to the toolbar, so a window resize moves both.
+  useEffect(() => {
+    const onResize = (): void => placeCommentPop()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [placeCommentPop])
 
   // Grow the comment box with its content (up to a cap) instead of letting it
   // scroll internally: a fixed 64px box starts scrolling after a few wrapped
