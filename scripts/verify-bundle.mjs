@@ -168,6 +168,50 @@ async function checkBinding(problems) {
   }
 }
 
+/**
+ * Link detection for the toolbar's "open" action (DOM-free, so it runs here).
+ *
+ * Only http(s) can be handed to the system browser; everything else must not
+ * light up the button, and a selection that merely contains a link must not
+ * either.
+ */
+async function checkSelectionUrl() {
+  const problems = []
+  const { linkTarget } = await import(
+    new URL('../src/client/dom/selection-url.ts', import.meta.url).href
+  )
+  const cases = [
+    ['https://chromewebstore.google.com/detail/x/beoonblekmppafnjppedgpgfngghebji', 'https://chromewebstore.google.com/detail/x/beoonblekmppafnjppedgpgfngghebji'],
+    ['https://a.com。', 'https://a.com/'],
+    ['（https://a.com）', 'https://a.com/'],
+    ['  http://a.com/p?q=1#h  ', 'http://a.com/p?q=1#h'],
+    ['HTTPS://A.COM', 'https://a.com/'],
+    ['chrome-extension://abc/options.html', null],
+    ['javascript:alert(1)', null],
+    ['ftp://a.com', null],
+    ['see https://a.com', null],
+    ['https://a.com and more', null],
+    ['plain text', null],
+    ['', null],
+  ]
+  for (const [input, want] of cases) {
+    const got = linkTarget(input)
+    if (got !== want) problems.push(`linkTarget(${JSON.stringify(input)}) -> ${got}, want ${want}`)
+  }
+  // Selecting a link's wording must still offer the anchor's target.
+  const anchorCases = [
+    ['点击这里', 'https://a.com/x', 'https://a.com/x'],
+    ['随便划一段', 'chrome-extension://abc/options.html', null],
+    ['https://a.com/direct', 'https://ignored.example/', 'https://a.com/direct'],
+    ['普通文字', null, null],
+  ]
+  for (const [text, href, want] of anchorCases) {
+    const got = linkTarget(text, href)
+    if (got !== want) problems.push(`linkTarget(${JSON.stringify(text)}, ${href}) -> ${got}, want ${want}`)
+  }
+  return problems
+}
+
 async function checkPersistence() {
   const problems = []
   const { createHostStorePersistence, createStoragePersistence } = await import(
@@ -538,6 +582,7 @@ const languages = new Set()
 for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) languages.add(locale)
 
 const persistenceProblems = await checkPersistence()
+const linkProblems = await checkSelectionUrl()
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -547,7 +592,8 @@ if (
   dictionaryProblems.length > 0 ||
   datasetProblems.length > 0 ||
   observerProblems.length > 0 ||
-  persistenceProblems.length > 0
+  persistenceProblems.length > 0 ||
+  linkProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
@@ -555,9 +601,10 @@ if (
   for (const problem of datasetProblems) console.error(`DATASET KEY: ${problem}`)
   for (const problem of observerProblems) console.error(`DIRECTIVE OBSERVER: ${problem}`)
   for (const problem of persistenceProblems) console.error(`PERSISTENCE: ${problem}`)
+  for (const problem of linkProblems) console.error(`LINK: ${problem}`)
   process.exit(1)
 }
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
-    `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed`,
+    `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed, link detection replayed`,
 )

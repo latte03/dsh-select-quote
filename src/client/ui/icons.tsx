@@ -17,7 +17,7 @@ const SVG_ATTRS = {
   focusable: false,
 } as const
 
-export type IconName = 'copy' | 'pencil' | 'trash-2' | 'x' | 'plus'
+export type IconName = 'copy' | 'pencil' | 'trash-2' | 'x' | 'plus' | 'external-link'
 
 const SHAPES: Record<IconName, ReactNode> = {
   copy: jsxs('g', {
@@ -54,6 +54,16 @@ const SHAPES: Record<IconName, ReactNode> = {
     children: [
       jsx('path', { key: 'p1', d: 'M5 12h14' }),
       jsx('path', { key: 'p2', d: 'M12 5v14' }),
+    ],
+  }),
+  'external-link': jsxs('g', {
+    children: [
+      jsx('path', {
+        key: 'p1',
+        d: 'M15 3h6v6',
+      }),
+      jsx('path', { key: 'p2', d: 'M10 14 21 3' }),
+      jsx('path', { key: 'p3', d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' }),
     ],
   }),
 }

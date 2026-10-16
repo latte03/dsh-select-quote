@@ -9,6 +9,8 @@ export interface SelectionSnapshot {
   readonly top: number
   /** Where the selection lives in the transcript, when it resolves. */
   readonly source?: MessageLocator
+  /** href of the anchor the selection sits in, when it sits in one. */
+  readonly anchorHref?: string
 }
 
 const TOOLBAR_OFFSET = 12
@@ -89,7 +91,11 @@ export function readSelectionSnapshot(toolbarRoot?: HTMLElement | null): Selecti
 
   const { left, top } = toolbarPosition(rect)
   const source = rangeOffsetsInFlowItem(selection.getRangeAt(0))
-  return { text, left, top, ...(source ? { source } : {}) }
+  // A selection over a link's wording is still "a link" as far as the user is
+  // concerned, so carry the anchor's href for the open action.
+  const anchorElement = anchorNode instanceof Element ? anchorNode : anchorNode.parentElement
+  const anchorHref = anchorElement?.closest('a[href]')?.getAttribute('href') ?? undefined
+  return { text, left, top, ...(source ? { source } : {}), ...(anchorHref ? { anchorHref } : {}) }
 }
 
 export function clearNativeSelection(): void {

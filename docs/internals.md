@@ -43,6 +43,8 @@ Each item contains text selected from an earlier message ...
 - 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成可点击 chip；
 - **改格式要一起改**：`composeAnnotatedMessage()`（写）、`scanAnnotatedMessage()`（读）、`ANNOTATION_DIRECTIVE_RE`（chip）、`scripts/verify-bundle.mjs`。
 
+**「打开链接」为什么用 `window.open`**：宿主自己的外链处理（`dsh-client-ui-chat` 的 `openExternalLink`）在用户把「链接打开方式」设成侧边栏时，会把 http(s) 链接塞进应用内的浏览器标签——那里加载任意 URL 就是客户端被搞崩的路径。工具条的「打开链接」因此直接 `window.open(url, '_blank', 'noopener,noreferrer')`：桌面主进程的 `setWindowOpenHandler` 只认 http/https，命中就转交 `shell.openExternal`（真·系统默认浏览器），其余协议一律 deny。所以按钮**只对 http(s) 亮起**（`selection-url.ts`），`chrome-extension://` 这类点了也不会有反应——要让它们也进系统浏览器，得宿主改那个白名单，是上游的事。检测逻辑无 DOM 依赖，`verify-bundle` 直接 import 跑用例（含全角括号/尾随标点/大小写/非 http  scheme）。
+
 **chip 必须接住 characterData**：流式回复是**原地改文本节点**（`nodeValue` / `insertData`），这类 MutationRecord 的 `addedNodes` 是空的。观察者若只遍历 `addedNodes`，流式期间就永远不装饰——原文一直挂在那儿，直到消息 DOM 被重建（切会话、重挂载）才补上，表现就是"切个会话就好了"。所以回调里必须先分流 `record.type === 'characterData'` 并装饰 `record.target`。`verify-bundle` 有一条静态闸守这件事（`checkDirectiveObserver`）。
 
 ### 遗留：`> [选中文本]` 引用块

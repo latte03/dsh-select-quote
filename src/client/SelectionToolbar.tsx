@@ -19,6 +19,7 @@ import {
   type SelectionSnapshot,
 } from './dom/selection.ts'
 import { focusComposer } from './dom/composer-host.ts'
+import { linkTarget } from './dom/selection-url.ts'
 import { t } from './i18n.ts'
 import { useLocale } from './useLocale.ts'
 import { placePopover } from './dom/popoverPlacement.ts'
@@ -230,6 +231,24 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     setStatus(null)
   }, [])
 
+  /**
+   * Hand the selected link to the system browser.
+   *
+   * `window.open` deliberately bypasses the host's in-app sidebar browser: the
+   * desktop shell's window-open handler sends http(s) straight to
+   * `shell.openExternal`, so the page never renders inside the client (loading
+   * arbitrary URLs there is what wedges it). Only http(s) selections get this
+   * button — every other scheme is refused by that handler.
+   */
+  const handleOpenLink = useCallback(() => {
+    const snapshot = activeRef.current
+    const url = snapshot ? linkTarget(snapshot.text, snapshot.anchorHref) : null
+    if (!url) return
+    window.open(url, '_blank', 'noopener,noreferrer')
+    clearNativeSelection()
+    hide()
+  }, [hide])
+
   /** Quick-add without opening the comment step (double-tap / “Skip comment”). */
   const commitAnnotation = useCallback(
     (body: string | undefined) => {
@@ -267,6 +286,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   if (!active) return null
 
   const toolbarStyle: CSSProperties = { left: active.left, top: active.top }
+  const link = linkTarget(active.text, active.anchorHref)
 
   return createPortal(
     jsxs(Fragment, {
@@ -291,6 +311,18 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
               : jsxs('div', {
                   style: { display: 'inline-flex', alignItems: 'center', gap: 2 },
                   children: [
+                    link
+                      ? jsx('button', {
+                          type: 'button',
+                          className: cx(A.plain, A.inlineRow, styles.button),
+                          onClick: handleOpenLink,
+                          children: [
+                            jsx(LucideIcon, { name: 'external-link', size: 14 }),
+                            t('toolbar.openLink'),
+                          ],
+                        })
+                      : null,
+                    link ? jsx('span', { className: styles.divider, 'aria-hidden': true }) : null,
                     jsx('button', {
                       type: 'button',
                       className: cx(A.plain, A.inlineRow, styles.button),
