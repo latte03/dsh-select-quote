@@ -46,8 +46,14 @@ import { createAnnotationPersistence } from './state/annotation-storage.ts'
  * Settings. Self-detecting from `navigator` would disagree with the host on the
  * desktop shell, where Electron pins the document language (`--lang`) to its own
  * value while the host preference comes through `__DSH_LOCALE__`.
+ *
+ * `inject` lists only the services this file actually touches. `sessions` used
+ * to be declared here without a single `ctx.sessions` read, and a cordis fiber
+ * that waits on a service the shell never provides never activates — which
+ * surfaces as a cold-boot "renderer boot failed" with no error message. The
+ * session id arrives as a slot prop, so the service is not needed.
  */
-export const inject = ['slots', 'sessions', 'locale']
+export const inject = ['slots', 'locale']
 
 export function apply(ctx: Context): void {
   ensureToolbarStyles()

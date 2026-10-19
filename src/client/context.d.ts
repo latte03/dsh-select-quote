@@ -1,7 +1,7 @@
 /**
  * Ambient faces for the client services this plugin injects.
  *
- * `ctx.slots`, `ctx.sessions` and `ctx.locale` are owned by the running dsh
+ * `ctx.slots` and `ctx.locale` are owned by the running dsh
  * deployment (the `@deepseek-ai/dsh-client-*` web packages), which are not
  * dependencies of this repository. Their `Context` augmentation is restated
  * here so `npm run typecheck` works without the full client install.
@@ -61,9 +61,6 @@ declare module '@deepseek-ai/cordis' {
     slots: {
       inject(key: string, callback: () => unknown): () => void
       register(options: SlotRegistration, component: unknown): () => void
-    }
-    sessions: {
-      scope(id: string): Context | undefined
     }
     locale: LocaleRuntime
   }
