@@ -302,14 +302,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           children:
             phase === 'comment'
               ? jsx('div', {
-                  style: { display: 'inline-flex', alignItems: 'center', gap: 2 },
+                  className: cx(A.inlineRow, styles.toolbarInner),
                   children: jsx('span', {
                     style: { padding: '0 8px', fontSize: 13, opacity: 0.8 },
                     children: t('toolbar.commentHint'),
                   }),
                 })
               : jsxs('div', {
-                  style: { display: 'inline-flex', alignItems: 'center', gap: 2 },
+                  className: cx(A.inlineRow, styles.toolbarInner),
                   children: [
                     link
                       ? jsx('button', {

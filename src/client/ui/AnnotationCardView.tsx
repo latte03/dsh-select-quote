@@ -157,7 +157,8 @@ export function AnnotationSummary({
     const anchor = root.getBoundingClientRect()
     const panel = { width: pop.offsetWidth || 300, height: pop.offsetHeight || 220 }
     // gap 0: the facing transparent pad is the hover bridge (no dead strip).
-    const { top, left, side } = placePopover(anchor, panel, 'bottom', 0)
+    // 优先放摘要上方；只有上方确实放不下、且下方更宽裕时才翻下去。
+    const { top, left, side } = placePopover(anchor, panel, 'top', 0)
     pop.style.top = `${top}px`
     pop.style.left = `${left}px`
     // Facing pad overlaps the summary so pointerleave does not fire in transit.
@@ -320,7 +321,9 @@ export function AnnotationSummary({
         onPointerLeave: onPointerLeave,
         children: jsx('div', {
           className: cx(A.col, styles.summaryHoverInner),
-          children: items.map((item, i) => {
+          children: jsx('div', {
+            className: cx(A.col, styles.summaryList),
+            children: items.map((item, i) => {
             const isEditing = editing === i
             return jsxs(
               'div',
@@ -446,6 +449,7 @@ export function AnnotationSummary({
               },
               item.id ?? `${i}`,
             )
+          }),
           }),
         }),
       })

@@ -52,7 +52,6 @@ body {
   --dsq-font-size: var(--dsh-content-font-size, 14px);
   --dsq-font-delta: var(--dsh-content-font-delta, 0px);
   --dsq-bg-raised: var(--dsw-alias-bg-layer-1, #fff);
-  --dsq-bg-panel: var(--dsw-alias-bg-layer-2, #fff);
   --dsq-bg-toast: var(--dsw-alias-bg-layer-3, rgba(0, 0, 0, 0.78));
   --dsq-line: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   --dsq-line-divider: var(--dsw-alias-border-l4, rgba(0, 0, 0, 0.12));
@@ -63,10 +62,13 @@ body {
   --dsq-label-2: var(--dsw-alias-label-secondary, rgba(0, 0, 0, 0.65));
   --dsq-label-3: var(--dsw-alias-label-tertiary, rgba(0, 0, 0, 0.45));
   --dsq-link: var(--dsw-alias-link, rgba(0, 0, 0, 0.65));
-  --dsq-shadow-pop: var(--dsw-elevation-prominent, 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
-  --dsq-shadow-soft: var(--dsw-elevation-soft, 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 20px rgba(0, 0, 0, 0.06));
+  /* 浮层阴影统一走宿主的 prominent 档——和宿主自己的菜单/弹层同一档。它自带
+     0 0 0 .5px 的描边环（--dsw-elevation-stroke），所以浮层不画 border 也有轮廓；
+     兜底值按真 token 的组成补齐那一圈，免得老宿主上轮廓消失。 */
+  --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
   --dsq-bubble: var(--dsw-specific-bubble, rgba(0, 0, 0, 0.05));
-  --dsq-menu: var(--dsw-specific-menu, #fff);
+  --dsq-menu: var(--dsw-menu-surface-fill, rgba(248, 249, 250, .58));
+  --dsq-menu-backdrop: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
   --dsq-accent-400: var(--dsw-static-blue-400, #1677ff);
   --dsq-accent: var(--dsw-static-blue-500, #3b82f6);
   --dsq-accent-tint: var(--dsw-static-blue-50p, #eaf3ff);
@@ -83,21 +85,73 @@ body {
 ${atomRules}
 
 /* Layer 3 — components. Floating selection toolbar. */
+
+/* 入场动画位置（2026-10-19 定稿）：scale + Y 位移都放在 .dsq_toolbar 容器上。
+   规范层面 transform 不形成 backdrop root（opacity 才会），磨砂不受影响；用户已在
+   真实客户端验证过容器 scale 没问题。若日后换环境再出问题，回退路径：去掉容器上的
+   animation，给 .dsq_toolbarInner 加回 dsq-rise-in（关键帧还在）。 */
+@keyframes dsq-toolbar-in {
+  from {
+    transform: translate(-50%, -100%) translateY(4px) scale(0.96);
+  }
+  to {
+    transform: translate(-50%, -100%) translateY(0) scale(1);
+  }
+}
+
+/* 内容层的 rise：悬停面板的列表在用；工具条改用容器 scale 后这条在这里待命。 */
+@keyframes dsq-rise-in {
+  from {
+    transform: translateY(4px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* 宿主菜单材质（官方 material 图层同款）：填充走 --dsw-menu-surface-fill，模糊走
+   --dsw-menu-backdrop-filter（恒为 blur(40px) saturate(150%)），亮暗自动翻。
+   画在 z-index:-1 的独立图层上，内容在它之上：模糊只取身后的页面，不会把
+   面板里的文字一起糊掉。工具条、评论气泡、悬停面板三个浮层共用这一条。
+   注意：macOS 上宿主另有一个 --dsw-specific-menu（覆写成 94% 不透明）给它的
+   菜单用；这里按需求用 surface-fill，所以我们的浮层会比宿主自己的菜单更透。 */
+.dsq_toolbar::before,
+.dsq_commentPop::before,
+.dsq_summaryHoverInner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--dsq-menu);
+  backdrop-filter: var(--dsq-menu-backdrop);
+  -webkit-backdrop-filter: var(--dsq-menu-backdrop);
+  pointer-events: none;
+}
+
 .dsq_toolbar {
   position: fixed;
   z-index: 10060;
   transform: translate(-50%, -100%);
   gap: 2px;
   padding: 4px;
-  /* 无边框：--dsq-shadow-soft 自带 0 0 0 .5px 的描边环，由它勾勒轮廓，
-     所以这里不要再画 border，否则描边会和环叠成两条线。 */
+  /* 无边框：--dsq-shadow（宿主的 elevation-prominent）自带 0 0 0 .5px 的描边环，
+     由它勾勒轮廓，所以这里不要再画 border，否则描边会和环叠成两条线。 */
   border: 0;
   border-radius: 12px;
-  background: var(--dsq-bg-panel);
-  box-shadow: var(--dsq-shadow-soft);
+  /* 底色与模糊都在上面的材质图层里，这里不再画背景 */
+  box-shadow: var(--dsq-shadow);
   pointer-events: auto;
-  /* Mounts once per selection, after the drag ends: soft rise + fade. */
+  /* A/B：scale 入场放在容器上（材质图层归它所有）。关键帧自带 translate(-50%,-100%)，
+     所以缩放不会破坏居中。若真实客户端里磨砂在放大期间消失，改回内容层方案。 */
   animation: dsq-toolbar-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* 按钮行：只负责布局；入场动画在容器上（见 .dsq_toolbar 的 A/B 说明）。 */
+.dsq_toolbarInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .dsq_button {
@@ -354,38 +408,44 @@ ${atomRules}
 }
 
 /* Must come after .dsq_summaryHover (same class weight otherwise loses to display:none). */
+/* 容器上不做 opacity 过渡、也不做 scale 入场。opacity 那条是规范实锤：祖先一带上
+   opacity<1 就成了 backdrop root，::before 采样不到身后的页面，磨砂在整段淡入里
+   消失、结束才糊上——所以 opacity 过渡删掉，只留 place() 里那次 0→1 瞬时翻转
+   （「定位前不可见」的守卫）。scale 一并去掉是保守起见：容器彻底静止，采样区域
+   不会逐帧移动；入场感交给内层列表的 rise（内容不是材质的祖先）。 */
 .dsq_summaryHover.dsq_summaryHoverOpen {
   display: flex;
-  transition: opacity 0.12s ease;
-  animation: dsq-panel-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.dsq_summaryHover[data-side='bottom'] {
-  transform-origin: top center;
-}
-
-.dsq_summaryHover[data-side='top'] {
-  transform-origin: bottom center;
 }
 
 .dsq_summaryHoverInner {
+  position: relative;
   gap: 4px;
-  max-height: min(420px, calc(100vh - 120px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 4px;
   border-radius: 12px;
-  border: 0.5px solid var(--dsq-line);
-  /* Frosted panel: the menu token at partial alpha over a blur. */
-  background: color-mix(in srgb, var(--dsq-bg-raised) 50%, transparent);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  box-shadow: var(--dsq-shadow-pop);
+  /* 不画 border：--dsq-shadow（宿主的 elevation-prominent）自带 0 0 0 .5px 的
+     描边环，再画一遍会叠成两条线。底色与模糊都在材质图层里。 */
+  box-shadow: var(--dsq-shadow);
 }
 
+/* 滚动只放在列表上：材质图层是绝对定位的，留在会滚动的容器里会跟着内容跑掉，
+   滚到底部时面板顶部就露空。入场 rise 也在这层——内容不是材质图层的祖先，
+   动它不会切断磨砂的采样源。 */
+.dsq_summaryList {
+  gap: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: min(412px, calc(100vh - 128px));
+  animation: dsq-rise-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* 老浏览器没有 backdrop-filter：图层退成不透明底色，否则半透明直接糊在文字上。 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .dsq_summaryHoverInner {
-    background: var(--dsq-menu);
+  .dsq_toolbar::before,
+  .dsq_commentPop::before,
+  .dsq_summaryHoverInner::before {
+    background: var(--dsq-bg-raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
 
@@ -563,10 +623,8 @@ ${atomRules}
   gap: 8px;
   padding: 8px;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--dsq-bg-raised) 75%, transparent);
-  backdrop-filter: blur(10px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  box-shadow: var(--dsq-shadow-pop);
+  /* 底色与模糊都在材质图层里 */
+  box-shadow: var(--dsq-shadow);
 }
 
 .dsq_commentInput {
@@ -778,26 +836,6 @@ ${atomRules}
 /* Layer 4 — host surface: keyframes, theme flips, and the two rules that reach
    into product-owned DOM. */
 
-@keyframes dsq-toolbar-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -100%) translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -100%);
-  }
-}
-
-@keyframes dsq-panel-in {
-  from {
-    transform: scale(0.96);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-
 @keyframes dsq-ann-flash {
   0% {
     background: var(--dsq-mark-color);
@@ -841,6 +879,7 @@ export function ensureToolbarStyles(): void {
 
 export const styles = {
   toolbar: 'dsq_toolbar',
+  toolbarInner: 'dsq_toolbarInner',
   button: 'dsq_button',
   buttonAddComment: 'dsq_buttonAddComment',
   divider: 'dsq_divider',
@@ -873,6 +912,7 @@ export const styles = {
   annEditCancel: 'dsq_annEditCancel',
   annEditSave: 'dsq_annEditSave',
   summaryHoverInner: 'dsq_summaryHoverInner',
+  summaryList: 'dsq_summaryList',
   summaryItemButton: 'dsq_summaryItemButton',
   summaryHoverOpen: 'dsq_summaryHoverOpen',
   summaryItemActions: 'dsq_summaryItemActions',
