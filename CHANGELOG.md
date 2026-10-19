@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.6](https://github.com/latte03/dsh-select-quote/compare/v0.3.5...v0.3.6) (2026-10-19)
+
+### Features
+
+* 三个浮层统一宿主菜单材质、阴影与入场动画 ([541a453](https://github.com/latte03/dsh-select-quote/commit/541a453cba5cdf69cacc4896b9f3c19dcce9a03d))
+* 插件页展示元信息对齐官方规范（locale + 图标） ([8161fae](https://github.com/latte03/dsh-select-quote/commit/8161faec9f5d80d5e5fa9ae389495001ce9bca98))
+
+### Bug Fixes
+
+* 持久化改用纯 localStorage，不再 require 宿主 client 包 ([2debc7a](https://github.com/latte03/dsh-select-quote/commit/2debc7acf8e554e6b599fd0a0c85dd2b4a6cfa1a)), references [#7](https://github.com/latte03/dsh-select-quote/issues/7)
+* 描边覆写收窄到三个浮层，不再影响页面其它面板 ([0839eac](https://github.com/latte03/dsh-select-quote/commit/0839eacef1bc5642a6cff84e87fae67e6c79713a))
+* 覆层不描边，阴影的描边环改用更浅的 border-l1 ([e29764a](https://github.com/latte03/dsh-select-quote/commit/e29764a5a7c4ab537591a3031e7869cbe7f4838c))
+
 ## [0.3.5](https://github.com/latte03/dsh-select-quote/compare/v0.3.4...v0.3.5) (2026-10-19)
 
 ### Bug Fixes
