@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.5](https://github.com/latte03/dsh-select-quote/compare/v0.3.4...v0.3.5) (2026-10-19)
+
+### Bug Fixes
+
+* 冷启动不再要求未使用的 sessions 服务 ([6679409](https://github.com/latte03/dsh-select-quote/commit/667940916e22ec15b329afbf7f6236d29cf36fd8))
+
 ## [0.3.4](https://github.com/latte03/dsh-select-quote/compare/v0.3.3...v0.3.4) (2026-10-16)
 
 ### Features
