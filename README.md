@@ -48,6 +48,15 @@ dsh web --patch "$PWD/dev.patch.yml"
 
 界面语言由 dsh 决定，插件不再自己判断浏览器语言。在 **设置 → 通用 → 语言** 里切换。
 
+## 插件页展示
+
+插件管理页与设置项里的标题、描述、图标来自包自带的资源，宿主读取它们时**不会激活插件**：
+
+- `locale/*.json` 的 `meta.title` / `meta.description`（`en.json` 是发现入口，其余语言文件与它同目录同名）
+- `icon.svg`（SVG / PNG / JPEG / WebP，≤256 KiB，必须在包内）
+
+标题按当前语言取，取不到回退 `package.json` 的 `name` / `description`；图标缺失时用面板的默认插画。要加一种语言，往 `locale/` 放一个同名 JSON 即可，`pnpm run check` 会按宿主的规则逐条校验（语言 id 文件名、字段非空、图标类型与体积、`exports` 与 `files` 覆盖、`npm pack` 实际清单）。
+
 
 ## 已知限制
 

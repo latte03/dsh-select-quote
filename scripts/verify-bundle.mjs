@@ -12,12 +12,18 @@
  * modules (save → drop the in-memory store → reload → reconcile → clear →
  * retention), on both storage backends, with no DOM involved.
  *
+ * Finally it checks the package's display metadata — the `locale/*.json`
+ * dictionaries and `icon.svg` the plugin manager reads through `exports`
+ * without activating the plugin — the way the host's own reader checks them,
+ * and confirms the packed tarball actually contains them.
+ *
  * Usage: npm run verify   (after npm run build)
  */
 
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { dirname, extname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 
@@ -210,6 +216,194 @@ async function checkSelectionUrl() {
     if (got !== want) problems.push(`linkTarget(${JSON.stringify(text)}, ${href}) -> ${got}, want ${want}`)
   }
   return problems
+}
+
+const MAX_ICON_BYTES = 256 * 1024
+const ICON_MEDIA_TYPES = new Map([
+  ['.svg', 'image/svg+xml'],
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.webp', 'image/webp'],
+])
+const LANGUAGE_ID = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u
+const MAGIC_BYTES = [
+  [Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'PNG'],
+  [Buffer.from([0xff, 0xd8, 0xff]), 'JPEG'],
+  [Buffer.from('RIFF', 'ascii'), 'WebP'],
+]
+const LOCALE_FILES = ['en.json', 'zh.json', 'ru.json']
+
+/**
+ * Package display metadata (locale + icon), checked the way the host reads it.
+ *
+ * The plugin manager resolves `<name>/locale/en.json`, every sibling `*.json`
+ * in that directory, `<name>/icon` and `<name>/package.json` through the Node
+ * ESM resolver — without activating the plugin — and every rule below mirrors
+ * one of its checks: a language-id filename, one dictionary per language, all
+ * locale files in the English file's directory, non-empty `meta` strings, a
+ * bounded image of an allowed type inside the package, and exports / `files`
+ * entries that actually reach the packed tarball.
+ *
+ * Resolution goes through `require.resolve` with the package's own name, which
+ * is exactly the host's path (Node self-reference) and therefore fails the same
+ * way a missing or mistyped `exports` entry fails there.
+ */
+function checkPackageMeta() {
+  const problems = []
+  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  const exportsMap = manifest.exports ?? {}
+  const files = new Set(manifest.files ?? [])
+
+  for (const [specifier, target] of [
+    ['./locale/*.json', './locale/*.json'],
+    ['./icon', './icon.svg'],
+  ]) {
+    if (exportsMap[specifier] !== target) {
+      problems.push(`exports["${specifier}"] must be "${target}" (host resolves display resources through it)`)
+    }
+  }
+  for (const entry of ['locale/*.json', 'icon.svg']) {
+    if (!files.has(entry)) problems.push(`files[] lacks "${entry}" — the tarball would ship without it`)
+  }
+
+  // Resolution through the package's own name, as the host does.
+  const resolveSelf = (specifier) => {
+    try {
+      return require.resolve(specifier)
+    } catch (error) {
+      problems.push(`resolve("${specifier}") failed: ${error.code ?? error.message}`)
+      return null
+    }
+  }
+  const englishPath = resolveSelf('dsh-select-quote/locale/en.json')
+  const iconPath = resolveSelf('dsh-select-quote/icon')
+  resolveSelf('dsh-select-quote/package.json')
+
+  // Locale dictionaries: the host enumerates the directory, so every *.json in
+  // it is a dictionary — an extra or malformed file becomes a row diagnostic.
+  const localeDir = resolve(root, 'locale')
+  let entries = []
+  try {
+    entries = readdirSync(localeDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map((entry) => entry.name)
+  } catch {
+    problems.push('locale/ directory is missing — no display metadata at all')
+  }
+  for (const name of LOCALE_FILES) {
+    if (!entries.includes(name)) problems.push(`locale/${name} is missing`)
+  }
+  for (const name of entries) {
+    const language = name.slice(0, -5)
+    if (!LANGUAGE_ID.test(language)) {
+      problems.push(`locale/${name}: "${language}" is not a language id filename`)
+      continue
+    }
+    const file = resolveSelf(`dsh-select-quote/locale/${name}`)
+    if (file === null) continue
+    if (englishPath !== null && dirname(file) !== dirname(englishPath)) {
+      problems.push(`locale/${name} resolves outside the English locale directory`)
+    }
+    let parsed
+    try {
+      parsed = JSON.parse(readFileSync(file, 'utf8'))
+    } catch (error) {
+      problems.push(`locale/${name}: ${String(error)}`)
+      continue
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      problems.push(`locale/${name} must contain an object`)
+      continue
+    }
+    const meta = parsed.meta
+    if (meta !== undefined && (typeof meta !== 'object' || meta === null || Array.isArray(meta))) {
+      problems.push(`locale/${name}: meta must be an object`)
+      continue
+    }
+    for (const field of ['title', 'description']) {
+      const value = meta?.[field]
+      if (value === undefined) {
+        problems.push(`locale/${name}: meta.${field} is missing — the row would fall back to package.json`)
+      } else if (typeof value !== 'string' || value.trim() === '') {
+        problems.push(`locale/${name}: meta.${field} must be a non-empty string`)
+      }
+    }
+  }
+
+  // Icon: the host turns it into a data URL, so the bytes must render.
+  if (iconPath !== null) {
+    const inside = relative(root, iconPath)
+    if (inside.startsWith('..') || resolve(root, inside) !== iconPath) {
+      problems.push('icon resolves outside the package')
+    }
+    const mediaType = ICON_MEDIA_TYPES.get(extname(iconPath).toLowerCase())
+    if (mediaType === undefined) {
+      problems.push(`icon must be SVG, PNG, JPEG, or WebP (got ${extname(iconPath)})`)
+    } else {
+      const size = statSync(iconPath).size
+      if (size > MAX_ICON_BYTES) problems.push(`icon is ${size} bytes, over the 256 KiB limit`)
+      const bytes = readFileSync(iconPath)
+      if (mediaType === 'image/svg+xml') {
+        const svg = bytes.toString('utf8')
+        if (!/^\s*<svg[\s>]/.test(svg)) problems.push('icon.svg: root element is not <svg>')
+        if (!svg.includes('viewBox')) problems.push('icon.svg: no viewBox — scaling is undefined')
+        if (!/<\/svg>\s*$/.test(svg)) problems.push('icon.svg: no closing </svg>')
+        if (/<script/i.test(svg)) problems.push('icon.svg: scripts are not rendered as an image')
+        if (/(?:xlink:href|href|src)\s*=\s*["']https?:/i.test(svg) || /url\(\s*["']?https?:/i.test(svg)) {
+          problems.push('icon.svg: external references are not resolvable from a data URL')
+        }
+      } else {
+        const [magic, label] = MAGIC_BYTES.find(([prefix]) => bytes.subarray(0, prefix.length).equals(prefix)) ?? []
+        if (!magic) problems.push(`icon bytes are not a valid ${mediaType}`)
+        if (label === 'WebP' && !bytes.subarray(8, 12).toString('ascii').startsWith('WEBP')) {
+          problems.push('icon bytes are not a valid image/webp')
+        }
+      }
+    }
+  }
+
+  // The packed file list is the only thing that ships.
+  const packed = packedFiles()
+  if (packed !== null) {
+    for (const path of [
+      'package.json',
+      'cordis.patch.yml',
+      'lib/index.js',
+      'lib/client.js',
+      'icon.svg',
+      'locale/en.json',
+      'locale/zh.json',
+      'locale/ru.json',
+    ]) {
+      if (!packed.includes(path)) problems.push(`npm pack would not ship ${path}`)
+    }
+  }
+  return problems
+}
+
+/** `npm pack --dry-run --json` file paths, or null when npm cannot run. */
+function packedFiles() {
+  const result = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  if (result.error !== undefined) {
+    console.error(`PACK: npm pack could not run (${result.error.message}) — the tarball list is unverified`)
+    return null
+  }
+  if (result.status !== 0) {
+    console.error(`PACK: npm pack exited ${result.status} — the tarball list is unverified`)
+    return null
+  }
+  // One pack target prints a bare object; several print an array. Notices may
+  // trail the JSON, so trim to the outermost braces.
+  const start = result.stdout.search(/[{[]/)
+  const end = Math.max(result.stdout.lastIndexOf('}'), result.stdout.lastIndexOf(']'))
+  const parsed = JSON.parse(result.stdout.slice(start, end + 1))
+  const summary = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0]
+  return summary?.files?.map((file) => file.path) ?? null
 }
 
 async function checkPersistence() {
@@ -583,6 +777,7 @@ for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) l
 
 const persistenceProblems = await checkPersistence()
 const linkProblems = await checkSelectionUrl()
+const metaProblems = checkPackageMeta()
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -593,7 +788,8 @@ if (
   datasetProblems.length > 0 ||
   observerProblems.length > 0 ||
   persistenceProblems.length > 0 ||
-  linkProblems.length > 0
+  linkProblems.length > 0 ||
+  metaProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
@@ -602,9 +798,11 @@ if (
   for (const problem of observerProblems) console.error(`DIRECTIVE OBSERVER: ${problem}`)
   for (const problem of persistenceProblems) console.error(`PERSISTENCE: ${problem}`)
   for (const problem of linkProblems) console.error(`LINK: ${problem}`)
+  for (const problem of metaProblems) console.error(`PACKAGE META: ${problem}`)
   process.exit(1)
 }
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
-    `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed, link detection replayed`,
+    `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed, link detection replayed, ` +
+    `package metadata (locale + icon) resolved and packed`,
 )

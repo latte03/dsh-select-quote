@@ -11,7 +11,7 @@ pnpm run watch       # 增量重建
 pnpm run sync:desktop        # 把 lib/ 推给桌面客户端已安装的副本（热更新）
 pnpm run sync:desktop -- --watch
 pnpm run dev:desktop         # 上面两个一起开：增量重建 + 推送（scripts/dev-desktop.mjs 拉起两个子进程）
-pnpm run verify      # 无头执行 lib/client.js：8 项贡献都注册上，且三种语言的词典键与占位符齐备
+pnpm run verify      # 无头执行 lib/client.js：8 项贡献都注册上，三种语言词典键与占位符齐备，外加包展示元信息（locale + icon）按宿主规则解析、打包
 pnpm run check       # typecheck + build + verify（提交前跑这个）
 pnpm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
@@ -185,6 +185,20 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 - **不做的**：没有 sessionId 就只在内存（宿主能在打字前就 mint 好会话，这条是"不该发生"的退路）；多标签同会话 last-write-wins，不做跨页同步；hero 换工作区宿主只搬 draft + 附件，批注落在死 id 上，不处理；fork 会话宿主发全新 id，批注不继承。
 - **验**：`pnpm run verify` 里用 query-bust 的 import 拿到第二个模块实例当"刷新"，对两个后端各跑一遍「存 → 清内存 → 回灌 → 对账 → 清除 → 保留」，另外单测 `bindAnnotationSession` 的同步发布 + 微任务 adopt。浏览器实测另算。
 
+**12. 插件页的标题、描述、图标（包展示元信息）**
+
+宿主**不激活插件**就能读出插件管理页与设置项里的展示信息：解析 `<包名>/locale/en.json` 发现英文入口，再枚举该目录下所有 `*.json`（文件名必须是语言 id，且都必须解析回同一个目录），读各自的 `meta.title` / `meta.description`；图标取 `<包名>/icon`（或 package.json 顶层的 `icon` 字段，优先级更高）转成 data URL。所以：
+
+| 件 | 作用 |
+|---|---|
+| `locale/{en,zh,ru}.json` | 三份展示文案，`en` 是发现入口；与界面文案（`i18n.ts`）是两套东西，各管各的 |
+| `icon.svg` | 64×64 蓝色徽章 + 双引号 + 选区高亮条，≤256 KiB、自包含（data URL 里没有网络可谈，外链一律无效） |
+| `package.json` | `exports` 加 `./locale/*.json` 与 `./icon`；`files` 加 `locale/*.json` 与 `icon.svg`——漏了 `files`，npm 包里的插件页就只剩默认插画 |
+
+- **回退链**：标题 `locale meta.title → package.json name → 完整插件名`，描述 `locale meta.description → package.json description → 不显示`；字段写错（空串、非字符串）宿主出单插件诊断并保留其余文本；
+- **为什么值得单独做**：没有这些，插件页显示的是技术名 `dsh-select-quote` 和默认插画——用户在两列插件列表里认不出它是干什么的；
+- **验**：`checkPackageMeta()` 逐条复刻宿主的读取规则（自引用解析、语言 id、同目录、字段非空、图标类型/体积/包内路径），并跑 `npm pack --dry-run --json` 核对**实际发货清单**——`files` 写漏只有这一步能发现。改文案只改 JSON；改图标改完记得肉眼看一次渲染（文件名对不代表字节能画）。
+
 ## 目录结构
 
 ```
@@ -218,9 +232,11 @@ src/client/context.d.ts            # 客户端 Context 服务的类型补充
 scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装（--watch 时每次重建都重新包装）
 scripts/sync-desktop.mjs           # 把 lib/ 写进桌面 profile 已安装副本，借宿主热更新（--watch 常驻）
 scripts/dev-desktop.mjs            # 拉起 build --watch + sync --watch 两个子进程，任一退出就收摊
-scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 8 项，另查三种语言词典齐备）
+scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 8 项，另查三种语言词典齐备、包展示元信息与发货清单）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
 dev.patch.yml                      # 本地 --patch 开发层（绝对路径，不发布）
+locale/                            # 插件页展示元信息（en/zh/ru 的 meta.title / meta.description，宿主不激活插件即可读）
+icon.svg                           # 插件页图标（随 npm 包发布）
 lib/                               # 构建产物（已提交，运行时直接读它）
 ```
 
@@ -232,6 +248,7 @@ lib/                               # 构建产物（已提交，运行时直接�
 - 槽位名 `shell.overlay` / `conversation.input.overlay` / `conversation.chat.node` 及其 props（`useInput`、`inputActions.setDraft`）；
 - `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
 - 开发期依赖：`client-hmr` 挂在 web 组合包里，按 500ms 轮询 client 产物并经 `/plugins/events` 推 `rebuilt`（`sync:desktop` 的热更新路径）；
+- 插件页展示元信息的读取约定：`<包名>/locale/en.json` 为发现入口、同目录其余 `*.json` 为各语言词典、`<包名>/icon` 为图标，全部经 Node ESM 解析且**不激活插件**（见关键机制 12）；这些路径必须在 `exports` 与 `files` 里都出现；
 - 类名 `.nyYjTG_file`、`.I17U7q_follow` 只是几何与层叠参照，产品改版不影响功能，但会影响观感。
 
 ## 排错

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Selection Annotations",
+    "description": "Quote text from the conversation into your next message: the selection stays marked in the source and the model points back at it."
+  }
+}
