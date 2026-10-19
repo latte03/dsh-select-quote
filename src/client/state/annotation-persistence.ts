@@ -27,13 +27,6 @@ export interface AnnotationPayload {
   readonly items: readonly SelectionAnnotation[]
 }
 
-/** Mutable shape the host store hands to action mutators (immer draft). */
-interface AnnotationDraft {
-  v: number
-  updatedAt: number
-  items: SelectionAnnotation[]
-}
-
 export interface AnnotationPersistence {
   load(sessionId: string): readonly SelectionAnnotation[]
   save(sessionId: string, items: readonly SelectionAnnotation[]): void
@@ -42,26 +35,13 @@ export interface AnnotationPersistence {
   prune(now?: number): readonly string[]
 }
 
-/** The storage surface both backends need: localStorage, or a Map in tests. */
+/** The storage surface the backend needs: localStorage, or a Map in tests. */
 export interface KeyValueStorage {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
   keys(): readonly string[]
 }
-
-/** Structural view of the host's client-store `defineStore` (a seed word). */
-interface HostStoreInstance {
-  getSnapshot(): unknown
-  actions: { replace(items: readonly SelectionAnnotation[], now: number): void }
-  clearPersisted(): void
-}
-
-interface HostStoreHandle {
-  create(scopeKey?: string): HostStoreInstance
-}
-
-export type DefineStoreLike = (decl: unknown) => HostStoreHandle
 
 export function keyForSession(sessionId: string): string {
   return `${ANNOTATION_KEY_PREFIX}.${sessionId}`
@@ -109,8 +89,8 @@ function warnQuota(): void {
 }
 
 /**
- * Direct localStorage backend (the documented fallback). Writes are wrapped so
- * a quota failure degrades to memory-only instead of breaking the composer.
+ * Direct localStorage backend. Writes are wrapped so a quota failure degrades
+ * to memory-only instead of breaking the composer.
  */
 export function createStoragePersistence(storage: KeyValueStorage): AnnotationPersistence {
   let degraded = false
@@ -133,48 +113,6 @@ export function createStoragePersistence(storage: KeyValueStorage): AnnotationPe
       }
     },
     prune: (now) => pruneSessions(storage, now),
-  }
-}
-
-/**
- * Host store backend: the same `defineStore` the composer draft uses, so the
- * write path, per-session keying and failure semantics are the host's.
- */
-export function createHostStorePersistence(
-  defineStore: DefineStoreLike,
-  storage: KeyValueStorage,
-): AnnotationPersistence {
-  const handle = defineStore({
-    init: (): AnnotationDraft => ({ v: PAYLOAD_VERSION, updatedAt: 0, items: [] }),
-    persist: ANNOTATION_KEY_PREFIX,
-    actions: {
-      replace(draft: AnnotationDraft, items: readonly SelectionAnnotation[], now: number) {
-        draft.items = [...items]
-        draft.updatedAt = now
-      },
-    },
-  })
-  const instances = new Map<string, HostStoreInstance>()
-  const instanceOf = (sessionId: string): HostStoreInstance => {
-    const cached = instances.get(sessionId)
-    if (cached) return cached
-    // Construction hydrates from `dsh.select-quote.annotations.<sessionId>`.
-    const instance = handle.create(sessionId)
-    instances.set(sessionId, instance)
-    return instance
-  }
-  return {
-    load: (sessionId) => itemsOf(instanceOf(sessionId).getSnapshot()),
-    save: (sessionId, items) => instanceOf(sessionId).actions.replace(items, Date.now()),
-    clear: (sessionId) => {
-      instanceOf(sessionId).clearPersisted()
-      instances.delete(sessionId)
-    },
-    prune: (now) => {
-      const removed = pruneSessions(storage, now)
-      for (const sessionId of removed) instances.delete(sessionId)
-      return removed
-    },
   }
 }
 

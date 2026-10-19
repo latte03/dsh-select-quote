@@ -10,7 +10,7 @@
  *
  * It then replays the annotation persistence cycle against the real source
  * modules (save → drop the in-memory store → reload → reconcile → clear →
- * retention), on both storage backends, with no DOM involved.
+ * retention), with no DOM involved.
  *
  * Finally it checks the package's display metadata — the `locale/*.json`
  * dictionaries and `icon.svg` the plugin manager reads through `exports`
@@ -50,7 +50,6 @@ const SEEDS = new Set([
   'react/jsx-runtime',
   'react-dom',
   'react-dom/client',
-  '@deepseek-ai/dsh-client-store',
 ])
 
 /**
@@ -63,6 +62,12 @@ const SEEDS = new Set([
  * dependency, so it survives the reload exactly as it does in the browser;
  * the reload phase therefore drives `adoptPersistedAnnotations` directly,
  * which is what the deferred bind call ends up invoking.)
+ *
+ * One backend: the plugin's own localStorage keys. (The host's
+ * `@deepseek-ai/dsh-client-store` used to be the primary backend, but its
+ * persistence layer *is* localStorage with the same key and payload, and the
+ * plugin spec forbids loading Harness Client packages as modules — so the
+ * direct backend is the whole story now.)
  */
 let moduleRevision = 0
 
@@ -408,15 +413,8 @@ function packedFiles() {
 
 async function checkPersistence() {
   const problems = []
-  const { createHostStorePersistence, createStoragePersistence } = await import(
+  const { createStoragePersistence } = await import(
     new URL('../src/client/state/annotation-persistence.ts', import.meta.url).href
-  )
-  const hostStorage = memoryStorage()
-  await replay(
-    () => createHostStorePersistence(mockDefineStore(hostStorage), hostStorage),
-    hostStorage,
-    problems,
-    'host store',
   )
   const plainStorage = memoryStorage()
   await replay(() => createStoragePersistence(plainStorage), plainStorage, problems, 'localStorage')
@@ -424,55 +422,7 @@ async function checkPersistence() {
   return problems
 }
 
-/**
- * In-memory stand-in for the host's `@deepseek-ai/dsh-client-store`.
- *
- * Mirrors the parts the plugin relies on: `defineStore(decl).create(scopeKey)`
- * hydrates from `<persist>.<scopeKey>` at construction, actions mutate the
- * snapshot, and every mutation rewrites the whole payload.
- */
-function mockDefineStore(storage) {
-  return (decl) => ({
-    create(scopeKey) {
-      const name =
-        decl.persist === undefined
-          ? undefined
-          : scopeKey === undefined
-            ? decl.persist
-            : `${decl.persist}.${scopeKey}`
-      let state = decl.init()
-      if (name !== undefined) {
-        const raw = storage.getItem(name)
-        if (raw !== null) {
-          try {
-            state = JSON.parse(raw)
-          } catch {
-            state = decl.init()
-          }
-        }
-      }
-      const write = () => {
-        if (name !== undefined) storage.setItem(name, JSON.stringify(state))
-      }
-      const actions = {}
-      for (const [key, mutate] of Object.entries(decl.actions)) {
-        actions[key] = (...params) => {
-          mutate(state, ...params)
-          write()
-        }
-      }
-      return {
-        getSnapshot: () => state,
-        actions,
-        clearPersisted: () => {
-          if (name !== undefined) storage.removeItem(name)
-        },
-      }
-    },
-  })
-}
-
-/** Map-backed `KeyValueStorage`: the injected port both backends run on. */
+/** Map-backed `KeyValueStorage`: the port the backend runs on. */
 function memoryStorage() {
   const map = new Map()
   return {
@@ -751,9 +701,6 @@ console.log(`bundle id: ${bundle.id}`)
 
 const module = bundle.factory((name) => {
   if (!SEEDS.has(name)) throw new Error(`require("${name}") is not a platform seed word`)
-  if (name === '@deepseek-ai/dsh-client-store') {
-    return { defineStore: mockDefineStore(storage) }
-  }
   return require(name)
 })
 

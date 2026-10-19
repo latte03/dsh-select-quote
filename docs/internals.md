@@ -172,8 +172,8 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 
 | 件 | 作用 |
 |---|---|
-| `state/annotation-persistence.ts` | 纯逻辑：载荷编解码、两个后端、保留策略。不碰 DOM，`verify-bundle` 直接 import 它跑无头用例 |
-| `state/annotation-storage.ts` | 挑后端。唯一需要 `require('@deepseek-ai/dsh-client-store')` 的地方，所以单独放——宿主没这个种子词时 `require` 会抛，正好当信号退回 localStorage |
+| `state/annotation-persistence.ts` | 纯逻辑：载荷编解码、保留策略。不碰 DOM，`verify-bundle` 直接 import 它跑无头用例 |
+| `state/annotation-storage.ts` | 环境探测：有 localStorage 就用纯 localStorage 后端，没有就退内存。单独放一份是为了让纯逻辑模块不碰 `globalThis` |
 | `state/annotation-store.ts` | 内存 Map + 持久化钩子；`bindAnnotationSession()` 绑定会话并在微任务里 adopt |
 
 - **键**：`dsh.select-quote.annotations.<sessionId>`，载荷 `{v, updatedAt, items}`。和草稿同一个形状，所以刷新、切会话、重启的行为与草稿一致。
@@ -181,9 +181,10 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 - **恢复时机**：会话 id 绑定时（composer 挂载 / 切会话）。`bindAnnotationSession` 在渲染期被调用，所以 adopt 走 `queueMicrotask`，避免在别人的 render 里 `setState`。内存里已有的条目按 id 覆盖恢复值（只可能是更新的），绑定前落在 `pending` 桶里的也会一起搬过去。
 - **mark 为什么还对得上**：mark id 就是批注自己的 `id`（`ann_<时间戳>_<随机>`），而 `id` 随载荷一起存了，所以刷新后重新装饰得到同一个 mark，卡片点回去照样能找到。`index` 取列表下标，顺序也就跟着保住了。
 - **保留**：最近 20 个会话 + 7 天，双条件，`apply()` 时扫一遍自己前缀。宿主自己不回收 per-session 键（本机实测留着 9 个会话的 `dsh.sidebar-right.v1.*`），所以这活儿归插件。
+- **为什么不用宿主的 client-store**：新版插件规范明确**不要 require Harness Client 包**（原话：它们随时会变、纯 JS 无类型检查、抛错会把你整个 slot 条目清掉），而我们的后端选择发生在 `apply()` 的 effect 里——`defineStore().create()` 只要因为宿主改 API 而抛，就是 issue #7 那类"启动健康检查未激活 → 无错误信息的硬失败"。况且宿主的持久化底层本来就是 localStorage（构造时整值读入、每次变更整值写回、键 `${persist}.${scopeKey}`），与直接后端**同键同形**，换过来零迁移、零数据丢失；
 - **对账**：挂载时双向对齐 marker 与批注列表（批注空 + 草稿有 marker → 抹掉；有批注 + marker 缺 → 补上），两边都幂等，和 `useDraftMarker` 的那次写入不冲突。**合成期间一律不写草稿**：宿主 store 的 draft 在 `compositionstart` 后会瞬态变空（候选串还没进 store），此时补写 marker 会让编辑器内容被整体替换，拼音第一个字符直接消失。`useComposing()` 在 document 捕获段听 composition 事件，对账 effect 见到就跳过；等 `compositionend`、候选文本作为一次 draft 变更落地，effect 自然会重跑。
 - **不做的**：没有 sessionId 就只在内存（宿主能在打字前就 mint 好会话，这条是"不该发生"的退路）；多标签同会话 last-write-wins，不做跨页同步；hero 换工作区宿主只搬 draft + 附件，批注落在死 id 上，不处理；fork 会话宿主发全新 id，批注不继承。
-- **验**：`pnpm run verify` 里用 query-bust 的 import 拿到第二个模块实例当"刷新"，对两个后端各跑一遍「存 → 清内存 → 回灌 → 对账 → 清除 → 保留」，另外单测 `bindAnnotationSession` 的同步发布 + 微任务 adopt。浏览器实测另算。
+- **验**：`pnpm run verify` 里用 query-bust 的 import 拿到第二个模块实例当"刷新"，跑一遍「存 → 清内存 → 回灌 → 对账 → 清除 → 保留」，另外单测 `bindAnnotationSession` 的同步发布 + 微任务 adopt。浏览器实测另算。
 
 **12. 插件页的标题、描述、图标（包展示元信息）**
 
@@ -216,8 +217,8 @@ src/client/dom/decorateAnnotationDirectives.ts # 模型回的 :dsh-annotation{in
 src/client/dom/popoverPlacement.ts # 浮层定位（翻转 + 视口夹取）
 src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 等）
 src/client/state/annotation-store.ts # 每会话待发批注状态（内存 Map + 持久化钩子）
-src/client/state/annotation-persistence.ts # 持久化纯逻辑：载荷、两个后端、保留策略
-src/client/state/annotation-storage.ts     # 挑后端（宿主 store / localStorage / 空）
+src/client/state/annotation-persistence.ts # 持久化纯逻辑：载荷、保留策略
+src/client/state/annotation-storage.ts     # 环境探测（localStorage / 空），不碰 require
 src/client/protocol/annotation-protocol.ts # 批注 wire 格式（含 source 定位）
 src/client/protocol/quote-protocol.ts      # 旧 > 引用块协议 / U+200B 标记 / 文本工具
 src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注卡片（由 UserMessageDisplay 渲染）

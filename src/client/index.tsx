@@ -91,8 +91,8 @@ export function apply(ctx: Context): void {
     return subscribeAnnotations(() => syncPendingAnnotationJobs(getAnnotations()))
   }, 'dsh-select-quote: pending annotation marks')
 
-  // Pending annotations survive a refresh the way the draft does: the port is
-  // the host store when the platform offers it, plain localStorage otherwise.
+  // Pending annotations survive a refresh the way the draft does: both live in
+  // localStorage, under this plugin's own key prefix.
   ctx.effect(() => {
     const port = createAnnotationPersistence()
     setAnnotationPersistence(port)
