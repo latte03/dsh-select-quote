@@ -1,6 +1,6 @@
 # dsh-select-quote 实现说明（维护者向）
 
-面向用户的介绍与安装在 [README](../README.md)。这里记录协议、槽位、以及踩过的坑——改代码前先读这份。
+面向用户的介绍与安装在 [README](../README.md)。这里只记**现存**的协议、槽位与机制——改代码前先读这份。历史调查记录（含已失效的中间结论）在 [`archive/`](archive/)，只供溯源。
 
 ## 开发命令
 
@@ -16,7 +16,7 @@ pnpm run check       # typecheck + build + verify（提交前跑这个）
 pnpm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
 
-**为什么有 `verify`**：`tsdown` 不做类型检查，一个语法坏掉的 bundle 也能构建"成功"。最典型的一次事故是 CSS 模板字符串里出现了反引号（`` `.nyYjTG_file` ``），字符串被提前截断，产出的 JS 无法执行，但 build 输出一切正常。`verify` 把 `lib/client.js` 放进假的 `window.__ModuleLoader__` 里跑一遍，用 mock ctx 调 `apply()`，逐项核对注册结果——这是唯一能在浏览器之外发现这类错误的手段。改动 `src/client/index.tsx` 的注册项时，记得同步 `scripts/verify-bundle.mjs` 里的 `EXPECTED`。
+**为什么有 `verify`**：`tsdown` 不做类型检查，一个语法坏掉的 bundle 也能构建"成功"，而这是唯一能在浏览器之外发现这类错误的手段——它把 `lib/client.js` 放进假的 `window.__ModuleLoader__` 里跑一遍，用 mock ctx 调 `apply()`，逐项核对注册结果。改动 `src/client/index.tsx` 的注册项时，记得同步 `scripts/verify-bundle.mjs` 里的 `EXPECTED`。（最初的事故现场见 [`archive/investigations.md`](archive/investigations.md)。）
 
 **本地跑起来**：`dev.patch.yml` 里的插件路径必须是**绝对路径**（checkout 不在 profile 的 `node_modules` 里，Loader 没有包名可解析）。换机器/换目录时改那一行；该文件不随 npm 包发布，发布版走 `cordis.patch.yml`（按包名）。
 
@@ -72,7 +72,7 @@ Each item contains text selected from an earlier message ...
 
 草稿为空时 composer 会把发送按钮置灰（`empty = draft.trim() === "" && attachments.length === 0`），而 U+200B 不是 JS 的 WhiteSpace，`trim()` 不会去掉它，于是"只有批注、没打字"也能直接发送。它只在**新增/移除批注卡片**时写入或清除一次，发送前由 `stripDraftMarker()` 剔除，绝不进消息。
 
-> 这条规则有个坑：**永远不要因为草稿变化就重写编辑器**。`inputActions.setDraft()` 的实现是 `root.clear()` + 逐行重建 + 光标移到末尾。早期版本在 `useEffect` 里依赖 `draft`，一旦发现标记缺失就补——用户按 Backspace 删到标记时会被立刻补回（表现为"删除失效"），输入法组字期间甚至会把正在组字的编辑器内容整段清掉（表现为"打完中文按 Backspace 没反应"）。现在标记由 `useDraftMarker.ts` 按 `itemCount` 变化驱动，不观察 `draft`。
+> **永远不要因为草稿变化就重写编辑器**：`inputActions.setDraft()` 的实现是 `root.clear()` + 逐行重建 + 光标移到末尾，在 `useEffect` 里依赖 `draft` 补标记会造成「删除失效」和「中文输入被打断」。所以标记由 `useDraftMarker.ts` 按 `itemCount` 变化驱动，不观察 `draft`。（事故现场见 [`archive/investigations.md`](archive/investigations.md)。）
 
 **3. 输入框卡片布局**
 
@@ -88,21 +88,9 @@ Each item contains text selected from an earlier message ...
 
 - `UserMessageDisplay.tsx` 以 `priority: -10` 替换内置的 `user` 节点，把协议块从气泡里剥掉，**同时自己渲染消息携带的图片**——只批注、没有正文的消息气泡文本为空，若不接管图片渲染，整条消息（含图片）会消失；
 - 卡片**由该组件自己渲染**（`<TranscriptQuoteCard>`），而不是注册一个独立的 `select-quote` Chat 节点；竖排顺序是 附件 → 卡片 → 气泡文本，与输入框里「卡片在草稿上方」保持一致；
-- `TranscriptQuoteCard.tsx` 负责卡片本身：**每段批注一张 `AnnotationCardView`（`variant: 'transcript'`）**，纵向堆叠、与气泡同侧。卡片上直接显示**选中文本 + 用户评论**，点卡片滚回正文对应 mark——评论是用户认出自己那条批注的唯一凭据，不能只藏在悬停面板里（曾经用过 `AnnotationSummary`，折叠态只显示「N 条批注」，评论必须悬停才看得到）。
+- `TranscriptQuoteCard.tsx` 负责卡片本身：**每段批注一张 `AnnotationCardView`（`variant: 'transcript'`）**，纵向堆叠、与气泡同侧。卡片上直接显示**选中文本 + 用户评论**，点卡片滚回正文对应 mark——评论是用户认出自己那条批注的唯一凭据，不能只藏在悬停面板里。
 
-> **为什么卡片必须挂在 `user` 节点上**（2026-10-08 定位）：`conversation.chat.node` 虽然能注册任意 key，但 `ui-chat` 用 allowlist `TURN_PROCESS_INDEPENDENT_KINDS` 决定一个节点能否脱离「Turn 过程折叠块」：
->
-> ```js
-> // dsh-client-ui-chat, ChatNodeSeat
-> const TURN_PROCESS_INDEPENDENT_KINDS = new Set([
->   "system-prompt", "user", "steering", "turn-trigger", "turn-process",
->   "turn-error", "turn-max-tokens", "turn-tail"
-> ])
-> const processMember = ... && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind) && ...
-> const processHidden  = controllerInactive || foldable && processMember && !processOpen
-> ```
->
-> `select-quote` 不在表里，于是被判定为 turn-process 成员；已结束的 Turn 折叠 `process` 区块后 `processHidden = true`，`useSearchableHidden` 给外层加 `hidden`。**节点挂载了、然后被隐藏**——外部表现就是「卡片不存在」，而且不报错、不写 crash log。`user` 在表里，所以只有挂在 `user` 节点上才稳定可见。诊断方法：注册的节点永远先查这张表，再怀疑注册/匹配/解析链路。
+> **卡片必须挂在 `user` 节点上**：`conversation.chat.node` 虽能注册任意 key，但 `ui-chat` 用 allowlist `TURN_PROCESS_INDEPENDENT_KINDS` 决定节点能否脱离「Turn 过程折叠块」；不在表里的 key 会被判为 turn-process 成员，Turn 折叠后被加 `hidden`——**挂载了、然后被隐藏**，且不报错。诊断方法：注册的节点永远先查这张表，再怀疑注册/匹配/解析链路（代码与定位过程见 [`archive/investigations.md`](archive/investigations.md)）。
 
 **5. 正文 Mark：虚线下划线 + 末尾序号角标**
 
@@ -129,26 +117,21 @@ Each item contains text selected from an earlier message ...
   JSX 里用 `cx(styles.card, A.row)` 组合；`A.x` 和 `styles.x` 都是字面量类型，写错名字过不了 `pnpm run typecheck`；
 - 同一段卡片几何在输入框和对话记录里不再各写一份：`.dsq_card` / `.dsq_cardIcon` / `.dsq_cardBody` / `.dsq_cardTitle` / `.dsq_cardSubtitle` 是共用基底，`.dsq_tCard` / `.dsq_tCardIcon` 只留真正不同的数字（宽度、40px 图标），基底里那些对 `position` / `display` 无意义的属性（如 `flex`）在 transcript 侧是惰性的；
 - **三个浮层的磨砂材质用官方 material 图层同款 token**：工具条、评论气泡、悬停面板的底色与模糊都画在一个 `z-index:-1` 的 `::before` 图层上（`background: var(--dsq-menu)` + `backdrop-filter: var(--dsq-menu-backdrop)`，即宿主的 `--dsw-menu-surface-fill` / `--dsw-menu-backdrop-filter`，后者恒为 `blur(40px) saturate(150%)`，亮暗自动翻）。**必须画在独立图层上**：`backdrop-filter` 直接写在容器上会连容器自己的子树一起糊，而负 z 图层只取身后的页面。悬停面板为此把 `overflow-y: auto` 从面板挪到内层 `.dsq_summaryList`——绝对定位的图层留在会滚动的容器里会跟着内容跑掉，滚到底部时面板顶部就露空。老浏览器没有 `backdrop-filter` 时（`@supports not`）图层退成 `--dsq-bg-raised` 不透明底，避免半透明直接糊在文字上；
-- **阴影统一用 `--dsw-elevation-prominent` 一档**（别名 `--dsq-shadow`）：和宿主自己的菜单/弹层同档，且它自带 `0 0 0 .5px` 的描边环（`--dsw-elevation-stroke`）——浮层因此不画 border 也有轮廓。以前工具条用 soft、两个气泡用 prominent 两档，现在合成一个别名；兜底值按真 token 的组成补齐那一圈描边。
+- **阴影统一用 `--dsw-elevation-prominent` 一档**（别名 `--dsq-shadow`）：和宿主自己的菜单/弹层同档，且它自带 `0 0 0 .5px` 的描边环（`--dsw-elevation-stroke`）——浮层因此不画 border 也有轮廓。以前工具条用 soft、两个气泡用 prominent 两档，现在合成一个别名；兜底值按真 token 的组成补齐那一圈描边。三个浮层把描边覆写成更淡的 `--dsw-alias-border-l1`（磨砂边缘自带分界，不需要再勾一道）——**覆写和 `--dsq-shadow` 的声明都必须写在浮层选择器上**：自定义属性在声明处展开，`--dsq-shadow` 留在 body 上时浮层上的覆写够不着；
+- **磨砂的视觉验证只能在真实客户端里做**：本机 headless Chrome（CLI 与 MCP 两通道）不渲染 `backdrop-filter`，最小页面可复现——别把"没模糊"当代码缺陷，也别用那里的帧率数字下结论（2026-10-19 的教训，见 [`archive/investigations.md`](archive/investigations.md)）；
+- **入场动画绝不带 opacity**：规范实锤祖先 `opacity<1` 会成为 backdrop root，`::before` 采样不到身后的页面，磨砂在整段淡入里消失、结束才糊上。transform 不在禁止列（用户已在真实客户端验证 scale 无恙），现行入场是 `translate(-50%,-100%) translateY(4px) scale(0.96) → 归位`；
 - 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）；桌面端可用 `pnpm run sync:desktop` 热更新（见「桌面客户端的热更新」）。
 
-**9. 装饰观察者会自我触发：一条 `return` 挡住了渲染进程楔死**
+**9. 装饰观察者不许自我触发**
 
-`decorateTextNode()` 的退出条件是文本不含字面量 `:dsh-annotation{`。协议头部原文里就带着这个字面量（`# Response annotations:` 那段指令在描述内联标记时逐字写出了 `:dsh-annotation{index="N"}`，`N` 是字母），而严格正则 `/:dsh-annotation\{index="([1-9]\d*)"\}/g` 只接受数字，于是「含字面量、零匹配」成立：`while` 一次都不进，`last` 停在 `0`，末尾仍然执行了
-
-```js
-if (last < value.length) frag.append(document.createTextNode(value.slice(last)))
-parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text 节点
-```
-
-`watchAnnotationDirectives()` 监听 `{childList: true, subtree: true, characterData: true}`，回调对新节点再调 `decorateTextNode()`，于是它一直在装饰自己刚产出的节点。`MutationObserver` 回调是微任务，队列永远排不空：**宏任务、定时器、`Runtime.evaluate` 全都得不到执行**，表现为主线程单核 100%、输入区不可点，连 `Debugger.pause` 都进不去（中断同样排不上队）。 [#1](https://github.com/latte03/dsh-select-quote/issues/1) 报告时只在 Electron 路径复现，是因为桌面端恰好把毒串送进了 Text 节点；缺陷与加载路径无关，在插件自己的装饰器里。
+`decorateTextNode()` 的退出条件是「严格正则零匹配」。协议头部原文里带着 `:dsh-annotation{index="N"}` 的字面量（`N` 是字母），而正则只接受数字——「含字面量、零匹配」时早期实现仍会走到 `replaceChild`，把文本换成一个内容完全相同的新 Text 节点；观察者监听着 `characterData`，回调对新节点再装饰一次，于是**它一直在装饰自己刚产出的节点**，微任务队列永远排不空，主线程单核 100%、连 `Debugger.pause` 都进不去（[issue #1](https://github.com/latte03/dsh-select-quote/issues/1)）。
 
 两道防线（`src/client/dom/decorateAnnotationDirectives.ts`）：
 
 1. 严格正则一次都没匹配上就在碰 DOM 之前 `return`（`if (!matched) return`）；
 2. composer 全程不碰：跳过列表加入 `textarea` / `input` / `[data-lexical-editor="true"]`，因为发送瞬间草稿里会短暂出现带该字面量的协议原文。
 
-> 凡是"改写 DOM 的观察者"都要自检这两条：**没有实际命中就不要写 DOM**，以及**别把自己输出的节点当成新输入**。
+> 凡是"改写 DOM 的观察者"都要自检这两条：**没有实际命中就不要写 DOM**，以及**别把自己输出的节点当成新输入**。（完整定位过程见 [`archive/investigations.md`](archive/investigations.md)。）
 
 **10. 界面语言由宿主决定，插件只提供词典**
 
@@ -170,7 +153,7 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 
 **11. 待发批注的持久化**
 
-宿主**已经**按会话持久化 composer 草稿（`@deepseek-ai/dsh-client-store` 的 `defineStore({persist:'dsh.conversation'})`，实际键 `dsh.conversation.<sessionId>`，每敲一个字同步写），而 `useDraftMarker` 写的 U+200B 是草稿正文的一部分。所以在加这一层之前，刷新后的真实状态是：草稿回来了、尾巴上躺着孤儿零宽字符、批注列表是空的——发送按钮可点，一发就带一个不可见字符。这不是"加个缓存"，是补一半已有的持久化。
+宿主**已经**按会话持久化 composer 草稿（`@deepseek-ai/dsh-client-store` 的 `defineStore({persist:'dsh.conversation'})`，实际键 `dsh.conversation.<sessionId>`，每敲一个字同步写），而 `useDraftMarker` 写的 U+200B 是草稿正文的一部分——所以这一层补的是「草稿回来了、批注列表空了」的那一半。
 
 | 件 | 作用 |
 |---|---|
@@ -195,7 +178,7 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 | 件 | 作用 |
 |---|---|
 | `locale/{en,zh,ru}.json` | 三份展示文案，`en` 是发现入口；与界面文案（`i18n.ts`）是两套东西，各管各的 |
-| `icon.svg` | 64×64 蓝色徽章 + 双引号 + 选区高亮条，≤256 KiB、自包含（data URL 里没有网络可谈，外链一律无效） |
+| `icon.svg` | 36×36 对话气泡 + 加号，B2FFDA → 0099FF 渐变、透明底（面板自供背景）；≤256 KiB、自包含（data URL 里没有网络可谈，外链一律无效） |
 | `package.json` | `exports` 加 `./locale/*.json` 与 `./icon`；`files` 加 `locale/*.json` 与 `icon.svg`——漏了 `files`，npm 包里的插件页就只剩默认插画 |
 
 - **回退链**：标题 `locale meta.title → package.json name → 完整插件名`，描述 `locale meta.description → package.json description → 不显示`；字段写错（空串、非字符串）宿主出单插件诊断并保留其余文本；
@@ -238,8 +221,10 @@ scripts/dev-desktop.mjs            # 拉起 build --watch + sync --watch 两个�
 scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 8 项，另查三种语言词典齐备、包展示元信息与发货清单）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
 dev.patch.yml                      # 本地 --patch 开发层（绝对路径，不发布）
+docs/internals.md                  # 本文档（现存机制；历史记录在 docs/archive/）
+docs/archive/                      # 历史调查记录（只读存档，结论已并入正文）
 locale/                            # 插件页展示元信息（en/zh/ru 的 meta.title / meta.description，宿主不激活插件即可读）
-icon.svg                           # 插件页图标（随 npm 包发布）
+icon.svg                           # 插件页图标（36×36 气泡 + 加号，随 npm 包发布）
 lib/                               # 构建产物（已提交，运行时直接读它）
 ```
 

@@ -89,7 +89,7 @@ pnpm run watch     # 增量重建
 
 依赖用 pnpm 管理（锁文件 `pnpm-lock.yaml`）；构建产物 `lib/` 随源码一起提交，运行时直接读它。
 
-`pnpm run verify` 无头执行产物，断言 8 项贡献都注册上，并检查三份词典的键与 `{placeholder}` 在每种语言里都齐备（复数消息必须有 `.other` 兜底）。
+`pnpm run verify` 无头执行产物，断言 8 项贡献都注册上，并检查三份词典的键与 `{placeholder}` 在每种语言里都齐备（复数消息必须有 `.other` 兜底），外加插件页展示元信息（locale + icon）按宿主的读取规则解析、并核对 `npm pack` 的实际发货清单。
 
 ### 热更新到桌面客户端
 
