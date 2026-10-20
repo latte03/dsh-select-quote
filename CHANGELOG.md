@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.7](https://github.com/latte03/dsh-select-quote/compare/v0.3.6...v0.3.7) (2026-10-20)
+
+### Bug Fixes
+
+* 批注正文标记的插入位置与序号徽章排版 ([7a6f16f](https://github.com/latte03/dsh-select-quote/commit/7a6f16fe7f0c712fb72788e769e5636ff36f5859))
+* 浮层挂进滚动容器并重做评论步骤 ([faa844d](https://github.com/latte03/dsh-select-quote/commit/faa844d34e4ea9d6e39d5943ae9f4fbb45aba409))
+
 ## [0.3.6](https://github.com/latte03/dsh-select-quote/compare/v0.3.5...v0.3.6) (2026-10-19)
 
 ### Features
