@@ -40,8 +40,9 @@ Each item contains text selected from an earlier message ...
 ```
 
 - 读取：`scanAnnotatedMessage()` 剥掉整块，气泡只剩用户正文；
+- 回填：`readComposedDraft()` 是 `composeAnnotatedMessage()` 的逆。dsh-rewind 撤回时把它读到的持久文本原样写回输入框（`messageTextAt` → `setComposerText`），协议块也会跟着进编辑器；`AnnotationPanel` 检测到完整块后把批注重新挂回待发摘要、草稿还原成用户正文（见关键机制 1）；
 - 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成可点击 chip；
-- **改格式要一起改**：`composeAnnotatedMessage()`（写）、`scanAnnotatedMessage()`（读）、`ANNOTATION_DIRECTIVE_RE`（chip）、`scripts/verify-bundle.mjs`。
+- **改格式要一起改**：`composeAnnotatedMessage()`（写）、`scanAnnotatedMessage()`（读）、`readComposedDraft()`（撤回回填）、`ANNOTATION_DIRECTIVE_RE`（chip）、`scripts/verify-bundle.mjs`。
 
 **「打开链接」为什么用 `window.open`**：宿主自己的外链处理（`dsh-client-ui-chat` 的 `openExternalLink`）在用户把「链接打开方式」设成侧边栏时，会把 http(s) 链接塞进应用内的浏览器标签——那里加载任意 URL 就是客户端被搞崩的路径。工具条的「打开链接」因此直接 `window.open(url, '_blank', 'noopener,noreferrer')`：桌面主进程的 `setWindowOpenHandler` 只认 http/https，命中就转交 `shell.openExternal`（真·系统默认浏览器），其余协议一律 deny。所以按钮**只对 http(s) 亮起**（`selection-url.ts`），`chrome-extension://` 这类点了也不会有反应——要让它们也进系统浏览器，得宿主改那个白名单，是上游的事。检测逻辑无 DOM 依赖，`verify-bundle` 直接 import 跑用例（含全角括号/尾随标点/大小写/非 http  scheme）。
 
@@ -68,6 +69,8 @@ Each item contains text selected from an earlier message ...
 
 摘要卡片不是草稿的"可视化"，而是唯一的表示。草稿始终保持用户真正输入的内容，JSON 块在**发送动作的捕获阶段**才折进去：`document` 上的 `keydown`（无修饰键的 Enter）或 `click`（composer 卡片内 DOM 顺序上的最后一个 `button`，且不是停止按钮——停止按钮渲染的是 `svg rect`）。捕获阶段早于 composer 自己的处理器，因此它读到的草稿已经包含批注块。见 `src/client/composer/useSendIntercept.ts`。
 
+反向路径只有一个入口：**检测到完整协议块**。dsh-rewind 撤回时直接读持久消息的 `data.content` 并把文本写回 composer（不经过本插件），协议块也会跟着进编辑器。`AnnotationPanel` 的 layout effect 用 `readComposedDraft()` 把块拆回批注与正文：批注带 `source` 定位重新挂回待发摘要（`restoreAnnotations()`，同 text+comment 去重），编辑器里只留用户自己写的字。触发条件是**完整且 JSON 合法**的块；发送手势刚折进去的那份由 `foldingRef` 排除，普通地提到 `<response-annotations>` 的草稿不会被改写，IME 合成期间也一律跳过。
+
 **2. 不可见字符 U+200B 让发送按钮保持可用**
 
 草稿为空时 composer 会把发送按钮置灰（`empty = draft.trim() === "" && attachments.length === 0`），而 U+200B 不是 JS 的 WhiteSpace，`trim()` 不会去掉它，于是"只有批注、没打字"也能直接发送。它只在**新增/移除批注卡片**时写入或清除一次，发送前由 `stripDraftMarker()` 剔除，绝不进消息。
@@ -84,11 +87,14 @@ Each item contains text selected from an earlier message ...
 
 绝对定位子元素相对**padding box** 定位，所以卡片仍在顶部，而附件栏与编辑器一起被推到它下方——这也顺带修掉了"传图时图片被卡片盖住"。
 
-**4. 对话记录：气泡替换 + 卡片内联在 `user` 节点里**
+**4. 对话记录：委托宿主视图 + 摘要块内联在 `user` 节点里**
 
-- `UserMessageDisplay.tsx` 以 `priority: -10` 替换内置的 `user` 节点，把协议块从气泡里剥掉，**同时自己渲染消息携带的图片**——只批注、没有正文的消息气泡文本为空，若不接管图片渲染，整条消息（含图片）会消失；
-- 卡片**由该组件自己渲染**（`<TranscriptQuoteCard>`），而不是注册一个独立的 `select-quote` Chat 节点；竖排顺序是 附件 → 卡片 → 气泡文本，与输入框里「卡片在草稿上方」保持一致；
-- `TranscriptQuoteCard.tsx` 负责卡片本身：**每段批注一张 `AnnotationCardView`（`variant: 'transcript'`）**，纵向堆叠、与气泡同侧。卡片上直接显示**选中文本 + 用户评论**，点卡片滚回正文对应 mark——评论是用户认出自己那条批注的唯一凭据，不能只藏在悬停面板里。
+- `UserMessageDisplay.tsx` 以 `priority: -10` 替换 `user` 节点，但**不重画气泡、附件和动作行**：它从 `ctx.slots.entries('conversation.chat.node')` 里找到宿主那条 `component.type.name === 'UserMessageNodeView'`（排除自己，按 `priority !== -10` 过滤），原样渲染 `<UserMessageNodeView {...kitProps} node={rewrittenNode} />`。`rewrittenNode` 只改 `data.content`：把协议块从文本块里剥掉，图片/文件/其它块保留。时间、复制、附件、文件卡片、引用摘要，以及所有往动作行 portal 的插件（dsh-rewind 的 ↶）都仍由宿主渲染；宿主升级或别的插件改这一行，这里自动跟上（[issue #8](https://github.com/latte03/dsh-select-quote/issues/8)）。
+- 委托的是宿主组件，所以 session 注册必须带 `locale: 'chat'`，让宿主拿到它自己的 `t`（复制/已复制等文案）；kit 的其余 props（`renderFactorySlot`、`loadImage`、hooks）原样透传。
+- 摘要块（`<TranscriptQuoteCard>`）是唯一新增的 DOM，放在委托组件**前面**：顺序是 摘要块 → 宿主 `userRow`。只改文本时不渲染空泡——`text` 为空时宿主自己的 `showBubble` 也会跳过；批注-only 消息因此只剩摘要块与宿主动作行。
+- 宿主视图解析失败（宿主改了内部组件名）时退回只读文本气泡，**绝不补一份私有的动作行**：宁可降级，也不要重新长出一份会跟宿主漂移的 chrome。
+- `TranscriptQuoteCard.tsx` 渲染**一个** `AnnotationSummary`（和输入框完全同款）：块上只显示条数，悬停列表里逐条展示**选中文本 + 用户评论**，点条目滚回正文对应 mark。一条消息无论有几条批注都只有一个块——不要退回"一条批注一张卡"的排布。
+- **发送瞬间还有一层宿主 UI**：本地回显气泡（`[data-submission-echo]`）由聊天流直接渲染提交文本，不经过 `conversation.chat.node`，慢接口下会把整段协议摆在屏幕上。`dom/stripSubmissionEcho.ts` 在回显的纯文本 run 上做一次展示层剥离（只认完整块；被会话 chip 等拆分的结构不动），持久消息里的块不受影响。`pnpm run verify` 的 `TRANSCRIPT SURFACE` 闸同时守回显和单块摘要。
 
 > **卡片必须挂在 `user` 节点上**：`conversation.chat.node` 虽能注册任意 key，但 `ui-chat` 用 allowlist `TURN_PROCESS_INDEPENDENT_KINDS` 决定节点能否脱离「Turn 过程折叠块」；不在表里的 key 会被判为 turn-process 成员，Turn 折叠后被加 `hidden`——**挂载了、然后被隐藏**，且不报错。诊断方法：注册的节点永远先查这张表，再怀疑注册/匹配/解析链路（代码与定位过程见 [`archive/investigations.md`](archive/investigations.md)）。
 
@@ -193,7 +199,7 @@ Each item contains text selected from an earlier message ...
 - **挂载**：`dom/floating-layer.ts` 从选区所在的 flow item 往上找**真正的滚动容器**（桌面抽屉布局是 `.ST7X_W_scrollBody`，此时 `.icaHSq_scroll` 的计算 overflow 是 visible；普通布局是 `.icaHSq_scroll`），在容器里挂一个零尺寸的 absolute host（必要时把容器补成 `position: relative`），浮层 portal 进去。坐标是**相对滚动内容**的，所以滚动时工具条/评论泡随正文一起走，不需要逐帧重定位；容器负责裁剪——滚到容器上边缘就滑进 header 下面，和正文一致。host 的 `z-index` 固定 **6**：低于 composer seat 的 7（不穿过输入框），高于内容里吸顶元素的 6；
 - **跟随**：滚动时仍会触发 `refresh()`（合并同一 tick 的多次事件），但选区的**内容坐标**不变，`setActive` 去重后不重渲染。真正需要重排的只有 resize / 布局变化，以及内容顶部选中时改为挂在首行下方的翻转（`below`）；
 - **收起**：选区真的没了、或**选中行的首行完全滚出视口**（`isFirstLineOnScreen`，没有可锚定的东西了）。滚回去会重新出现；半可见时由容器裁剪，不再用视口边缘钳位；
-- **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。评论阶段工具条本身（「添加批注…」提示）改放到评论泡**上方、左对齐**，底边距评论泡顶边 6px；顶部空间不够时翻到评论泡下方。它和评论泡的重排都由 `placeCommentPop` 负责。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要卡片同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
+- **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。**「下方」的可用边界是 composer seat 的顶边，不是滚动容器自己的盒子**（`floating-layer.ts` 的 `bounds().bottom` 取两者较小值）：桌面布局里 composer 是 sticky、z-7 覆盖在滚动容器下半段，用容器盒子会把评论泡放到输入框底下（[data-composer-seat]，缺失时退回 [data-composer-card]）。评论阶段工具条本身（「添加批注…」提示）改放到评论泡**上方、左对齐**，底边距评论泡顶边 6px；顶部空间不够时翻到评论泡下方。它和评论泡的重排都由 `placeCommentPop` 负责。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要卡片同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
 
 ## 浮层名词与层带
 
@@ -204,13 +210,12 @@ Each item contains text selected from an earlier message ...
 | 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6） | 复制 / 添加到任务 / 打开链接；评论阶段缩成提示 |
 | 状态提示 | `.dsq_status` | 同上 | 3 | 复制失败等瞬时提示 |
 | 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方；评论阶段「添加批注…」提示条在它上方左对齐、间距 6px |
-| 悬浮摘要 | `.dsq_summaryHover` | `document.body`（fixed） | 14 | 输入框摘要卡片的悬停列表 |
-| 摘要芯片 | `.dsq_summary` | composer 内（`conversation.input.overlay`） | 13 | 「N 条批注」入口 |
+| 悬浮摘要 | `.dsq_summaryHover` | `document.body`（fixed） | 14 | 摘要块的悬停列表（composer 与历史消息共用） |
+| 摘要块 | `.dsq_summary` | composer 内（`conversation.input.overlay`）/ 历史用户气泡上方 | 13 | 「N 条批注」入口；历史侧外包 `.dsq_tSummary` 右对齐 |
 | 卡片堆 | `.dsq_cardStack` | composer 卡片内 | 12 | 输入框上方的摘要容器 |
-| 记录卡片 | `.dsq_tCardStack` | 用户气泡内（普通流） | auto | 历史消息里的批注卡片 |
 
 - 工具条/状态/评论泡共用一个 host：host 的 6 低于 composer seat 的 7，又被滚动容器裁剪，所以既不会穿过输入框，也会随正文滑进 header 下面（机制 13）。三者的内部次序是 status 3 > toolbar 2 > commentPop 1。
-- 摘要芯片/卡片堆在 composer seat（z 7，自成层叠上下文）内部，12/13 只在 composer 内比较；悬浮摘要是 body 级 fixed，14 属于页面根层叠上下文。
+- 摘要块/卡片堆在 composer seat（z 7，自成层叠上下文）内部，12/13 只在 composer 内比较；悬浮摘要是 body 级 fixed，14 属于页面根层叠上下文。
 
 ## 目录结构
 
@@ -218,7 +223,7 @@ Each item contains text selected from an earlier message ...
 src/index.ts                       # Node 半：占位，让包被 Loader 挂载
 src/client/index.tsx               # Client 半入口：注册 Slot、语言词典与装饰观察者
 src/client/SelectionToolbar.tsx    # 划词浮动条（复制 / 添加到任务）+ 评论气泡
-src/client/composer/AnnotationPanel.tsx      # 输入框内批注摘要 + 发送动作拦截
+src/client/composer/AnnotationPanel.tsx      # 输入框内批注摘要 + 发送动作拦截 + 撤回协议块还原
 src/client/composer/useSendIntercept.ts      # 发送手势时把待发批注折进草稿
 src/client/composer/useDraftMarker.ts        # U+200B 让"只有批注"时发送按钮可用
 src/client/dom/selection.ts        # 选区快照、工具条定位、复制、聚焦输入框
@@ -226,6 +231,7 @@ src/client/dom/floating-layer.ts   # 找到对话滚动容器，挂内容坐标�
 src/client/dom/message-text.ts     # 消息纯净文本遍历、选区→字符偏移定位
 src/client/dom/annotate-text.ts    # 正文 mark（下划线+序号徽章）的注册表与装饰
 src/client/dom/scrollToAnnotation.ts # 点击批注滚动到正文 mark 并闪烁
+src/client/dom/stripSubmissionEcho.ts # 发送回显气泡里剥掉协议块（只改展示）
 src/client/dom/decorateAnnotationDirectives.ts # 模型回的 :dsh-annotation{index="N"} 渲染成可点 chip
 src/client/dom/popoverPlacement.ts # 浮层定位（翻转 + 视口夹取）
 src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 等）
@@ -234,9 +240,9 @@ src/client/state/annotation-persistence.ts # 持久化纯逻辑：载荷、保�
 src/client/state/annotation-storage.ts     # 环境探测（localStorage / 空），不碰 require
 src/client/protocol/annotation-protocol.ts # 批注 wire 格式（含 source 定位）
 src/client/protocol/quote-protocol.ts      # 旧 > 引用块协议 / U+200B 标记 / 文本工具
-src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注卡片（由 UserMessageDisplay 渲染）
-src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡（隐藏协议块、保留图片、内联批注卡片）
-src/client/ui/AnnotationCardView.tsx  # 批注卡片与悬停列表面板（portal 到 body、内联编辑）
+src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注摘要块（单个块 + 悬停列表）
+src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡：委托宿主 UserMessageNodeView，只改文本块并前置卡片
+src/client/ui/AnnotationCardView.tsx  # 摘要块与悬停列表面板（portal 到 body、内联编辑）
 src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus）
 src/client/i18n.ts                   # 三份词典（zh / en / ru）、复数形式挑选、把 t() 转给宿主 bind 结果
 src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
@@ -259,10 +265,14 @@ lib/                               # 构建产物（已提交，运行时直接�
 ## 依赖的产品内部约定（升级 dsh 后逐条复核）
 
 - `[data-composer-card]` 属性存在，且主发送按钮是卡片内 DOM 顺序上最后一个 `button`；停止按钮渲染 `svg rect`；
+- 桌面（overlay）布局里 `[data-composer-seat]` 是 sticky、z 7 的输入区，**滚动容器的盒子会延伸**到它背后——浮层可放置区域的下边界要取它的顶边；
+- 提交瞬间宿主渲染本地回显 `[data-submission-echo]`（含 `clock: start` 动作行），走 `conversation.chat.user.content` / `conversation.user.text` 工厂，不经过 `conversation.chat.node`；
 - `user/message` 事件的内容在 `data.content`（不是 `data.message.content`）；
 - 深色属性 `data-ds-dark-theme` 由 `dsh-client-ui-layout` 挂在 `body`；
 - 槽位名 `shell.overlay` / `conversation.input.overlay` / `conversation.chat.node` 及其 props（`useInput`、`inputActions.setDraft`）；
+- `ctx.slots.entries('conversation.chat.node')` 可枚举全部条目（包括被遮蔽的宿主条目）；宿主内置 `user` 视图的 `component.type.name` 是 `UserMessageNodeView`、`options` 只有 `key`（没有 `priority`）。委托渲染时要把 kit 里的 `renderFactorySlot`、`loadImage` 与 hooks 原样透传，并给注册项声明 `locale: 'chat'`——否则宿主的复制/已复制文案拿不到词典。`conversation.chat.user.content` 工厂（子槽 `conversation.chat.user.images` 渲染图片）由宿主视图自己调用，插件不再直接碰；**`renderMessageImages` 不是 0.2.1-rc.2 的宿主 prop**；
 - `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
+- dsh-rewind 的撤回读持久 `user` / `steering` 节点的文本块（`block.type === 'text'`）并原样写回 composer——消息里的任何文本协议都会回到编辑器，所以本插件必须能把它反向还原（见关键机制 1）；
 - 开发期依赖：`client-hmr` 挂在 web 组合包里，按 500ms 轮询 client 产物并经 `/plugins/events` 推 `rebuilt`（`sync:desktop` 的热更新路径）；
 - 插件页展示元信息的读取约定：`<包名>/locale/en.json` 为发现入口、同目录其余 `*.json` 为各语言词典、`<包名>/icon` 为图标，全部经 Node ESM 解析且**不激活插件**（见关键机制 12）；这些路径必须在 `exports` 与 `files` 里都出现；
 - **对话滚动容器与浮层挂载（0.2.1-rc.2 复核）**：`_6Qf49G_frame` 是 `position:relative; z-index:auto`，不建层叠上下文；对话 header（`ST7X_W_header`，"标准模式"那一排）是滚动容器**之外**的非定位 flex 子项，composer seat 是 `position: sticky; z-index: 7`。因此 body 级 positioned 浮层无论 z-index 多低都会压过 header（非定位元素永远输给 positioned 元素）——这正是旧版 z-index 降到 0 仍浮在 header 上的原因。工具条/评论泡改挂进滚动容器：桌面抽屉布局滚的是 `.ST7X_W_scrollBody`（`.icaHSq_scroll` 此时是 visible），普通布局滚 `.icaHSq_scroll`；host 在容器内 `position:absolute`、z-index 6（低于 composer 7），靠容器裁剪实现"滑进 header 下面"（见机制 13）。宿主顶栏座位 `_6Qf49G_leadingSeat` 是 z-15、全帧 overlay 层 z-20，仅 `darwin && sidebarCollapsed` 时挂载；宿主菜单 100、弹层 1100-1250、模态 900-1005；
@@ -277,10 +287,14 @@ lib/                               # 构建产物（已提交，运行时直接�
 | 划词没有工具条 / 卡片不出现 | 跑 `pnpm run check`；确认页面已刷新；Host 的 boot 图里应包含 `dsh-select-quote`（`/plugins` 路由由 `ctx.clientModules` 提供） |
 | 滚动后工具条不见了 / 滚回来也没有 | 设计如此：选中行首行完全滚出视口时收起，滚回去会重新出现（见关键机制 13）。若滚回来仍不出现，查 `refresh` 链路——`selectionchange` 是否被宿主吞掉、选区是否被虚拟列表重建 |
 | 工具条浮在 header / 输入框上面 | 检查工具条是否还 portal 在 `document.body`：它应挂在 `[data-dsq-layer]` 里，host 的父级是 `ST7X_W_scrollBody` 或 `icaHSq_scroll`（见机制 13 与依赖约定）。body 级浮层压不过非定位 header，也拦不住 composer |
+| 在消息列表最底部划词时，评论泡被输入框盖住 | `floating-layer.ts` 的 `bounds().bottom` 是否还是滚动容器底边：必须取 composer seat 顶边（`[data-composer-seat]`，缺失退回 `[data-composer-card]`）与容器底边的较小值，否则桌面布局里容器盒子的下半段在 composer 后面（机制 13） |
 | 点空白处批注没了 | 应当保留：批注在点「添加到任务」时已保存，空白点击只会关闭评论泡（见机制 13）。若真丢了，查 `openComment` 是否走到 `saveSelection` |
 | 输入框里出现协议原文 | 发送前的注入没生效：确认草稿里存在 U+200B（发送按钮应可用），以及 composer 结构未变（`[data-composer-card]`） |
-| 对话记录里没有卡片 | 该 `user/message` 事件的 `data.content` 是否含批注块；卡片由 `user` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 的 `user` 单元是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
-| 带图片的消息在记录里只剩卡片、图片没了 | `UserMessageDisplay` 是否拿到了 `renderMessageImages` |
+| 发送后、模型返回前的气泡里出现整段协议 | 这是宿主的本地回显（`[data-submission-echo]`），不走本插件的 chat node。查 `watchSubmissionEcho()` 是否注册（`pnpm run verify` 的 `TRANSCRIPT SURFACE` 闸）；如果回显文本被会话 chip 拆成多个 run，按设计不重建（只处理包含完整块的单个 run） |
+| 撤回（dsh-rewind 的 ↶）后输入框里是整段协议 JSON | 撤回把持久文本原样写回 composer，正常应由 `readComposedDraft()` 反向还原成正文 + 待发摘要卡。先看 `pnpm run verify` 的 `COMPOSED DRAFT` / `REWIND RESTORE` 两道闸；再用 DevTools 确认写回的是**完整且 JSON 合法**的块——被截断或手改过的块按设计不碰，以免误删用户草稿 |
+| 对话记录里没有摘要块 | 该 `user/message` 事件的 `data.content` 是否含批注块；摘要块由 `user` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 的 `user` 单元是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
+| 带图片的消息在记录里只剩卡片、图片没了 | `UserMessageDisplay` 是否成功解析并渲染了宿主 `UserMessageNodeView`；图片/文件由宿主视图从改写后的 `node.data.content` 自己渲染 |
+| 用户消息下方的时间 / 复制（以及 dsh-rewind 的 ↶）整行消失 | 先查宿主视图解析：`ctx.slots.entries('conversation.chat.node')` 里是否还有 `UserMessageNodeView`，注册项是否带 `locale: 'chat'`；`pnpm run verify` 的 `USER CHROME` 闸会兜住。**不要再自己补动作行**——这正是 issue #8 的复发路径 |
 | 改了 CSS 不生效 | `<style>` 只注入一次，刷新页面 |
 | `sync:desktop` 推了但客户端没变 | 报 `already matches` 说明 `lib/` 还没重建（先跑 `pnpm run watch`）；报 `no installed bundle` 说明 profile 名不对（`--profile <name>`）；都正常仍不重载，看宿主 boot 日志里有没有 `client-hmr` |
 | 界面语言不跟着 dsh 变 | `pnpm run verify` 是否列出 4 项 `locale.*` 贡献；宿主是否提供 `ctx.locale`（没有则文案退到 English）；用户在设置里选的语言是否已注册 |

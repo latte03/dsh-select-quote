@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type MutableRefObject,
@@ -14,11 +15,16 @@ import {
   clearAnnotations,
   getAnnotations,
   removeAnnotation,
+  restoreAnnotations,
   subscribeAnnotations,
   updateAnnotationComment,
   type SelectionAnnotation,
 } from '../state/annotation-store.ts'
 import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
+import {
+  ANNOTATIONS_BLOCK_OPEN,
+  readComposedDraft,
+} from '../protocol/annotation-protocol.ts'
 import {
   DRAFT_MARKER,
   stripDraftMarker,
@@ -82,6 +88,7 @@ export function AnnotationPanel({
   const draftRef = useRef(draft)
   const actionsRef = useRef(inputActions)
   const sessionRef = useRef(sessionId)
+  const foldingRef = useRef(false)
   const composing = useComposing()
   draftRef.current = draft
   actionsRef.current = inputActions
@@ -131,7 +138,31 @@ export function AnnotationPanel({
     draftRef,
     setDraft,
     onFolded: () => setItems(EMPTY),
+    foldingRef,
   })
+
+  // dsh-rewind refills a withdrawn message verbatim, protocol block included
+  // (it reads the durable text blocks and writes them into the composer). Undo
+  // that fold here: put the annotations back into the pending summary and the
+  // user's own words back into the editor, so a rewind lands on the same state
+  // the message was composed from instead of a wall of JSON.
+  //
+  // Runs only when a COMPLETE block is present, and never for the block this
+  // plugin just folded at the send gesture — a draft that merely mentions the
+  // markers is left alone. `foldingRef` clears as soon as the folded draft is
+  // gone from the editor (sent and cleared, or replaced by this restore).
+  useLayoutEffect(() => {
+    if (!draft.includes(ANNOTATIONS_BLOCK_OPEN)) {
+      foldingRef.current = false
+      return
+    }
+    if (foldingRef.current || composing.current) return
+    const restored = readComposedDraft(draft)
+    if (restored === null) return
+    foldingRef.current = true
+    restoreAnnotations(sessionId, restored.annotations)
+    setDraft(restored.rest)
+  }, [draft, sessionId, setDraft, composing])
 
   // Reconcile the invisible marker with the annotation list. The host persists
   // the draft — marker included — so a refresh used to come back with an orphan

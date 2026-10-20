@@ -180,8 +180,8 @@ ${atomRules}
      内容里吸顶元素的 6（同 z 时 host 追加在滚动容器末尾，DOM 次序压过它们）。
    host 内部次序：status 3 > toolbar 2 > commentPop 1。
 
-   摘要行与批注卡片在内容普通流里，不参与这套层带；悬停面板仍是 body 级 fixed
-   （原因见 AnnotationCardView 里 contain:layout 的说明）。 */
+   摘要块（composer 与历史消息）在内容普通流里，不参与这套层带；悬停面板仍是
+   body 级 fixed（原因见 AnnotationCardView 里 contain:layout 的说明）。 */
 
 .dsq_toolbar {
   position: absolute;
@@ -291,78 +291,8 @@ ${atomRules}
   pointer-events: auto;
 }
 
-/* One annotation card, shared by the composer and the transcript: the base
-   carries the shape, and \`.dsq_tCard\` / \`.dsq_tCardIcon\` override only the
-   numbers where the transcript really differs.
-   Geometry mirrors the product's own file card (\`.nyYjTG_file\` in
-   ui-deliverables): hairline border, neutral fill, 18px radius, fixed 72px row. */
-.dsq_card {
-  --dsq-card-fill: var(--dsq-neutral-50);
-  --dsq-card-hover: var(--dsq-neutral-100);
-  flex: 0 0 auto;
-  gap: 10px;
-  width: fit-content;
-  max-width: calc(25% - 5px);
-  min-width: 0;
-  height: 64px;
-  margin: 0;
-  padding: 10px;
-  border: 0.5px solid var(--dsq-line);
-  border-radius: 18px;
-  background: var(--dsq-card-fill);
-  color: var(--dsq-label);
-  transition: background-color 0.12s;
-  position: relative;
-  overflow: hidden;
-  user-select: none;
-  pointer-events: auto;
-}
-
-.dsq_card:hover {
-  background: var(--dsq-card-hover);
-}
-
-/* Scaled down from the reference 48px: the composer card is width-capped at a
-   quarter of the input, so 48px would leave no room for the quote text. */
-.dsq_cardIcon {
-  z-index: 2;
-  width: 36px;
-  height: 36px;
-  border: 0.5px solid var(--dsq-line);
-  border-radius: 12px;
-  background: var(--dsq-card-fill);
-  color: var(--dsq-link);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.dsq_cardBody {
-  z-index: 2;
-  justify-content: center;
-  gap: 2px;
-}
-
-/* Keeps the ellipsised title clear of the corner remove button, which only the
-   composer stack renders. */
-.dsq_cardStack .dsq_cardBody {
-  padding-right: 14px;
-}
-
-.dsq_cardTitle {
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
-  color: var(--dsq-label);
-}
-
-.dsq_cardSubtitle {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsq-label-3);
-}
-
-/* Corner remove button: hidden until the card is hovered or focused. */
+/* Corner remove-all button on the summary block: hidden until the block is
+   hovered or focused. */
 .dsq_cardClose {
   position: absolute;
   top: 4px;
@@ -379,8 +309,6 @@ ${atomRules}
   transition: opacity 0.12s, background-color 0.12s;
 }
 
-.dsq_card:hover .dsq_cardClose,
-.dsq_card:focus-within .dsq_cardClose,
 .dsq_summary:hover .dsq_cardClose,
 .dsq_summary:focus-within .dsq_cardClose {
   opacity: 1;
@@ -390,33 +318,6 @@ ${atomRules}
 .dsq_cardClose:hover {
   background: var(--dsq-fill-hover);
   color: var(--dsq-label);
-}
-
-/* Secondary corner action (edit comment). */
-.dsq_cardAction {
-  position: absolute;
-  top: 4px;
-  right: 28px;
-  z-index: 3;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  color: var(--dsq-label-3);
-  font-size: 12px;
-  line-height: 1;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s, background-color 0.12s;
-}
-
-.dsq_card:hover .dsq_cardAction,
-.dsq_card:focus-within .dsq_cardAction {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.dsq_cardAction:hover {
-  background: var(--dsq-fill-hover);
 }
 
 /* Qoder-style annotation summary (“N 条批注”) inside the composer. */
@@ -727,98 +628,19 @@ ${atomRules}
   gap: 6px;
 }
 
-/* Transcript cards — in-flow rows under the user bubble, side by side. */
-.dsq_tCardStack {
+/* Transcript summary — the same block as the composer's, right-aligned under
+   the user bubble. One block per message; the hover list carries every
+   annotation with its selected text and comment. */
+.dsq_tSummary {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  align-items: stretch;
-  gap: 6px;
   margin: 4px 0 8px;
-  /* Cards lay out horizontally and wrap onto the next row when they run out of
-     width. Each card carries the selected text plus the user's comment, so they
-     stay compact and stay on the user-bubble side (right). */
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: 0;
 }
 
-/* Transcript-only differences from the shared card. Unlike the composer
-   summary (one collapsed row per message) each history card shows its own
-   comment, so the fixed height and single-line clamps are lifted on \`.dsq_tCardButton\`. */
-.dsq_tCard {
+.dsq_tSummary .dsq_summary {
+  width: auto;
+  min-width: 220px;
   max-width: min(calc(var(--dsq-chat-width) * 0.72), 520px);
-  margin-left: auto;
-}
-
-.dsq_tCardIcon {
-  width: 40px;
-  height: 40px;
-  font-size: 14px;
-}
-
-.dsq_tCardButton {
-  /* Compact cards: several fit in one row before wrapping. */
-  display: block;
-  flex: 0 1 auto;
-  width: 230px;
-  max-width: 100%;
-  padding: 0;
-  font: inherit;
-  text-align: left;
-  border-radius: 14px;
-}
-
-.dsq_tCardButton:focus-visible {
-  outline: 2px solid var(--dsq-accent);
-  outline-offset: 2px;
-}
-
-.dsq_tCardButton .dsq_card {
-  height: auto;
-  min-height: 0;
-  align-items: flex-start;
-  width: 100%;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 14px;
-}
-
-.dsq_tCardButton .dsq_cardIcon {
-  width: 22px;
-  height: 22px;
-  border-radius: 8px;
-  font-size: 11px;
-}
-
-.dsq_tCardButton .dsq_cardTitle {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.dsq_tCardButton .dsq_cardSubtitle {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 16px;
-}
-
-/* A comment is the user's own words — give it more presence than the neutral
-   "no comment" placeholder. */
-.dsq_cardSubtitle[data-dsq-has-comment='true'] {
-  color: var(--dsq-label-2);
 }
 
 /* Replacement user bubble (quote block stripped from display). */
@@ -847,6 +669,12 @@ ${atomRules}
 /* Durable message images of a replacement user bubble. */
 .dsq_userImages {
   max-width: 100%;
+}
+
+.dsq_userImages img {
+  display: block;
+  max-width: 100%;
+  border-radius: 12px;
 }
 
 /* Model-written :dsh-annotation{index="N"} chips. */
@@ -931,13 +759,7 @@ ${atomRules}
 }
 
 /* The product flips its palette on body[data-ds-dark-theme], and every
-   --dsq-* alias follows it. Only values we own ourselves need restating — the
-   transcript card carries .dsq_card too, so one selector covers both. */
-body[data-ds-dark-theme] .dsq_card {
-  --dsq-card-fill: var(--dsq-neutral-850);
-  --dsq-card-hover: var(--dsq-neutral-800);
-}
-
+   --dsq-* alias follows it. Only values we own ourselves need restating. */
 body[data-ds-dark-theme] .dsq_annMark {
   --dsq-mark-tint: var(--dsq-accent-tint-dark);
 }
@@ -968,14 +790,8 @@ export const styles = {
   divider: 'dsq_divider',
   status: 'dsq_status',
   cardStack: 'dsq_cardStack',
-  card: 'dsq_card',
-  cardIcon: 'dsq_cardIcon',
-  cardBody: 'dsq_cardBody',
-  cardTitle: 'dsq_cardTitle',
-  cardSubtitle: 'dsq_cardSubtitle',
   cardClose: 'dsq_cardClose',
   cardPad: 'dsq_cardPad',
-  cardAction: 'dsq_cardAction',
   summary: 'dsq_summary',
   summaryIcon: 'dsq_summaryIcon',
   summaryBody: 'dsq_summaryBody',
@@ -1007,10 +823,7 @@ export const styles = {
   commentPop: 'dsq_commentPop',
   commentInput: 'dsq_commentInput',
   commentActions: 'dsq_commentActions',
-  tCardStack: 'dsq_tCardStack',
-  tCardButton: 'dsq_tCardButton',
-  tCard: 'dsq_tCard',
-  tCardIcon: 'dsq_tCardIcon',
+  tSummary: 'dsq_tSummary',
   userRow: 'dsq_userRow',
   userStack: 'dsq_userStack',
   userImages: 'dsq_userImages',

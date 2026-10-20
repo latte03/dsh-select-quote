@@ -39,6 +39,24 @@ const layers = new WeakMap<HTMLElement, FloatingLayer>()
 const itemLayers = new WeakMap<HTMLElement, FloatingLayer>()
 let fallback: FloatingLayer | null = null
 
+/**
+ * Top edge of the composer seat, in viewport coordinates.
+ *
+ * In the desktop (overlay) layout the composer is `position: sticky` over the
+ * scroller and stacks above this layer (z 7 vs 6), so the scroller's own box
+ * extends **behind** it. Placement that stops at the scroller box therefore
+ * parks popovers under the input box — the bottom edge must be the composer.
+ * In the regular layout the seat sits below the scroller, so it changes nothing.
+ */
+function composerTop(): number | null {
+  if (typeof document === 'undefined') return null
+  const seat =
+    document.querySelector<HTMLElement>('[data-composer-seat]') ??
+    document.querySelector<HTMLElement>('[data-composer-card]')
+  if (seat === null) return null
+  return seat.getBoundingClientRect().top
+}
+
 function contentCoords(scroller: HTMLElement, left: number, top: number) {
   const rect = scroller.getBoundingClientRect()
   return {
@@ -69,11 +87,15 @@ function layerFor(scroller: HTMLElement): FloatingLayer {
     scroller,
     bounds: () => {
       const rect = scroller.getBoundingClientRect()
+      const top = rect.top + scroller.clientTop
+      const rawBottom = top + scroller.clientHeight
+      const cover = composerTop()
+      const bottom = cover !== null && cover > top && cover < rawBottom ? cover : rawBottom
       return new DOMRect(
         rect.left + scroller.clientLeft,
-        rect.top + scroller.clientTop,
+        top,
         scroller.clientWidth,
-        scroller.clientHeight,
+        Math.max(0, bottom - top),
       )
     },
     toContent: (left, top) => contentCoords(scroller, left, top),
@@ -99,7 +121,10 @@ function fallbackLayer(): FloatingLayer {
   fallback = {
     host,
     scroller: document.body,
-    bounds: () => new DOMRect(0, 0, window.innerWidth, window.innerHeight),
+    bounds: () => {
+      const bottom = composerTop() ?? window.innerHeight
+      return new DOMRect(0, 0, window.innerWidth, Math.max(0, bottom))
+    },
     toContent: (left, top) => ({ left, top }),
     fromContent: (left, top) => ({ left, top }),
   }

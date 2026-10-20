@@ -223,6 +223,36 @@ async function checkSelectionUrl() {
   return problems
 }
 
+/**
+ * The replaced `user` node must delegate to the host's own node view.
+ *
+ * The shipped `UserMessageNodeView` renders the bubble/content factory and the
+ * time/copy `MessageIconActions` row as siblings. A private bubble that
+ * redraws the chrome silently drops the clock, the copy button, every plugin
+ * that portals into that row (dsh-rewind's ↶), and stops following host
+ * changes. So the built artifact must resolve and render `UserMessageNodeView`
+ * (with its `chat` translator) and must not carry a private actions row.
+ * `renderMessageImages` is not a host prop in 0.2.1-rc.2 at all.
+ */
+function checkUserChrome(code) {
+  const problems = []
+  if (!/["']UserMessageNodeView["']/.test(code) || !code.includes('conversation.chat.node')) {
+    problems.push(
+      'replacement user node does not resolve the host UserMessageNodeView — chrome stops following the host',
+    )
+  }
+  if (!/locale:\s*["']chat["']/.test(code)) {
+    problems.push('delegated host node view is registered without the chat locale seat (copy labels break)')
+  }
+  if (code.includes('dsq_userActions')) {
+    problems.push('user node redraws the actions row instead of delegating it to the host')
+  }
+  if (code.includes('renderMessageImages')) {
+    problems.push('renderMessageImages is not a host prop — pass the node through the host view')
+  }
+  return problems
+}
+
 const MAX_ICON_BYTES = 256 * 1024
 const ICON_MEDIA_TYPES = new Map([
   ['.svg', 'image/svg+xml'],
@@ -409,6 +439,115 @@ function packedFiles() {
   const parsed = JSON.parse(result.stdout.slice(start, end + 1))
   const summary = Array.isArray(parsed) ? parsed[0] : Object.values(parsed)[0]
   return summary?.files?.map((file) => file.path) ?? null
+}
+
+/**
+ * The composer-side inverse of the send fold.
+ *
+ * dsh-rewind refills a withdrawn message verbatim — it reads the durable text
+ * blocks and writes them into the composer, so the protocol block comes back
+ * too. The composer must recover the annotations (with their source locators)
+ * and the user's own text instead of showing a wall of JSON. Replay
+ * compose → rewind text → read here, without a DOM.
+ */
+async function checkComposedDraft() {
+  const problems = []
+  const { composeAnnotatedMessage, readComposedDraft } = await import(
+    new URL('../src/client/protocol/annotation-protocol.ts', import.meta.url).href
+  )
+  const source = {
+    text: '被划中的原文',
+    messageId: 'flow-42',
+    messageKind: 'assistant',
+    startOffset: 3,
+    endOffset: 11,
+  }
+  const annotations = [
+    { id: 'a1', text: source.text, comment: '这里要改', sources: [source] },
+    {
+      id: 'a2',
+      text: '另一段',
+      sources: [{ text: '另一段' }, { text: '另一段', messageId: 'flow-7' }],
+    },
+  ]
+  const restored = readComposedDraft(composeAnnotatedMessage('用户正文', annotations))
+  if (restored === null) {
+    problems.push('a composed message was not recognized as an annotation block')
+    return problems
+  }
+  if (restored.rest !== '用户正文') {
+    problems.push(`restored draft is ${JSON.stringify(restored.rest)}, want "用户正文"`)
+  }
+  if (restored.annotations.length !== 2) {
+    problems.push(`restored ${restored.annotations.length} annotations, want 2`)
+  }
+  const [first, second] = restored.annotations
+  if (first?.text !== source.text || first?.comment !== '这里要改') {
+    problems.push('first annotation lost its text/comment')
+  }
+  if (first?.sources[0]?.messageId !== 'flow-42' || first?.sources[0]?.startOffset !== 3) {
+    problems.push('first annotation lost its source locator — the mark would not come back')
+  }
+  if (second?.sources.length !== 2) {
+    problems.push('multi-source annotation lost a source')
+  }
+  // Only complete, valid blocks may touch the editor.
+  for (const text of [
+    '只提到 <response-annotations> 的普通草稿',
+    '<response-annotations>{oops}</response-annotations>',
+    '<response-annotations>[]</response-annotations>',
+  ]) {
+    if (readComposedDraft(text) !== null) {
+      problems.push(`readComposedDraft edited a non-restorable draft: ${text}`)
+    }
+  }
+  // A block with text on both sides keeps both sides.
+  const middle = readComposedDraft(
+    '前文\n\n<response-annotations>[{"text":"x"}]</response-annotations>\n\n后文',
+  )
+  if (middle === null || middle.rest !== '前文\n\n后文') {
+    problems.push(`middle placement restored ${JSON.stringify(middle?.rest)}`)
+  }
+  return problems
+}
+
+/** The rewind restore must be wired into the built bundle, not just exported. */
+function checkRewindRestore(code) {
+  const problems = []
+  if (!code.includes('readComposedDraft')) {
+    problems.push(
+      'composer has no rewind restore — a withdrawn message refills the editor with the whole protocol block',
+    )
+  }
+  if (!code.includes('restoreAnnotations')) {
+    problems.push(
+      'rewind restore does not re-adopt annotations — resending would silently drop the selections',
+    )
+  }
+  return problems
+}
+
+/**
+ * Surfaces that bypass the chat-node slot.
+ *
+ * The optimistic submission echo (`[data-submission-echo]`) is painted by the
+ * chat flow from the composer draft, so it shows the protocol block until the
+ * durable message lands — it must be stripped in place. History annotations
+ * group into ONE summary block per message (count + hover list), never one
+ * card per annotation.
+ */
+function checkTranscriptSurfaces(code) {
+  const problems = []
+  if (!code.includes('data-submission-echo')) {
+    problems.push('submission echo is not stripped — a slow turn shows the raw protocol block')
+  }
+  if (!code.includes('dsq_tSummary')) {
+    problems.push('transcript summary block is missing — annotations must group into one block')
+  }
+  if (code.includes('dsq_tCardStack')) {
+    problems.push('per-annotation transcript cards are back — one block with a hover list is the contract')
+  }
+  return problems
 }
 
 async function checkPersistence() {
@@ -725,6 +864,10 @@ for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) l
 const persistenceProblems = await checkPersistence()
 const linkProblems = await checkSelectionUrl()
 const metaProblems = checkPackageMeta()
+const userChromeProblems = checkUserChrome(code)
+const composedDraftProblems = await checkComposedDraft()
+const rewindProblems = checkRewindRestore(code)
+const surfaceProblems = checkTranscriptSurfaces(code)
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -736,7 +879,11 @@ if (
   observerProblems.length > 0 ||
   persistenceProblems.length > 0 ||
   linkProblems.length > 0 ||
-  metaProblems.length > 0
+  metaProblems.length > 0 ||
+  userChromeProblems.length > 0 ||
+  composedDraftProblems.length > 0 ||
+  rewindProblems.length > 0 ||
+  surfaceProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
@@ -746,10 +893,16 @@ if (
   for (const problem of persistenceProblems) console.error(`PERSISTENCE: ${problem}`)
   for (const problem of linkProblems) console.error(`LINK: ${problem}`)
   for (const problem of metaProblems) console.error(`PACKAGE META: ${problem}`)
+  for (const problem of userChromeProblems) console.error(`USER CHROME: ${problem}`)
+  for (const problem of composedDraftProblems) console.error(`COMPOSED DRAFT: ${problem}`)
+  for (const problem of rewindProblems) console.error(`REWIND RESTORE: ${problem}`)
+  for (const problem of surfaceProblems) console.error(`TRANSCRIPT SURFACE: ${problem}`)
   process.exit(1)
 }
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
     `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed, link detection replayed, ` +
+    `user node delegates to the host view, composed annotation blocks read back, ` +
+    `echo stripped and transcript summary single-block, ` +
     `package metadata (locale + icon) resolved and packed`,
 )

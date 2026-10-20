@@ -9,6 +9,7 @@ import {
   syncPendingAnnotationJobs,
   watchAnnotationMarks,
 } from './dom/annotate-text.ts'
+import { watchSubmissionEcho } from './dom/stripSubmissionEcho.ts'
 import {
   bindLocale,
   DICTIONARIES,
@@ -18,7 +19,11 @@ import {
   subscribeLocale,
 } from './i18n.ts'
 import { ensureToolbarStyles } from './styles.ts'
-import { UserMessageDisplay } from './transcript/UserMessageDisplay.tsx'
+import {
+  UserMessageDisplay,
+  type HostUserComponent,
+  type UserMessageDisplayProps,
+} from './transcript/UserMessageDisplay.tsx'
 import {
   bindAnnotationSession,
   getAnnotations,
@@ -85,6 +90,8 @@ export function apply(ctx: Context): void {
   ctx.effect(() => watchAnnotationDirectives(), 'dsh-select-quote: annotation directives')
   // Underline + ordinal badges on annotated text; survive transcript re-renders.
   ctx.effect(() => watchAnnotationMarks(), 'dsh-select-quote: annotation marks')
+  // The optimistic send echo paints the composer draft, protocol block included.
+  ctx.effect(() => watchSubmissionEcho(), 'dsh-select-quote: submission echo')
   // Pending annotations mark their source text the moment they are added.
   ctx.effect(() => {
     syncPendingAnnotationJobs(getAnnotations())
@@ -136,17 +143,46 @@ export function apply(ctx: Context): void {
     )
   })
 
-  // History: protocol-stripped user bubbles that carry their own cards.
+  // History: delegate the bubble to the host's own UserMessageNodeView after
+  // rewriting `node.data.content`, then prepend the annotation cards. The host
+  // view owns the time/copy actions row, attachments, file cards and reference
+  // summaries, so a host change or another plugin's decoration of that row is
+  // preserved instead of being shadowed by a private copy.
+  const hostUserOf = (): HostUserComponent | undefined => {
+    const entries =
+      typeof ctx.slots.entries === 'function'
+        ? ctx.slots.entries('conversation.chat.node')
+        : []
+    const candidates = entries.filter(
+      (entry) => entry.options?.key === 'user' && entry.options?.priority !== -10,
+    )
+    const named = candidates.find((entry) => componentName(entry.component) === 'UserMessageNodeView')
+    return (named ?? candidates[0])?.component as HostUserComponent | undefined
+  }
+  const UserNode = (props: UserMessageDisplayProps) => (
+    <UserMessageDisplay {...props} hostUserOf={hostUserOf} />
+  )
   ctx.slots.inject('conversation.chat.node', () => {
     ctx.slots.register(
       {
         name: 'conversation.chat.node',
         key: 'user',
         priority: -10,
+        // The delegated host view needs its own translator for the copy
+        // tooltip; the chat namespace is the one it is written against.
+        locale: 'chat',
       },
-      UserMessageDisplay,
+      UserNode,
     )
   })
+}
+
+/** Component name across memo/forwardRef/plain function shapes. */
+function componentName(component: unknown): string | undefined {
+  const candidate = component as
+    | { type?: { name?: string }; name?: string; displayName?: string }
+    | undefined
+  return candidate?.type?.name ?? candidate?.name ?? candidate?.displayName
 }
 
 /** Invisible session-scoped bridge that publishes sessionId for the root toolbar. */

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { upsertAnnotationJobs } from '../dom/annotate-text.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
-import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
+import { ensureToolbarStyles, styles } from '../styles.ts'
 import type { ParsedAnnotation } from '../protocol/annotation-protocol.ts'
-import { AnnotationCardView } from '../ui/AnnotationCardView.tsx'
+import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
 
 /** View payload a user message's cards are rendered from. */
 export interface SelectQuoteNodeData {
@@ -15,14 +15,14 @@ export interface TranscriptQuoteCardProps {
 }
 
 /**
- * History-side cards for one user message's annotations.
+ * History-side summary for one user message's annotations.
  *
- * One card per annotation, each showing the selected text **and** the user's
- * comment. The comment is how the user recognizes their own annotation, so it
- * belongs on the visible card — not behind a hover panel that has to be
- * discovered. Clicking a card scrolls back to the marked text in the source
- * message; the ordinal badge matches the `:dsh-annotation{index="N"}` the model
- * refers to.
+ * One block per message, not one card per annotation: the block carries the
+ * count and the hover list shows every annotation with its selected text and
+ * comment. That is the same shape the composer uses for pending selections, so
+ * a message reads the same before and after it is sent. Clicking an item
+ * scrolls back to the marked text in the source message; the ordinal badge
+ * matches the `:dsh-annotation{index="N"}` the model refers to.
  */
 export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNode {
   ensureToolbarStyles()
@@ -52,39 +52,28 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
   }, [])
 
   const onSelect = useCallback(
-    (index: number, text: string) => {
-      scrollToAnnotation(index + 1, text, markIdOf(index))
+    (index: number, _item: AnnotationSummaryItem) => {
+      const quote = quotes[index]
+      if (quote === undefined) return
+      scrollToAnnotation(index + 1, quote.text, markIdOf(index))
     },
-    [markIdOf],
+    [markIdOf, quotes],
   )
 
   if (quotes.length === 0) return null
 
   return (
-    <div ref={stackRef} className={styles.tCardStack} data-dsq-deco="true">
-      {quotes.map((quote, index) => (
-        <div
-          key={`ann-${index}`}
-          className={cx(A.plain, styles.tCardButton)}
-          role="button"
-          tabIndex={0}
-          aria-label={quote.title}
-          onClick={() => onSelect(index, quote.text)}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return
-            event.preventDefault()
-            onSelect(index, quote.text)
-          }}
-        >
-          <AnnotationCardView
-            variant="transcript"
-            title={quote.title}
-            text={quote.text}
-            comment={quote.comment || undefined}
-            index={index + 1}
-          />
-        </div>
-      ))}
+    <div ref={stackRef} className={styles.tSummary} data-dsq-deco="true">
+      <AnnotationSummary
+        count={quotes.length}
+        items={quotes.map((quote, index) => ({
+          id: `dqsm-${index}`,
+          title: quote.title,
+          text: quote.text,
+          ...(quote.comment ? { comment: quote.comment } : {}),
+        }))}
+        onItemSelect={onSelect}
+      />
     </div>
   )
 }

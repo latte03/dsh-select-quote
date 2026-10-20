@@ -8,6 +8,11 @@ export interface SendInterceptDeps {
   readonly draftRef: MutableRefObject<string>
   readonly setDraft: (text: string) => void
   readonly onFolded: () => void
+  /**
+   * Set while the composed draft may still be in the editor. The composer
+   * half must not treat the block it just wrote as a rewind restore.
+   */
+  readonly foldingRef?: MutableRefObject<boolean>
 }
 
 /**
@@ -20,6 +25,7 @@ export function useSendIntercept({
   draftRef,
   setDraft,
   onFolded,
+  foldingRef,
 }: SendInterceptDeps): void {
   useEffect(() => {
     if (itemCount === 0) return
@@ -27,6 +33,7 @@ export function useSendIntercept({
     const inject = (): void => {
       const current = getAnnotations()
       if (current.length === 0) return
+      if (foldingRef !== undefined) foldingRef.current = true
       setDraft(composeAnnotatedMessage(draftRef.current, current))
       clearAnnotations()
       onFolded()
@@ -62,5 +69,5 @@ export function useSendIntercept({
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onClick, true)
     }
-  }, [itemCount, draftRef, setDraft, onFolded])
+  }, [itemCount, draftRef, setDraft, onFolded, foldingRef])
 }

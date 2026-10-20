@@ -42,12 +42,6 @@ const zh: LocaleDict = {
   'toolbar.skipComment': '暂不评论',
   'toolbar.addComment': '添加评论',
 
-  'card.commentSubtitle': '评论 · {comment}',
-  'card.ariaIndexed': '批注 {index}',
-  'card.ariaPlain': '划词批注',
-  'card.editComment': '编辑评论',
-  'card.remove': '移除批注',
-
   'summary.hint': '悬停查看批注',
   'summary.dialogAria': '{count} 条划词批注详情',
   'summary.edit': '编辑批注 {index}',
@@ -76,12 +70,6 @@ const en: LocaleDict = {
   'toolbar.commentDialogAria': 'Add an optional comment',
   'toolbar.skipComment': 'Skip comment',
   'toolbar.addComment': 'Add comment',
-
-  'card.commentSubtitle': 'Comment · {comment}',
-  'card.ariaIndexed': 'Annotation {index}',
-  'card.ariaPlain': 'Selection annotation',
-  'card.editComment': 'Edit comment',
-  'card.remove': 'Remove annotation',
 
   'summary.hint': 'Hover to view annotations',
   'summary.dialogAria': 'Annotation details: {count}',
@@ -118,12 +106,6 @@ const ru: LocaleDict = {
   'toolbar.commentDialogAria': 'Добавить необязательный комментарий',
   'toolbar.skipComment': 'Без комментария',
   'toolbar.addComment': 'Добавить комментарий',
-
-  'card.commentSubtitle': 'Комментарий · {comment}',
-  'card.ariaIndexed': 'Аннотация {index}',
-  'card.ariaPlain': 'Аннотация к выделенному тексту',
-  'card.editComment': 'Изменить комментарий',
-  'card.remove': 'Удалить аннотацию',
 
   'summary.hint': 'Наведите, чтобы увидеть аннотации',
   'summary.dialogAria': 'Детали аннотаций: {count}',

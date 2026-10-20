@@ -3,6 +3,7 @@
 import {
   previewTitle,
   type AnnotationSource,
+  type RestoredAnnotation,
   type SelectionAnnotation,
 } from '../protocol/annotation-protocol.ts'
 import { runtime, setRuntimeSession } from '../runtime.ts'
@@ -56,6 +57,10 @@ function persist(partitionKey: string): void {
   persistence.save(partitionKey, bySession.get(partitionKey) ?? EMPTY)
 }
 
+function newAnnotationId(): string {
+  return `ann_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+}
+
 /** Append one selection; an identical text+comment pair is reused. */
 export function saveAnnotation(
   sessionId: string | undefined,
@@ -70,7 +75,7 @@ export function saveAnnotation(
   if (duplicate) return duplicate
 
   const annotation: SelectionAnnotation = {
-    id: `ann_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    id: newAnnotationId(),
     text: input.text,
     ...(comment ? { comment } : {}),
     sources: input.sources?.length ? input.sources : [{ text: input.text }],
@@ -79,6 +84,40 @@ export function saveAnnotation(
   persist(k)
   notify()
   return annotation
+}
+
+/**
+ * Re-adopt annotations lifted out of a composed message.
+ *
+ * dsh-rewind puts a withdrawn message back into the composer verbatim, so the
+ * protocol block arrives there too; the composer half parses it and hands the
+ * items here. Same text+comment pairs already pending win, so a repeated
+ * restore never duplicates a card. Returns how many items were added.
+ */
+export function restoreAnnotations(
+  sessionId: string | undefined,
+  items: readonly RestoredAnnotation[],
+): number {
+  const k = partition(sessionId)
+  const current = bySession.get(k) ?? EMPTY
+  const next = [...current]
+  for (const item of items) {
+    const text = item.text.trim()
+    if (!text) continue
+    const comment = item.comment?.trim() ?? ''
+    if (next.some((entry) => entry.text === text && (entry.comment ?? '') === comment)) continue
+    next.push({
+      id: newAnnotationId(),
+      text,
+      ...(comment ? { comment } : {}),
+      sources: item.sources.length > 0 ? item.sources : [{ text }],
+    })
+  }
+  if (next.length === current.length) return 0
+  bySession.set(k, next)
+  persist(k)
+  notify()
+  return next.length - current.length
 }
 
 export function getAnnotations(sessionId?: string): readonly SelectionAnnotation[] {

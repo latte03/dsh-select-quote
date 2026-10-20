@@ -98,6 +98,75 @@ function stripProtocolHeader(prefix: string): string {
   return prefix.replace(/\s+$/, '')
 }
 
+/** A complete `<response-annotations>` block, split into its surroundings. */
+interface BlockParts {
+  readonly before: string
+  readonly after: string
+  readonly json: string
+}
+
+function blockParts(text: string): BlockParts | null {
+  const open = text.indexOf(ANNOTATIONS_BLOCK_OPEN)
+  if (open < 0) return null
+  const close = text.indexOf(ANNOTATIONS_BLOCK_CLOSE, open + ANNOTATIONS_BLOCK_OPEN.length)
+  if (close < 0) return null
+  return {
+    before: stripProtocolHeader(text.slice(0, open)),
+    after: text.slice(close + ANNOTATIONS_BLOCK_CLOSE.length).replace(/^\s+/, ''),
+    json: text.slice(open + ANNOTATIONS_BLOCK_OPEN.length, close).trim(),
+  }
+}
+
+function joinedRest(parts: BlockParts): string {
+  return [parts.before, parts.after].filter((part) => part.length > 0).join('\n\n').trim()
+}
+
+/** Wire payload as an array; null when the block is not valid JSON. */
+function parseWire(parts: BlockParts): unknown[] | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(parts.json)
+  } catch {
+    return null
+  }
+  return Array.isArray(parsed) ? parsed : null
+}
+
+interface WireBody {
+  readonly body: string
+  readonly comment: string
+  readonly sources: readonly AnnotationSource[]
+}
+
+/** Every source an item carries; falls back to the selected text itself. */
+function sourcesOf(record: { source?: unknown; sources?: unknown }, body: string): readonly AnnotationSource[] {
+  const single = record.source
+  if (single !== null && typeof single === 'object' && typeof (single as { text?: unknown }).text === 'string') {
+    return [single as AnnotationSource]
+  }
+  if (Array.isArray(record.sources)) {
+    const list = record.sources.filter(
+      (item): item is AnnotationSource =>
+        item !== null && typeof item === 'object' && typeof (item as { text?: unknown }).text === 'string',
+    )
+    if (list.length > 0) return list
+  }
+  return [{ text: body }]
+}
+
+/** One usable wire item; null for entries without a selected text. */
+function wireBody(entry: unknown): WireBody | null {
+  if (entry === null || typeof entry !== 'object') return null
+  const record = entry as { text?: unknown; annotation?: unknown; source?: unknown; sources?: unknown }
+  const body = typeof record.text === 'string' ? record.text.trim() : ''
+  if (!body) return null
+  return {
+    body,
+    comment: typeof record.annotation === 'string' ? record.annotation : '',
+    sources: sourcesOf(record, body),
+  }
+}
+
 export interface ParsedAnnotation {
   readonly title: string
   readonly text: string
@@ -120,52 +189,69 @@ export interface AnnotationScan {
  * and strips it from `rest` so the bubble can show only the user's question.
  */
 export function scanAnnotatedMessage(text: string): AnnotationScan {
-  const open = text.indexOf(ANNOTATIONS_BLOCK_OPEN)
-  const close = text.indexOf(ANNOTATIONS_BLOCK_CLOSE)
-  if (open < 0 || close < 0 || close < open) {
+  const parts = blockParts(text)
+  if (parts === null) {
     return { annotations: [], rest: text }
   }
-
-  const jsonStart = open + ANNOTATIONS_BLOCK_OPEN.length
-  const jsonText = text.slice(jsonStart, close).trim()
-  // Drop the instructional header that precedes the JSON block as well.
-  const before = stripProtocolHeader(text.slice(0, open))
-  const after = text.slice(close + ANNOTATIONS_BLOCK_CLOSE.length).replace(/^\s+/, '')
-  const rest = [before, after].filter((part) => part.length > 0).join('\n\n').trim()
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(jsonText)
-  } catch {
+  const parsed = parseWire(parts)
+  if (parsed === null) {
     return { annotations: [], rest: text.replace(/^\s+/, '') }
   }
-  if (!Array.isArray(parsed)) return { annotations: [], rest }
+  const rest = joinedRest(parts)
 
   const annotations: ParsedAnnotation[] = []
   for (const entry of parsed) {
-    if (!entry || typeof entry !== 'object') continue
-    const record = entry as { text?: unknown; annotation?: unknown; source?: unknown; sources?: unknown }
-    const body = typeof record.text === 'string' ? record.text.trim() : ''
-    if (!body) continue
-    const source =
-      record.source && typeof record.source === 'object'
-        ? (record.source as AnnotationSource)
-        : Array.isArray(record.sources)
-          ? (record.sources.find((item) => item && typeof item === 'object') as AnnotationSource | undefined)
-          : undefined
+    const item = wireBody(entry)
+    if (item === null) continue
+    const source = item.sources[0]
     const messageId = typeof source?.messageId === 'string' ? source.messageId : undefined
     const startOffset = typeof source?.startOffset === 'number' ? source.startOffset : undefined
     const endOffset = typeof source?.endOffset === 'number' ? source.endOffset : undefined
     annotations.push({
-      title: previewTitle(body),
-      text: body,
-      comment: typeof record.annotation === 'string' ? record.annotation : '',
+      title: previewTitle(item.body),
+      text: item.body,
+      comment: item.comment,
       ...(messageId ? { messageId } : {}),
       ...(startOffset !== undefined ? { startOffset } : {}),
       ...(endOffset !== undefined ? { endOffset } : {}),
     })
   }
   return { annotations, rest }
+}
+
+/** One annotation recovered from a composed message. */
+export interface RestoredAnnotation {
+  readonly text: string
+  readonly comment: string
+  readonly sources: readonly AnnotationSource[]
+}
+
+export interface ComposedDraftScan {
+  readonly annotations: readonly RestoredAnnotation[]
+  readonly rest: string
+}
+
+/**
+ * Inverse of `composeAnnotatedMessage` for text that is about to live in the
+ * composer: dsh-rewind refills a withdrawn message verbatim, protocol block
+ * included. Returns the pending annotations and the user's own text, or null
+ * when `text` carries no complete, valid block — a draft that merely mentions
+ * the markers must never be edited away.
+ */
+export function readComposedDraft(text: string): ComposedDraftScan | null {
+  const parts = blockParts(text)
+  if (parts === null) return null
+  const parsed = parseWire(parts)
+  if (parsed === null || parsed.length === 0) return null
+  const annotations: RestoredAnnotation[] = []
+  for (const entry of parsed) {
+    const item = wireBody(entry)
+    if (item !== null) {
+      annotations.push({ text: item.body, comment: item.comment, sources: item.sources })
+    }
+  }
+  if (annotations.length === 0) return null
+  return { annotations, rest: joinedRest(parts) }
 }
 
 /** Convenience: annotations only. */

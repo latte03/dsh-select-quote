@@ -9,6 +9,16 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 
+/** One live slot entry as exposed by the registry inspection surface. */
+export interface SlotEntryInspection {
+  /** Registered component (memo/forwardRef/plain function). */
+  component?: unknown
+  /** Discriminating registration options; `key` for keyed slots. */
+  options?: { key?: string; priority?: number }
+  /** Fiber/registrant name, for diagnostics only. */
+  registrant?: string
+}
+
 /** Options accepted by `ctx.slots.register` for the slots this plugin uses. */
 export interface SlotRegistration {
   name: string
@@ -61,6 +71,8 @@ declare module '@deepseek-ai/cordis' {
     slots: {
       inject(key: string, callback: () => unknown): () => void
       register(options: SlotRegistration, component: unknown): () => void
+      /** All live entries for a key, including entries shadowed by a winner. */
+      entries(key: string): ReadonlyArray<SlotEntryInspection>
     }
     locale: LocaleRuntime
   }
