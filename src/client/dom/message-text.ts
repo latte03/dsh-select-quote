@@ -52,7 +52,7 @@ export function collectCleanText(root: HTMLElement): TextEntry[] {
   return entries
 }
 
-function flowItemOf(node: Node | null): HTMLElement | null {
+export function flowItemOf(node: Node | null): HTMLElement | null {
   const el = node instanceof Element ? node : node?.parentElement
   const item = el?.closest(FLOW_ITEM)
   return item instanceof HTMLElement ? item : null

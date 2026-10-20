@@ -11,20 +11,28 @@ const GAP = 8
 const MARGIN = 8
 const ESTIMATED_HEIGHT = 220
 
+/** Visible area placement must stay inside (defaults to the viewport). */
+export interface PlacementBounds {
+  readonly top: number
+  readonly left: number
+  readonly right: number
+  readonly bottom: number
+}
+
 /**
  * Place `panel` near `anchor`, flipping vertical side when the preferred side
- * lacks room. Keeps the panel inside the viewport on the horizontal axis.
+ * lacks room. Keeps the panel inside `bounds` (the viewport by default).
  */
 export function placePopover(
   anchor: DOMRect,
   panel: { width: number; height: number },
   preferred: 'bottom' | 'top' = 'bottom',
   gap: number = GAP,
+  bounds?: PlacementBounds,
 ): PopoverPlacement {
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const spaceBelow = vh - anchor.bottom
-  const spaceAbove = anchor.top
+  const box = bounds ?? { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight }
+  const spaceBelow = box.bottom - anchor.bottom
+  const spaceAbove = anchor.top - box.top
 
   let side: 'bottom' | 'top' = preferred
   const need = panel.height + gap
@@ -36,12 +44,12 @@ export function placePopover(
 
   const top =
     side === 'bottom'
-      ? Math.min(anchor.bottom + gap, vh - panel.height - MARGIN)
-      : Math.max(anchor.top - panel.height - gap, MARGIN)
+      ? Math.min(anchor.bottom + gap, box.bottom - panel.height - MARGIN)
+      : Math.max(anchor.top - panel.height - gap, box.top + MARGIN)
 
   const left = Math.min(
-    Math.max(anchor.left, MARGIN),
-    Math.max(MARGIN, vw - panel.width - MARGIN),
+    Math.max(anchor.left, box.left + MARGIN),
+    Math.max(box.left + MARGIN, box.right - panel.width - MARGIN),
   )
 
   return { top, left, side }

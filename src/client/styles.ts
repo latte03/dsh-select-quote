@@ -95,6 +95,16 @@ ${atomRules}
   }
 }
 
+/* Same entrance for the below-anchor variant (only the content top uses it). */
+@keyframes dsq-toolbar-in-below {
+  from {
+    transform: translate(-50%, 0) translateY(-4px) scale(0.96);
+  }
+  to {
+    transform: translate(-50%, 0) translateY(0) scale(1);
+  }
+}
+
 /* 内容层的 rise：悬停面板的列表在用；工具条改用容器 scale 后这条在这里待命。 */
 @keyframes dsq-rise-in {
   from {
@@ -141,10 +151,35 @@ ${atomRules}
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
 }
 
+/* 浮层挂载与层带（2026-10-20 定，改前先读）：
+   工具条/评论泡/状态不再 portal 到 body，而是由 dom/floating-layer.ts 挂进对话
+   真正的滚动容器（桌面抽屉布局是 ST7X_W_scrollBody，普通布局是 .icaHSq_scroll）
+   里的一个 absolute host，坐标用**内容坐标**。
+
+   为什么不是 body：header（对话标题那一排）是滚动容器之外的非定位元素，任何
+   body 级 positioned + z-index 的浮层都天然压过它（这就是 z-index 降到 0 也仍在
+   header 之上的原因）；composer 座位是 sticky + z-index 7，只有低于它才不会被
+   输入框穿透。
+
+   现在把两件事交回宿主布局：
+   - 滚动容器负责裁剪：浮层随内容上移，到容器上边缘就被裁掉，自然滑进 header
+     下面，和正文一致；
+   - host 的 z-index 固定 6（见 floating-layer.ts）：低于 composer 的 7，高于
+     内容里吸顶元素的 6（同 z 时 host 追加在滚动容器末尾，DOM 次序压过它们）。
+   host 内部次序：status 3 > toolbar 2 > commentPop 1。
+
+   摘要行与批注卡片在内容普通流里，不参与这套层带；悬停面板仍是 body 级 fixed
+   （原因见 AnnotationCardView 里 contain:layout 的说明）。 */
+
 .dsq_toolbar {
-  position: fixed;
-  z-index: 10060;
-  transform: translate(-50%, -100%);
+  position: absolute;
+  z-index: 2;
+  /* The layer host is 0×0, so an auto-width absolute child would shrink to
+     min-content (Chinese hint text then wraps one character per line).
+     max-content keeps the bubble sized by its row regardless of the host. */
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  transform: translate(-50%, var(--dsq-anchor-y, -100%));
   gap: 2px;
   padding: 4px;
   /* 无边框：--dsq-shadow（宿主的 elevation-prominent）自带 0 0 0 .5px 的描边环，
@@ -157,6 +192,12 @@ ${atomRules}
   /* A/B：scale 入场放在容器上（材质图层归它所有）。关键帧自带 translate(-50%,-100%)，
      所以缩放不会破坏居中。若真实客户端里磨砂在放大期间消失，改回内容层方案。 */
   animation: dsq-toolbar-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Hangs below the selection: no room above at the very top of the transcript. */
+.dsq_toolbar[data-anchor='below'] {
+  --dsq-anchor-y: 0%;
+  animation-name: dsq-toolbar-in-below;
 }
 
 /* 按钮行：只负责布局；入场动画在容器上（见 .dsq_toolbar 的 A/B 说明）。 */
@@ -205,8 +246,8 @@ ${atomRules}
 }
 
 .dsq_status {
-  position: fixed;
-  z-index: 10061;
+  position: absolute;
+  z-index: 3;
   transform: translate(-50%, 8px);
   padding: 4px 10px;
   border-radius: 999px;
@@ -223,7 +264,7 @@ ${atomRules}
   position: absolute;
   top: 8px;
   left: 8px;
-  z-index: 40;
+  z-index: 12;
   width: 20%;
   min-width: 148px;
   max-width: 220px;
@@ -363,7 +404,7 @@ ${atomRules}
 /* Qoder-style annotation summary (“N 条批注”) inside the composer. */
 .dsq_summary {
   position: relative;
-  z-index: 10040;
+  z-index: 13;
   gap: 10px;
   width: 100%;
   max-width: 100%;
@@ -407,7 +448,7 @@ ${atomRules}
      flex atoms — the open class below turns display back on. */
   display: none;
   position: fixed;
-  z-index: 10050;
+  z-index: 14;
   width: min(320px, calc(100vw - 16px));
   flex-direction: column;
   padding: 12px;
@@ -628,15 +669,19 @@ ${atomRules}
 
 /* Inline comment composer under the floating selection toolbar. */
 .dsq_commentPop {
-  position: fixed;
-  z-index: 10050;
-  transform: translate(-50%, 4px);
+  position: absolute;
+  z-index: 1;
+  /* Vertical offset comes from placeCommentPop (below the selection); only
+     the horizontal centering belongs to the transform. */
+  transform: translateX(-50%);
   width: min(320px, calc(100vw - 24px));
   gap: 8px;
   padding: 8px;
   border-radius: 16px;
   /* 底色与模糊都在材质图层里 */
   box-shadow: var(--dsq-shadow);
+  /* The layer host is pointer-events:none; interactive surfaces opt back in. */
+  pointer-events: auto;
 }
 
 .dsq_commentInput {

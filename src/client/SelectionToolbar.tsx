@@ -2,6 +2,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -22,8 +23,11 @@ import { focusComposer } from './dom/composer-host.ts'
 import { linkTarget } from './dom/selection-url.ts'
 import { t } from './i18n.ts'
 import { useLocale } from './useLocale.ts'
-import { placePopover } from './dom/popoverPlacement.ts'
-import { bindAnnotationSession, getAnnotations, saveAnnotation } from './state/annotation-store.ts'
+import {
+  bindAnnotationSession,
+  saveAnnotation,
+  updateAnnotationComment,
+} from './state/annotation-store.ts'
 import { ensureToolbarStyles, A, cx, styles } from './styles.ts'
 import { LucideIcon } from './ui/icons.tsx'
 
@@ -47,6 +51,8 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const [status, setStatus] = useState<string | null>(null)
   const activeRef = useRef<SelectionSnapshot | null>(null)
   activeRef.current = active
+  /** Annotation saved when the comment step opened; the box only edits it. */
+  const pendingIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     ensureToolbarStyles()
@@ -54,10 +60,44 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   }, [sessionId])
 
   const hide = useCallback(() => {
+    pendingIdRef.current = null
     setActive(null)
     setPhase('idle')
     setComment('')
     setStatus(null)
+  }, [])
+
+  /**
+   * Keep what was typed when the comment popover goes away without an explicit
+   * cancel. The annotation itself was saved when the step opened, so dropping
+   * the text would also lose the only optional part of the interaction.
+   */
+  const flushComment = useCallback(() => {
+    const id = pendingIdRef.current
+    pendingIdRef.current = null
+    if (!id) return
+    const typed = commentRef.current?.value ?? ''
+    if (typed.trim()) updateAnnotationComment(undefined, id, typed)
+  }, [])
+
+  /** Save the current selection without a comment; returns the store id. */
+  const saveSelection = useCallback((): string | null => {
+    const snapshot = activeRef.current
+    if (!snapshot) return null
+    return saveAnnotation(undefined, {
+      text: snapshot.text,
+      sources: snapshot.source
+        ? [
+            {
+              text: snapshot.text,
+              messageId: snapshot.source.messageId,
+              messageKind: snapshot.source.messageKind,
+              startOffset: snapshot.source.startOffset,
+              endOffset: snapshot.source.endOffset,
+            },
+          ]
+        : undefined,
+    }).id
   }, [])
 
   const refresh = useCallback(() => {
@@ -67,24 +107,42 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       if (phaseRef.current === 'idle') setActive(null)
       return
     }
-    setActive((prev) => {
-      // New text while commenting → drop back to idle toolbar for the new range.
-      if (phaseRef.current === 'comment' && prev && prev.text !== next.text) {
-        setPhase('idle')
-        setComment('')
-      }
-      if (prev && prev.text === next.text && prev.left === next.left && prev.top === next.top) {
-        return prev
-      }
-      return next
-    })
-  }, [])
+    const current = activeRef.current
+    if (phaseRef.current === 'comment' && current && current.text !== next.text) {
+      // A new range replaces the comment step: keep the typed comment on the
+      // old (already saved) annotation, then retarget the toolbar.
+      flushComment()
+      setPhase('idle')
+      setComment('')
+    }
+    setActive((prev) =>
+      prev &&
+      prev.text === next.text &&
+      prev.left === next.left &&
+      prev.top === next.top &&
+      prev.below === next.below &&
+      prev.layer === next.layer
+        ? prev
+        : next,
+    )
+  }, [flushComment])
 
   const phaseRef = useRef(phase)
   phaseRef.current = phase
 
   useEffect(() => {
-    const schedule = () => window.setTimeout(refresh, 0)
+    // Scroll / selectionchange / keyup can land several times in one tick;
+    // collapse them into a single re-read — each refresh measures the range,
+    // and during a scroll there is no point paying for that twice.
+    let scheduled = false
+    const schedule = () => {
+      if (scheduled) return
+      scheduled = true
+      window.setTimeout(() => {
+        scheduled = false
+        refresh()
+      }, 0)
+    }
     // The toolbar waits for the drag to end: selectionchange fires continuously
     // mid-drag, so it must not raise the toolbar — pointerup does.
     let dragging = false
@@ -98,9 +156,11 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       // Any outside press may start a new selection drag.
       dragging = true
 
-      // Outside click: cancel comment mode entirely so the next selection
-      // shows the idle toolbar again.
+      // Outside click ends the optional comment step, never the annotation:
+      // it was saved the moment "add to task" was pressed. Keep what was typed
+      // too — only an explicit skip / Escape discards the comment text.
       if (phaseRef.current === 'comment') {
+        flushComment()
         hide()
         return
       }
@@ -124,9 +184,17 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     }
 
     // Scroll inside our own popover must not count as a page scroll: a long
-    // comment scrolls its textarea, and closing here would throw away what the
-    // user just typed. The capture listener fires for descendants too, so the
-    // origin has to be checked instead of relying on bubbling.
+    // comment scrolls its textarea, and re-placing here would fight the user.
+    // The capture listener fires for descendants too, so the origin has to be
+    // checked instead of relying on bubbling.
+    //
+    // A page scroll follows the selection instead of dropping the toolbar: the
+    // selection and its highlight survive scrolling, so hiding mid-annotation
+    // read as "still selected, buttons gone". When the first line scrolls fully
+    // out of view, readSelectionSnapshot returns null and refresh retracts the
+    // idle toolbar (it reappears on the way back). An open comment popover is
+    // never retracted by refresh, so scrolling away to re-read the question no
+    // longer throws away what was typed.
     const onScroll = (event: Event) => {
       const target = event.target
       if (
@@ -136,7 +204,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       ) {
         return
       }
-      hide()
+      schedule()
     }
 
     document.addEventListener('pointerdown', onPointerDown, true)
@@ -157,35 +225,66 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       window.removeEventListener('resize', schedule)
       document.removeEventListener('scroll', onScroll, true)
     }
-  }, [hide, refresh])
+  }, [flushComment, hide, refresh])
 
   // Flip the comment popover when the preferred side lacks room, and center it
-  // on the selection (the CSS transform shifts it back by half its width).
+  // on the selection. Both the toolbar and this box live in the transcript
+  // layer's content coordinates, so scrolling moves them together; only a
+  // layout change needs a re-place. The visible bounds are the scroller's box,
+  // not the window: the popover must not be clamped underneath the composer.
   const placeCommentPop = useCallback(() => {
+    const snapshot = activeRef.current
+    const layer = snapshot?.layer
     const toolbar = toolbarRef.current
     const pop = commentWrapRef.current
-    if (!toolbar || !pop) return
+    if (!snapshot || !layer || !toolbar || !pop) return
+    const bounds = layer.bounds()
     const anchor = toolbar.getBoundingClientRect()
     pop.style.display = 'flex'
     pop.style.visibility = 'hidden'
     const panel = { width: pop.offsetWidth || 320, height: pop.offsetHeight || 180 }
     pop.style.visibility = ''
-    const { top } = placePopover(anchor, panel, 'bottom')
+
+    // Prefer below the selected text, not below the toolbar: the toolbar sits
+    // only 12px above the first line, so anchoring here would cover the words
+    // being commented on. When the selection is too low, go above the toolbar
+    // instead — never over the selection.
+    const gap = 8
+    const margin = 8
+    const belowTop = layer.fromContent(0, snapshot.selectionBottom).top + gap
+    const aboveTop = anchor.top - panel.height - gap
+    const top =
+      belowTop <= bounds.bottom - margin - panel.height
+        ? belowTop
+        : aboveTop >= bounds.top + margin
+          ? aboveTop
+          : Math.max(
+              bounds.top + margin,
+              Math.min(belowTop, bounds.bottom - margin - panel.height),
+            )
+
     const half = panel.width / 2 + 8
+    const min = bounds.left + half
     const center = Math.min(
-      Math.max(anchor.left + anchor.width / 2, half),
-      Math.max(half, window.innerWidth - half),
+      Math.max(anchor.left + anchor.width / 2, min),
+      Math.max(min, bounds.right - half),
     )
-    pop.style.top = `${top}px`
-    pop.style.left = `${center}px`
+    const at = layer.toContent(center, top)
+    pop.style.top = `${at.top}px`
+    pop.style.left = `${at.left}px`
   }, [])
 
+  // Use layout effects: the box is measured and placed before the first paint,
+  // so it never flashes at the host's origin. Scroll itself does not need a
+  // re-place — content coordinates already follow the selection.
+  useLayoutEffect(() => {
+    if (phase === 'comment') placeCommentPop()
+  }, [active, phase, placeCommentPop])
+
+  // Focus once when the box opens, not on every re-placement.
   useEffect(() => {
-    if (phase === 'comment') {
-      placeCommentPop()
-      commentRef.current?.focus()
-    }
-  }, [phase, placeCommentPop])
+    if (phase === 'comment') commentRef.current?.focus()
+  }, [phase])
 
   // The popover is anchored to the toolbar, so a window resize moves both.
   useEffect(() => {
@@ -198,7 +297,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   // scroll internally: a fixed 64px box starts scrolling after a few wrapped
   // lines, which reads as a character limit. Re-place the popover afterwards so
   // a taller box still flips and clamps correctly.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (phase !== 'comment') return
     const area = commentRef.current
     if (!area) return
@@ -224,12 +323,18 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     }
   }, [hide])
 
+  /**
+   * "Add to task" is the commit: the quote is saved immediately, with or
+   * without a comment. The popover only edits that saved entry, so dismissing
+   * it (outside click, new selection) can never undo the annotation.
+   */
   const openComment = useCallback(() => {
     if (!activeRef.current) return
+    pendingIdRef.current = saveSelection()
     setPhase('comment')
     setComment('')
     setStatus(null)
-  }, [])
+  }, [saveSelection])
 
   /**
    * Hand the selected link to the system browser.
@@ -249,38 +354,16 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     hide()
   }, [hide])
 
-  /** Quick-add without opening the comment step (double-tap / “Skip comment”). */
-  const commitAnnotation = useCallback(
-    (body: string | undefined) => {
-      const snapshot = activeRef.current
-      if (!snapshot) {
-        hide()
-        return
-      }
-      saveAnnotation(undefined, {
-        text: snapshot.text,
-        ...(body && body.trim() ? { comment: body.trim() } : {}),
-        sources: snapshot.source
-          ? [
-              {
-                text: snapshot.text,
-                messageId: snapshot.source.messageId,
-                messageKind: snapshot.source.messageKind,
-                startOffset: snapshot.source.startOffset,
-                endOffset: snapshot.source.endOffset,
-              },
-            ]
-          : undefined,
-      })
-      const count = getAnnotations().length
+  /** Close the optional comment step; the annotation stays saved either way. */
+  const finishComment = useCallback(
+    (keepComment: boolean) => {
+      if (keepComment) flushComment()
+      else pendingIdRef.current = null
       clearNativeSelection()
       hide()
-      setStatus(null)
       window.setTimeout(focusComposer, 16)
-      // Transient confirmation near the composer is owned by AnnotationPanel.
-      void count
     },
-    [hide],
+    [flushComment, hide],
   )
 
   if (!active) return null
@@ -298,13 +381,19 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           role: 'toolbar',
           'aria-label': t('toolbar.aria'),
           'data-dsq-toolbar': 'true',
+          'data-anchor': active.below ? 'below' : 'above',
           onPointerDown: handleToolbarPointerDown,
           children:
             phase === 'comment'
               ? jsx('div', {
                   className: cx(A.inlineRow, styles.toolbarInner),
                   children: jsx('span', {
-                    style: { padding: '0 8px', fontSize: 13, opacity: 0.8 },
+                    style: {
+                      padding: '0 8px',
+                      fontSize: 13,
+                      opacity: 0.8,
+                      whiteSpace: 'nowrap',
+                    },
                     children: t('toolbar.commentHint'),
                   }),
                 })
@@ -363,12 +452,15 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                   onKeyDown: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
                     if (e.key === 'Escape') {
                       e.preventDefault()
+                      // Explicit cancel discards the optional comment text;
+                      // the annotation itself stays saved.
+                      pendingIdRef.current = null
                       hide()
                       return
                     }
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault()
-                      commitAnnotation(comment)
+                      finishComment(true)
                     }
                   },
                 }),
@@ -378,14 +470,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
                     jsx('button', {
                       type: 'button',
                       className: cx(A.plain, A.inlineRow, styles.button),
-                      onClick: () => commitAnnotation(undefined),
+                      onClick: () => finishComment(false),
                       children: t('toolbar.skipComment'),
                     }),
                     jsx('button', {
                       type: 'button',
                       className: cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment),
                       disabled: !comment.trim(),
-                      onClick: () => commitAnnotation(comment),
+                      onClick: () => finishComment(true),
                       children: t('toolbar.addComment'),
                     }),
                   ],
@@ -403,6 +495,6 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           : null,
       ],
     }),
-    document.body,
+    active.layer.host,
   )
 }

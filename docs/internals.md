@@ -98,7 +98,7 @@ Each item contains text selected from an earlier message ...
 
 **6. 悬停摘要面板**
 
-面板 **portal 到 `document.body`**：对话区的 `.I17U7q_follow` 带 `contain: layout`、滚动容器带 `container-type`，它们都是 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群有 320ms 宽限；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层那 12px padding。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
+面板 **portal 到 `document.body`**：消息内容里有带 `contain: layout` 的表面、滚动容器带 `container-type`，它们都会成为 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群有 320ms 宽限；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层那 12px padding。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
 
 **7. 划词只在对话区生效**
 
@@ -119,7 +119,7 @@ Each item contains text selected from an earlier message ...
 - **三个浮层的磨砂材质用官方 material 图层同款 token**：工具条、评论气泡、悬停面板的底色与模糊都画在一个 `z-index:-1` 的 `::before` 图层上（`background: var(--dsq-menu)` + `backdrop-filter: var(--dsq-menu-backdrop)`，即宿主的 `--dsw-menu-surface-fill` / `--dsw-menu-backdrop-filter`，后者恒为 `blur(40px) saturate(150%)`，亮暗自动翻）。**必须画在独立图层上**：`backdrop-filter` 直接写在容器上会连容器自己的子树一起糊，而负 z 图层只取身后的页面。悬停面板为此把 `overflow-y: auto` 从面板挪到内层 `.dsq_summaryList`——绝对定位的图层留在会滚动的容器里会跟着内容跑掉，滚到底部时面板顶部就露空。老浏览器没有 `backdrop-filter` 时（`@supports not`）图层退成 `--dsq-bg-raised` 不透明底，避免半透明直接糊在文字上；
 - **阴影统一用 `--dsw-elevation-prominent` 一档**（别名 `--dsq-shadow`）：和宿主自己的菜单/弹层同档，且它自带 `0 0 0 .5px` 的描边环（`--dsw-elevation-stroke`）——浮层因此不画 border 也有轮廓。以前工具条用 soft、两个气泡用 prominent 两档，现在合成一个别名；兜底值按真 token 的组成补齐那一圈描边。三个浮层把描边覆写成更淡的 `--dsw-alias-border-l1`（磨砂边缘自带分界，不需要再勾一道）——**覆写和 `--dsq-shadow` 的声明都必须写在浮层选择器上**：自定义属性在声明处展开，`--dsq-shadow` 留在 body 上时浮层上的覆写够不着；
 - **磨砂的视觉验证只能在真实客户端里做**：本机 headless Chrome（CLI 与 MCP 两通道）不渲染 `backdrop-filter`，最小页面可复现——别把"没模糊"当代码缺陷，也别用那里的帧率数字下结论（2026-10-19 的教训，见 [`archive/investigations.md`](archive/investigations.md)）；
-- **入场动画绝不带 opacity**：规范实锤祖先 `opacity<1` 会成为 backdrop root，`::before` 采样不到身后的页面，磨砂在整段淡入里消失、结束才糊上。transform 不在禁止列（用户已在真实客户端验证 scale 无恙），现行入场是 `translate(-50%,-100%) translateY(4px) scale(0.96) → 归位`；
+- **入场动画绝不带 opacity**：规范实锤祖先 `opacity<1` 会成为 backdrop root，`::before` 采样不到身后的页面，磨砂在整段淡入里消失、结束才糊上。transform 不在禁止列（用户已在真实客户端验证 scale 无恙），现行入场是 `translate(-50%,-100%) translateY(4px) scale(0.96) → 归位`；内容顶部没地方放时工具条翻到首行下方（`data-anchor="below"`），换成 `dsq-toolbar-in-below` 关键帧；
 - 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）；桌面端可用 `pnpm run sync:desktop` 热更新（见「桌面客户端的热更新」）。
 
 **9. 装饰观察者不许自我触发**
@@ -185,6 +185,33 @@ Each item contains text selected from an earlier message ...
 - **为什么值得单独做**：没有这些，插件页显示的是技术名 `dsh-select-quote` 和默认插画——用户在两列插件列表里认不出它是干什么的；
 - **验**：`checkPackageMeta()` 逐条复刻宿主的读取规则（自引用解析、语言 id、同目录、字段非空、图标类型/体积/包内路径），并跑 `npm pack --dry-run --json` 核对**实际发货清单**——`files` 写漏只有这一步能发现。改文案只改 JSON；改图标改完记得肉眼看一次渲染（文件名对不代表字节能画）。
 
+**13. 工具条的生命周期：跟着选区走，不跟着选区死**
+
+工具条不是「出现后常驻」的面板，存亡完全由**当前选区**决定，`refresh()` 是唯一入口（`pointerup` / `selectionchange` / `keyup` / `resize` / `scroll` 都只是触发它）：
+
+- **出现**：拖拽结束（`pointerup`）后读一次活选区——非空、在对话区、不在输入框/工具条自身里；
+- **挂载**：`dom/floating-layer.ts` 从选区所在的 flow item 往上找**真正的滚动容器**（桌面抽屉布局是 `.ST7X_W_scrollBody`，此时 `.icaHSq_scroll` 的计算 overflow 是 visible；普通布局是 `.icaHSq_scroll`），在容器里挂一个零尺寸的 absolute host（必要时把容器补成 `position: relative`），浮层 portal 进去。坐标是**相对滚动内容**的，所以滚动时工具条/评论泡随正文一起走，不需要逐帧重定位；容器负责裁剪——滚到容器上边缘就滑进 header 下面，和正文一致。host 的 `z-index` 固定 **6**：低于 composer seat 的 7（不穿过输入框），高于内容里吸顶元素的 6；
+- **跟随**：滚动时仍会触发 `refresh()`（合并同一 tick 的多次事件），但选区的**内容坐标**不变，`setActive` 去重后不重渲染。真正需要重排的只有 resize / 布局变化，以及内容顶部选中时改为挂在首行下方的翻转（`below`）；
+- **收起**：选区真的没了、或**选中行的首行完全滚出视口**（`isFirstLineOnScreen`，没有可锚定的东西了）。滚回去会重新出现；半可见时由容器裁剪，不再用视口边缘钳位；
+- **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要卡片同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
+
+## 浮层名词与层带
+
+改样式/层级前先认名字（z-index 一栏是**各自层叠上下文内**的值，不能横向直接比大小）：
+
+| 名称 | 类名 | 挂载位置 | z-index | 作用 |
+|---|---|---|---|---|
+| 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6） | 复制 / 添加到任务 / 打开链接；评论阶段缩成提示 |
+| 状态提示 | `.dsq_status` | 同上 | 3 | 复制失败等瞬时提示 |
+| 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方 |
+| 悬浮摘要 | `.dsq_summaryHover` | `document.body`（fixed） | 14 | 输入框摘要卡片的悬停列表 |
+| 摘要芯片 | `.dsq_summary` | composer 内（`conversation.input.overlay`） | 13 | 「N 条批注」入口 |
+| 卡片堆 | `.dsq_cardStack` | composer 卡片内 | 12 | 输入框上方的摘要容器 |
+| 记录卡片 | `.dsq_tCardStack` | 用户气泡内（普通流） | auto | 历史消息里的批注卡片 |
+
+- 工具条/状态/评论泡共用一个 host：host 的 6 低于 composer seat 的 7，又被滚动容器裁剪，所以既不会穿过输入框，也会随正文滑进 header 下面（机制 13）。三者的内部次序是 status 3 > toolbar 2 > commentPop 1。
+- 摘要芯片/卡片堆在 composer seat（z 7，自成层叠上下文）内部，12/13 只在 composer 内比较；悬浮摘要是 body 级 fixed，14 属于页面根层叠上下文。
+
 ## 目录结构
 
 ```
@@ -195,6 +222,7 @@ src/client/composer/AnnotationPanel.tsx      # 输入框内批注摘要 + 发送
 src/client/composer/useSendIntercept.ts      # 发送手势时把待发批注折进草稿
 src/client/composer/useDraftMarker.ts        # U+200B 让"只有批注"时发送按钮可用
 src/client/dom/selection.ts        # 选区快照、工具条定位、复制、聚焦输入框
+src/client/dom/floating-layer.ts   # 找到对话滚动容器，挂内容坐标的浮层 host（裁剪 + 层带）
 src/client/dom/message-text.ts     # 消息纯净文本遍历、选区→字符偏移定位
 src/client/dom/annotate-text.ts    # 正文 mark（下划线+序号徽章）的注册表与装饰
 src/client/dom/scrollToAnnotation.ts # 点击批注滚动到正文 mark 并闪烁
@@ -237,13 +265,19 @@ lib/                               # 构建产物（已提交，运行时直接�
 - `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
 - 开发期依赖：`client-hmr` 挂在 web 组合包里，按 500ms 轮询 client 产物并经 `/plugins/events` 推 `rebuilt`（`sync:desktop` 的热更新路径）；
 - 插件页展示元信息的读取约定：`<包名>/locale/en.json` 为发现入口、同目录其余 `*.json` 为各语言词典、`<包名>/icon` 为图标，全部经 Node ESM 解析且**不激活插件**（见关键机制 12）；这些路径必须在 `exports` 与 `files` 里都出现；
-- 类名 `.nyYjTG_file`、`.I17U7q_follow` 只是几何与层叠参照，产品改版不影响功能，但会影响观感。
+- **对话滚动容器与浮层挂载（0.2.1-rc.2 复核）**：`_6Qf49G_frame` 是 `position:relative; z-index:auto`，不建层叠上下文；对话 header（`ST7X_W_header`，"标准模式"那一排）是滚动容器**之外**的非定位 flex 子项，composer seat 是 `position: sticky; z-index: 7`。因此 body 级 positioned 浮层无论 z-index 多低都会压过 header（非定位元素永远输给 positioned 元素）——这正是旧版 z-index 降到 0 仍浮在 header 上的原因。工具条/评论泡改挂进滚动容器：桌面抽屉布局滚的是 `.ST7X_W_scrollBody`（`.icaHSq_scroll` 此时是 visible），普通布局滚 `.icaHSq_scroll`；host 在容器内 `position:absolute`、z-index 6（低于 composer 7），靠容器裁剪实现"滑进 header 下面"（见机制 13）。宿主顶栏座位 `_6Qf49G_leadingSeat` 是 z-15、全帧 overlay 层 z-20，仅 `darwin && sidebarCollapsed` 时挂载；宿主菜单 100、弹层 1100-1250、模态 900-1005；
+- macOS 顶部净空由 `--dsh-frame-overlay-top` 给出（`--dsh-frame-top-clearance:48px` + 20px = **68px**，全屏时 20px），要算顶部空间时读它；
+- 宿主菜单/弹层是 z-index 100（菜单）与 1100-1250（弹层），模态 900-1005，都在我们之上；它们同样把 `--dsw-elevation-stroke-color` 覆写成 `--dsw-alias-border-l1`（"覆层不描边"，与本插件一致）。
+- **已失效的旧类名**（0.2.0-rc.2 时期）：`.nyYjTG_file`（文件卡片几何）、`.I17U7q_follow`（对话滚动区）随 0.2.1-rc.2 重构消失；机制 8 对标的卡片几何需要在新版上重新找参照类。消息行的 `data-chat-flow-key` 仍在，另有 `data-chat-anchor-key` / `data-chat-group-key` / `data-chat-flow-kind` / `data-chat-turn`。
 
 ## 排错
 
 | 现象 | 先查 |
 |---|---|
 | 划词没有工具条 / 卡片不出现 | 跑 `pnpm run check`；确认页面已刷新；Host 的 boot 图里应包含 `dsh-select-quote`（`/plugins` 路由由 `ctx.clientModules` 提供） |
+| 滚动后工具条不见了 / 滚回来也没有 | 设计如此：选中行首行完全滚出视口时收起，滚回去会重新出现（见关键机制 13）。若滚回来仍不出现，查 `refresh` 链路——`selectionchange` 是否被宿主吞掉、选区是否被虚拟列表重建 |
+| 工具条浮在 header / 输入框上面 | 检查工具条是否还 portal 在 `document.body`：它应挂在 `[data-dsq-layer]` 里，host 的父级是 `ST7X_W_scrollBody` 或 `icaHSq_scroll`（见机制 13 与依赖约定）。body 级浮层压不过非定位 header，也拦不住 composer |
+| 点空白处批注没了 | 应当保留：批注在点「添加到任务」时已保存，空白点击只会关闭评论泡（见机制 13）。若真丢了，查 `openComment` 是否走到 `saveSelection` |
 | 输入框里出现协议原文 | 发送前的注入没生效：确认草稿里存在 U+200B（发送按钮应可用），以及 composer 结构未变（`[data-composer-card]`） |
 | 对话记录里没有卡片 | 该 `user/message` 事件的 `data.content` 是否含批注块；卡片由 `user` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 的 `user` 单元是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
 | 带图片的消息在记录里只剩卡片、图片没了 | `UserMessageDisplay` 是否拿到了 `renderMessageImages` |
