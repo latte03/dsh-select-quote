@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.8](https://github.com/latte03/dsh-select-quote/compare/v0.3.7...v0.3.8) (2026-10-20)
+
+### Bug Fixes
+
+* 尊重宿主动作行，并修正撤回、回显与摘要展示 ([f55a70d](https://github.com/latte03/dsh-select-quote/commit/f55a70d77c437525a432052ec4a1fbb18ebb65ad))
+
 ## [0.3.7](https://github.com/latte03/dsh-select-quote/compare/v0.3.6...v0.3.7) (2026-10-20)
 
 ### Bug Fixes
