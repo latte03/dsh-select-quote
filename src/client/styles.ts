@@ -851,6 +851,7 @@ ${atomRules}
 .dsq_annMark {
   --dsq-mark-color: var(--dsq-accent);
   --dsq-mark-tint: var(--dsq-accent-tint);
+  position: relative;
   background: var(--dsq-mark-tint);
   text-decoration: underline;
   text-decoration-style: dashed;
@@ -864,10 +865,17 @@ ${atomRules}
 
 /* Ordinal as a superscript corner badge at the END of the marked text, so it
    never sits between the reader and the sentence. Only the last fragment of a
-   multi-fragment mark carries the index, so the number appears exactly once. */
+   multi-fragment mark carries the index, so the number appears exactly once.
+   Absolute so the badge adds no inline advance width: annotating never reflows
+   the paragraph or moves following words. Bottom (not top) anchors to the last
+   fragment: for a mark spanning several lines the containing block is the union
+   of the first and last fragments, so its bottom edge is the last line. */
 .dsq_annMark[data-dsq-ann-index]::after {
   content: attr(data-dsq-ann-index);
-  display: inline-grid;
+  position: absolute;
+  bottom: 8px;
+  left: 100%;
+  display: grid;
   place-items: center;
   min-width: 15px;
   height: 15px;
@@ -879,7 +887,7 @@ ${atomRules}
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  vertical-align: super;
+  pointer-events: none;
 }
 
 .dsq_annMark:hover {

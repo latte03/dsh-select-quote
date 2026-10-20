@@ -76,6 +76,12 @@ function createMark(job: AnnotationJob, withIndex: boolean): HTMLSpanElement {
  * selections that cross inline elements or paragraph boundaries never reorder
  * the DOM; fragments of one annotation share the mark id, and the ordinal
  * badge rides on the final fragment (end of the annotation).
+ *
+ * `surroundContents` is load-bearing: `extractContents()` leaves the text
+ * before **and after** the range in the same node, so inserting the mark at
+ * `node.nextSibling` (the old implementation) appended every partial selection
+ * to the end of its parent — a selection starting at offset 0, such as the
+ * sentence after a colon, visibly jumped to the paragraph's end.
  */
 function wrapRange(item: HTMLElement, job: AnnotationJob, from: number, to: number): boolean {
   const located = cleanTextRange(item, from, to)
@@ -86,15 +92,12 @@ function wrapRange(item: HTMLElement, job: AnnotationJob, from: number, to: numb
   let wrapped = false
   pieces.forEach((piece, i) => {
     const node = piece.entry.node
-    const parent = node.parentElement
-    if (!parent) return
+    if (!node.parentElement) return
     const range = document.createRange()
     range.setStart(node, piece.start - piece.entry.start)
     range.setEnd(node, piece.end - piece.entry.start)
     const mark = createMark(job, i === pieces.length - 1)
-    mark.append(range.extractContents())
-    parent.insertBefore(mark, node.nextSibling)
-    if (node.nodeValue === '') node.remove()
+    range.surroundContents(mark)
     wrapped = true
   })
   return wrapped
