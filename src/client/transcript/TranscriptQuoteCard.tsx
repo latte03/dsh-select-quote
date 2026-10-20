@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { jsx } from 'react/jsx-runtime'
 import { upsertAnnotationJobs } from '../dom/annotate-text.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
 import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
@@ -61,34 +60,31 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
 
   if (quotes.length === 0) return null
 
-  return jsx('div', {
-    ref: stackRef,
-    className: styles.tCardStack,
-    'data-dsq-deco': 'true',
-    children: quotes.map((quote, index) =>
-      jsx(
-        'div',
-        {
-          className: cx(A.plain, styles.tCardButton),
-          role: 'button',
-          tabIndex: 0,
-          'aria-label': quote.title,
-          onClick: () => onSelect(index, quote.text),
-          onKeyDown: (event: { key: string; preventDefault: () => void }) => {
+  return (
+    <div ref={stackRef} className={styles.tCardStack} data-dsq-deco="true">
+      {quotes.map((quote, index) => (
+        <div
+          key={`ann-${index}`}
+          className={cx(A.plain, styles.tCardButton)}
+          role="button"
+          tabIndex={0}
+          aria-label={quote.title}
+          onClick={() => onSelect(index, quote.text)}
+          onKeyDown={(event) => {
             if (event.key !== 'Enter' && event.key !== ' ') return
             event.preventDefault()
             onSelect(index, quote.text)
-          },
-          children: jsx(AnnotationCardView, {
-            variant: 'transcript',
-            title: quote.title,
-            text: quote.text,
-            comment: quote.comment || undefined,
-            index: index + 1,
-          }),
-        },
-        `ann-${index}`,
-      ),
-    ),
-  })
+          }}
+        >
+          <AnnotationCardView
+            variant="transcript"
+            title={quote.title}
+            text={quote.text}
+            comment={quote.comment || undefined}
+            index={index + 1}
+          />
+        </div>
+      ))}
+    </div>
+  )
 }

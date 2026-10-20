@@ -193,7 +193,7 @@ Each item contains text selected from an earlier message ...
 - **挂载**：`dom/floating-layer.ts` 从选区所在的 flow item 往上找**真正的滚动容器**（桌面抽屉布局是 `.ST7X_W_scrollBody`，此时 `.icaHSq_scroll` 的计算 overflow 是 visible；普通布局是 `.icaHSq_scroll`），在容器里挂一个零尺寸的 absolute host（必要时把容器补成 `position: relative`），浮层 portal 进去。坐标是**相对滚动内容**的，所以滚动时工具条/评论泡随正文一起走，不需要逐帧重定位；容器负责裁剪——滚到容器上边缘就滑进 header 下面，和正文一致。host 的 `z-index` 固定 **6**：低于 composer seat 的 7（不穿过输入框），高于内容里吸顶元素的 6；
 - **跟随**：滚动时仍会触发 `refresh()`（合并同一 tick 的多次事件），但选区的**内容坐标**不变，`setActive` 去重后不重渲染。真正需要重排的只有 resize / 布局变化，以及内容顶部选中时改为挂在首行下方的翻转（`below`）；
 - **收起**：选区真的没了、或**选中行的首行完全滚出视口**（`isFirstLineOnScreen`，没有可锚定的东西了）。滚回去会重新出现；半可见时由容器裁剪，不再用视口边缘钳位；
-- **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要卡片同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
+- **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。评论阶段工具条本身（「添加批注…」提示）改放到评论泡**上方、左对齐**，底边距评论泡顶边 6px；顶部空间不够时翻到评论泡下方。它和评论泡的重排都由 `placeCommentPop` 负责。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要卡片同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
 
 ## 浮层名词与层带
 
@@ -203,7 +203,7 @@ Each item contains text selected from an earlier message ...
 |---|---|---|---|---|
 | 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6） | 复制 / 添加到任务 / 打开链接；评论阶段缩成提示 |
 | 状态提示 | `.dsq_status` | 同上 | 3 | 复制失败等瞬时提示 |
-| 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方 |
+| 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方；评论阶段「添加批注…」提示条在它上方左对齐、间距 6px |
 | 悬浮摘要 | `.dsq_summaryHover` | `document.body`（fixed） | 14 | 输入框摘要卡片的悬停列表 |
 | 摘要芯片 | `.dsq_summary` | composer 内（`conversation.input.overlay`） | 13 | 「N 条批注」入口 |
 | 卡片堆 | `.dsq_cardStack` | composer 卡片内 | 12 | 输入框上方的摘要容器 |

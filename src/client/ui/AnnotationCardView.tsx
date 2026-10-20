@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { jsx, jsxs } from 'react/jsx-runtime'
 import { placePopover } from '../dom/popoverPlacement.ts'
 import { A, cx, styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
@@ -47,54 +46,54 @@ export function AnnotationCardView({
     : composer
       ? t('common.selectedText')
       : t('summary.noComment')
-  return jsxs('div', {
-    className: cx(A.box, A.row, styles.card, !composer && styles.tCard),
-    role: 'group',
-    'aria-label': index ? t('card.ariaIndexed', { index }) : t('card.ariaPlain'),
-    children: [
-      jsx('div', {
-        className: cx(A.keep, A.gridMid, styles.cardIcon, !composer && styles.tCardIcon),
-        'aria-hidden': true,
-        children: index ? String(index) : 'AI',
-      }),
-      jsxs('div', {
-        className: cx(A.grow, A.col, styles.cardBody),
-        children: [
-          jsx('div', {
-            className: cx(A.ell, styles.cardTitle),
-            title: text,
-            children: title,
-          }),
-          jsx('div', {
-            className: cx(A.ell, styles.cardSubtitle),
-            // Transcript cards clamp the comment; keep the full text reachable
-            // as a native tooltip, and let CSS tell a real comment apart from
-            // the "no comment" placeholder.
-            ...(comment ? { title: comment, 'data-dsq-has-comment': 'true' } : {}),
-            children: subtitle,
-          }),
-        ],
-      }),
-      composer && onEditComment
-        ? jsx('button', {
-            type: 'button',
-            className: cx(A.plain, A.gridMid, styles.cardAction),
-            'aria-label': t('card.editComment'),
-            onClick: onEditComment,
-            children: '✎',
-          })
-        : null,
-      composer && onRemove
-        ? jsx('button', {
-            type: 'button',
-            className: cx(A.plain, A.gridMid, styles.cardClose),
-            'aria-label': t('card.remove'),
-            onClick: onRemove,
-            children: '×',
-          })
-        : null,
-    ],
-  })
+  return (
+    <div
+      className={cx(A.box, A.row, styles.card, !composer && styles.tCard)}
+      role="group"
+      aria-label={index ? t('card.ariaIndexed', { index }) : t('card.ariaPlain')}
+    >
+      <div
+        className={cx(A.keep, A.gridMid, styles.cardIcon, !composer && styles.tCardIcon)}
+        aria-hidden="true"
+      >
+        {index ? String(index) : 'AI'}
+      </div>
+      <div className={cx(A.grow, A.col, styles.cardBody)}>
+        <div className={cx(A.ell, styles.cardTitle)} title={text}>
+          {title}
+        </div>
+        {/* Transcript cards clamp the comment; keep the full text reachable
+            as a native tooltip, and let CSS tell a real comment apart from
+            the "no comment" placeholder. */}
+        <div
+          className={cx(A.ell, styles.cardSubtitle)}
+          {...(comment ? { title: comment, 'data-dsq-has-comment': 'true' } : {})}
+        >
+          {subtitle}
+        </div>
+      </div>
+      {composer && onEditComment ? (
+        <button
+          type="button"
+          className={cx(A.plain, A.gridMid, styles.cardAction)}
+          aria-label={t('card.editComment')}
+          onClick={onEditComment}
+        >
+          ✎
+        </button>
+      ) : null}
+      {composer && onRemove ? (
+        <button
+          type="button"
+          className={cx(A.plain, A.gridMid, styles.cardClose)}
+          aria-label={t('card.remove')}
+          onClick={onRemove}
+        >
+          ×
+        </button>
+      ) : null}
+    </div>
+  )
 }
 
 export interface AnnotationSummaryItem {
@@ -311,193 +310,153 @@ export function AnnotationSummary({
     setEditing(null)
   }, [editing, items, editDraft, onItemEdit])
 
-  const panel = open
-    ? jsx('div', {
-        ref: popRef,
-        className: `${styles.summaryHover} ${styles.summaryHoverOpen}`,
-        role: 'dialog',
-        'aria-label': t('summary.dialogAria', { count }),
-        onPointerEnter: openPop,
-        onPointerLeave: onPointerLeave,
-        children: jsx('div', {
-          className: cx(A.col, styles.summaryHoverInner),
-          children: jsx('div', {
-            className: cx(A.col, styles.summaryList),
-            children: items.map((item, i) => {
+  const panel = open ? (
+    <div
+      ref={popRef}
+      className={`${styles.summaryHover} ${styles.summaryHoverOpen}`}
+      role="dialog"
+      aria-label={t('summary.dialogAria', { count })}
+      onPointerEnter={openPop}
+      onPointerLeave={onPointerLeave}
+    >
+      <div className={cx(A.col, styles.summaryHoverInner)}>
+        <div className={cx(A.col, styles.summaryList)}>
+          {items.map((item, i) => {
             const isEditing = editing === i
-            return jsxs(
-              'div',
-              {
-                className: styles.summaryItem,
-                children: [
-                  jsxs('div', {
-                    className: cx(A.row, styles.summaryItemHead),
-                    children: [
-                      jsx('div', {
-                        className: cx(A.keep, A.gridMid, styles.summaryItemBadge),
-                        'aria-hidden': true,
-                        children: String(i + 1),
-                      }),
-                      jsx('div', {
-                        className: styles.summaryItemLabel,
-                        children: t('common.selectedText'),
-                      }),
-                      !isEditing && (onItemRemove || onItemEdit)
-                        ? jsxs('div', {
-                            className: cx(A.row, styles.summaryItemActions),
-                            children: [
-                              onItemEdit
-                                ? jsx('button', {
-                                    type: 'button',
-                                    className: cx(A.plain, A.gridMid, styles.summaryItemAction),
-                                    'aria-label': t('summary.edit', { index: i + 1 }),
-                                    onClick: () => startEdit(i),
-                                    children: jsx(LucideIcon, { name: 'pencil' }),
-                                  })
-                                : null,
-                              onItemRemove
-                                ? jsx('button', {
-                                    type: 'button',
-                                    className: cx(A.plain, A.gridMid, styles.summaryItemAction),
-                                    'aria-label': t('summary.remove', { index: i + 1 }),
-                                    onClick: () => onItemRemove(i, item),
-                                    children: jsx(LucideIcon, { name: 'trash-2' }),
-                                  })
-                                : null,
-                            ],
-                          })
-                        : null,
-                    ],
-                  }),
-                  isEditing
-                    ? jsxs('div', {
-                        className: styles.summaryItemMain,
-                        children: [
-                          jsx('div', {
-                            className: styles.annEditText,
-                            children: item.text,
-                          }),
-                          jsx('div', {
-                            className: styles.summaryItemLabel,
-                            children: t('summary.userComment'),
-                          }),
-                          jsx('textarea', {
-                            ref: editInputRef,
-                            className: cx(A.box, styles.annEditInput),
-                            placeholder: t('common.commentPlaceholder'),
-                            value: editDraft,
-                            onChange: (e: { target: { value: string } }) => setEditDraft(e.target.value),
-                            onKeyDown: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-                              if (e.key === 'Escape') {
-                                e.preventDefault()
-                                setEditing(null)
-                                return
-                              }
-                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                                e.preventDefault()
-                                commitEdit()
-                              }
-                            },
-                          }),
-                          jsxs('div', {
-                            className: cx(A.row, styles.annEditActions),
-                            children: [
-                              jsx('button', {
-                                type: 'button',
-                                className: cx(A.plain, styles.annEditCancel),
-                                onClick: () => setEditing(null),
-                                children: t('common.cancel'),
-                              }),
-                              jsx('button', {
-                                type: 'button',
-                                className: styles.annEditSave,
-                                onClick: commitEdit,
-                                children: t('common.save'),
-                              }),
-                            ],
-                          }),
-                        ],
-                      })
-                    : jsx('div', {
-                        className: styles.summaryItemMain,
-                        children: jsxs('button', {
-                          type: 'button',
-                          className: cx(A.plain, styles.summaryItemButton),
-                          onClick: () => {
-                            onItemSelect?.(i, item)
-                            closePop()
-                          },
-                          children: [
-                            jsx('div', {
-                              className: styles.summaryItemText,
-                              children: item.title,
-                            }),
-                            jsx('div', {
-                              className: styles.summaryItemLabel,
-                              children: t('summary.userComment'),
-                            }),
-                            jsx('div', {
-                              className: item.comment
-                                ? styles.summaryItemText
-                                : `${styles.summaryItemText} ${styles.summaryItemTextEmpty}`,
-                              children: item.comment || t('summary.noComment'),
-                            }),
-                          ],
-                        }),
-                      }),
-                ],
-              },
-              item.id ?? `${i}`,
+            return (
+              <div key={item.id ?? `${i}`} className={styles.summaryItem}>
+                <div className={cx(A.row, styles.summaryItemHead)}>
+                  <div
+                    className={cx(A.keep, A.gridMid, styles.summaryItemBadge)}
+                    aria-hidden="true"
+                  >
+                    {String(i + 1)}
+                  </div>
+                  <div className={styles.summaryItemLabel}>{t('common.selectedText')}</div>
+                  {!isEditing && (onItemRemove || onItemEdit) ? (
+                    <div className={cx(A.row, styles.summaryItemActions)}>
+                      {onItemEdit ? (
+                        <button
+                          type="button"
+                          className={cx(A.plain, A.gridMid, styles.summaryItemAction)}
+                          aria-label={t('summary.edit', { index: i + 1 })}
+                          onClick={() => startEdit(i)}
+                        >
+                          <LucideIcon name="pencil" />
+                        </button>
+                      ) : null}
+                      {onItemRemove ? (
+                        <button
+                          type="button"
+                          className={cx(A.plain, A.gridMid, styles.summaryItemAction)}
+                          aria-label={t('summary.remove', { index: i + 1 })}
+                          onClick={() => onItemRemove(i, item)}
+                        >
+                          <LucideIcon name="trash-2" />
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+                {isEditing ? (
+                  <div className={styles.summaryItemMain}>
+                    <div className={styles.annEditText}>{item.text}</div>
+                    <div className={styles.summaryItemLabel}>{t('summary.userComment')}</div>
+                    <textarea
+                      ref={editInputRef}
+                      className={cx(A.box, styles.annEditInput)}
+                      placeholder={t('common.commentPlaceholder')}
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.preventDefault()
+                          setEditing(null)
+                          return
+                        }
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault()
+                          commitEdit()
+                        }
+                      }}
+                    />
+                    <div className={cx(A.row, styles.annEditActions)}>
+                      <button
+                        type="button"
+                        className={cx(A.plain, styles.annEditCancel)}
+                        onClick={() => setEditing(null)}
+                      >
+                        {t('common.cancel')}
+                      </button>
+                      <button type="button" className={styles.annEditSave} onClick={commitEdit}>
+                        {t('common.save')}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.summaryItemMain}>
+                    <button
+                      type="button"
+                      className={cx(A.plain, styles.summaryItemButton)}
+                      onClick={() => {
+                        onItemSelect?.(i, item)
+                        closePop()
+                      }}
+                    >
+                      <div className={styles.summaryItemText}>{item.title}</div>
+                      <div className={styles.summaryItemLabel}>{t('summary.userComment')}</div>
+                      <div
+                        className={
+                          item.comment
+                            ? styles.summaryItemText
+                            : `${styles.summaryItemText} ${styles.summaryItemTextEmpty}`
+                        }
+                      >
+                        {item.comment || t('summary.noComment')}
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
             )
-          }),
-          }),
-        }),
-      })
-    : null
+          })}
+        </div>
+      </div>
+    </div>
+  ) : null
 
-  return jsxs('div', {
-    ref: rootRef,
-    className: cx(A.row, styles.summary),
-    tabIndex: 0,
-    'data-selection-annotation-summary': 'true',
-    'aria-label': t('summary.aria', { count }),
-    'aria-expanded': open,
-    onPointerEnter,
-    onPointerLeave,
-    onFocus: onPointerEnter,
-    onBlur,
-    onKeyDown,
-    children: [
-      jsx('div', {
-        className: cx(A.keep, A.gridMid, styles.summaryIcon),
-        'aria-hidden': true,
-        children: String(count),
-      }),
-      jsxs('div', {
-        className: cx(A.grow, styles.summaryBody),
-        children: [
-          jsx('div', {
-            className: styles.summaryTitle,
-            children: t('summary.title', { count }),
-          }),
-          jsx('div', {
-            className: styles.summaryHint,
-            children: t('summary.hint'),
-          }),
-        ],
-      }),
-      onRemoveAll
-        ? jsx('button', {
-            type: 'button',
-            className: cx(A.plain, A.gridMid, styles.cardClose),
-            'aria-label': t('summary.removeAll'),
-            onClick: onRemoveAll,
-            children: jsx(LucideIcon, { name: 'x', size: 13 }),
-          })
-        : null,
-      panel !== null && typeof document !== 'undefined'
-        ? createPortal(panel, document.body)
-        : null,
-    ],
-  })
+  return (
+    <div
+      ref={rootRef}
+      className={cx(A.row, styles.summary)}
+      tabIndex={0}
+      data-selection-annotation-summary="true"
+      aria-label={t('summary.aria', { count })}
+      aria-expanded={open}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      onFocus={onPointerEnter}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
+    >
+      <div className={cx(A.keep, A.gridMid, styles.summaryIcon)} aria-hidden="true">
+        {String(count)}
+      </div>
+      <div className={cx(A.grow, styles.summaryBody)}>
+        <div className={styles.summaryTitle}>{t('summary.title', { count })}</div>
+        <div className={styles.summaryHint}>{t('summary.hint')}</div>
+      </div>
+      {onRemoveAll ? (
+        <button
+          type="button"
+          className={cx(A.plain, A.gridMid, styles.cardClose)}
+          aria-label={t('summary.removeAll')}
+          onClick={onRemoveAll}
+        >
+          <LucideIcon name="x" size={13} />
+        </button>
+      ) : null}
+      {panel !== null && typeof document !== 'undefined' ? createPortal(panel, document.body) : null}
+    </div>
+  )
 }

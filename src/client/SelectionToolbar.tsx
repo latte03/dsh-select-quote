@@ -1,17 +1,13 @@
 import {
-  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type ChangeEvent,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
-import { jsx, jsxs } from 'react/jsx-runtime'
 import { createPortal } from 'react-dom'
 import {
   clearNativeSelection,
@@ -239,7 +235,18 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     const pop = commentWrapRef.current
     if (!snapshot || !layer || !toolbar || !pop) return
     const bounds = layer.bounds()
-    const anchor = toolbar.getBoundingClientRect()
+    // The toolbar has already moved beside the popover when this re-runs (the
+    // comment grew, the window resized). Rebuild its home rect from the stored
+    // selection anchor instead of measuring where it currently sits.
+    const toolbarW = toolbar.offsetWidth
+    const toolbarH = toolbar.offsetHeight
+    const home = layer.fromContent(snapshot.left, snapshot.top)
+    const anchor = {
+      left: home.left - toolbarW / 2,
+      top: home.top - (snapshot.below ? 0 : toolbarH),
+      width: toolbarW,
+      height: toolbarH,
+    }
     pop.style.display = 'flex'
     pop.style.visibility = 'hidden'
     const panel = { width: pop.offsetWidth || 320, height: pop.offsetHeight || 180 }
@@ -272,6 +279,22 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     const at = layer.toContent(center, top)
     pop.style.top = `${at.top}px`
     pop.style.left = `${at.left}px`
+
+    // The "adding a comment" hint sits above the popover's top-left corner:
+    // left edges aligned, 6px clear of the card's top edge. Flip below the
+    // card only when the top of the scroller leaves no room.
+    const sideGap = 6
+    const popCenter = layer.fromContent(at.left, at.top)
+    const popLeftView = popCenter.left - panel.width / 2
+    const popTopView = top
+    let leftView = popLeftView
+    let topView = popTopView - sideGap - toolbarH
+    if (topView < bounds.top + margin) topView = popTopView + panel.height + sideGap
+    leftView = Math.max(bounds.left + margin, Math.min(leftView, bounds.right - margin - toolbarW))
+    topView = Math.max(bounds.top + margin, Math.min(topView, bounds.bottom - margin - toolbarH))
+    const toolbarAt = layer.toContent(leftView, topView)
+    toolbar.style.left = `${toolbarAt.left}px`
+    toolbar.style.top = `${toolbarAt.top}px`
   }, [])
 
   // Use layout effects: the box is measured and placed before the first paint,
@@ -372,129 +395,117 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const link = linkTarget(active.text, active.anchorHref)
 
   return createPortal(
-    jsxs(Fragment, {
-      children: [
-        jsx('div', {
-          ref: toolbarRef,
-          className: cx(A.row, styles.toolbar),
-          style: toolbarStyle,
-          role: 'toolbar',
-          'aria-label': t('toolbar.aria'),
-          'data-dsq-toolbar': 'true',
-          'data-anchor': active.below ? 'below' : 'above',
-          onPointerDown: handleToolbarPointerDown,
-          children:
-            phase === 'comment'
-              ? jsx('div', {
-                  className: cx(A.inlineRow, styles.toolbarInner),
-                  children: jsx('span', {
-                    style: {
-                      padding: '0 8px',
-                      fontSize: 13,
-                      opacity: 0.8,
-                      whiteSpace: 'nowrap',
-                    },
-                    children: t('toolbar.commentHint'),
-                  }),
-                })
-              : jsxs('div', {
-                  className: cx(A.inlineRow, styles.toolbarInner),
-                  children: [
-                    link
-                      ? jsx('button', {
-                          type: 'button',
-                          className: cx(A.plain, A.inlineRow, styles.button),
-                          onClick: handleOpenLink,
-                          children: [
-                            jsx(LucideIcon, { name: 'external-link', size: 14 }),
-                            t('toolbar.openLink'),
-                          ],
-                        })
-                      : null,
-                    link ? jsx('span', { className: styles.divider, 'aria-hidden': true }) : null,
-                    jsx('button', {
-                      type: 'button',
-                      className: cx(A.plain, A.inlineRow, styles.button),
-                      onClick: () => void handleCopy(),
-                      children: [
-                        jsx(LucideIcon, { name: 'copy', size: 14 }),
-                        t('toolbar.copy'),
-                      ],
-                    }),
-                    jsx('span', { className: styles.divider, 'aria-hidden': true }),
-                    jsx('button', {
-                      type: 'button',
-                      className: cx(A.plain, A.inlineRow, styles.button),
-                      onClick: openComment,
-                      children: [
-                        jsx(LucideIcon, { name: 'plus', size: 14 }),
-                        t('toolbar.addToTask'),
-                      ],
-                    }),
-                  ],
-                }),
-        }),
-        phase === 'comment'
-          ? jsxs('div', {
-              ref: commentWrapRef,
-              className: cx(A.col, styles.commentPop),
-              style: undefined,
-              role: 'dialog',
-              'aria-label': t('toolbar.commentDialogAria'),
-              onPointerDown: handleToolbarPointerDown,
-              children: [
-                jsx('textarea', {
-                  ref: commentRef,
-                  className: cx(A.box, styles.commentInput),
-                  placeholder: t('common.commentPlaceholder'),
-                  value: comment,
-                  onChange: (e: ChangeEvent<HTMLTextAreaElement>) => setComment(e.target.value),
-                  onKeyDown: (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      // Explicit cancel discards the optional comment text;
-                      // the annotation itself stays saved.
-                      pendingIdRef.current = null
-                      hide()
-                      return
-                    }
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault()
-                      finishComment(true)
-                    }
-                  },
-                }),
-                jsxs('div', {
-                  className: styles.commentActions,
-                  children: [
-                    jsx('button', {
-                      type: 'button',
-                      className: cx(A.plain, A.inlineRow, styles.button),
-                      onClick: () => finishComment(false),
-                      children: t('toolbar.skipComment'),
-                    }),
-                    jsx('button', {
-                      type: 'button',
-                      className: cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment),
-                      disabled: !comment.trim(),
-                      onClick: () => finishComment(true),
-                      children: t('toolbar.addComment'),
-                    }),
-                  ],
-                }),
-              ],
-            })
-          : null,
-        status
-          ? jsx('div', {
-              className: styles.status,
-              style: toolbarStyle,
-              role: 'status',
-              children: status,
-            })
-          : null,
-      ],
-    }),
+    <>
+      <div
+        ref={toolbarRef}
+        className={cx(A.row, styles.toolbar)}
+        style={phase === 'comment' ? undefined : toolbarStyle}
+        role="toolbar"
+        aria-label={t('toolbar.aria')}
+        data-dsq-toolbar="true"
+        data-anchor={phase === 'comment' ? 'popover-top' : active.below ? 'below' : 'above'}
+        onPointerDown={handleToolbarPointerDown}
+      >
+        {phase === 'comment' ? (
+          <div className={cx(A.inlineRow, styles.toolbarInner)}>
+            <span
+              style={{
+                padding: '0 8px',
+                fontSize: 13,
+                opacity: 0.8,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('toolbar.commentHint')}
+            </span>
+          </div>
+        ) : (
+          <div className={cx(A.inlineRow, styles.toolbarInner)}>
+            {link ? (
+              <button
+                type="button"
+                className={cx(A.plain, A.inlineRow, styles.button)}
+                onClick={handleOpenLink}
+              >
+                <LucideIcon name="external-link" size={14} />
+                {t('toolbar.openLink')}
+              </button>
+            ) : null}
+            {link ? <span className={styles.divider} aria-hidden="true" /> : null}
+            <button
+              type="button"
+              className={cx(A.plain, A.inlineRow, styles.button)}
+              onClick={() => void handleCopy()}
+            >
+              <LucideIcon name="copy" size={14} />
+              {t('toolbar.copy')}
+            </button>
+            <span className={styles.divider} aria-hidden="true" />
+            <button
+              type="button"
+              className={cx(A.plain, A.inlineRow, styles.button)}
+              onClick={openComment}
+            >
+              <LucideIcon name="plus" size={14} />
+              {t('toolbar.addToTask')}
+            </button>
+          </div>
+        )}
+      </div>
+      {phase === 'comment' ? (
+        <div
+          ref={commentWrapRef}
+          className={cx(A.col, styles.commentPop)}
+          role="dialog"
+          aria-label={t('toolbar.commentDialogAria')}
+          onPointerDown={handleToolbarPointerDown}
+        >
+          <textarea
+            ref={commentRef}
+            className={cx(A.box, styles.commentInput)}
+            placeholder={t('common.commentPlaceholder')}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                // Explicit cancel discards the optional comment text;
+                // the annotation itself stays saved.
+                pendingIdRef.current = null
+                hide()
+                return
+              }
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                finishComment(true)
+              }
+            }}
+          />
+          <div className={styles.commentActions}>
+            <button
+              type="button"
+              className={cx(A.plain, A.inlineRow, styles.button)}
+              onClick={() => finishComment(false)}
+            >
+              {t('toolbar.skipComment')}
+            </button>
+            <button
+              type="button"
+              className={cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment)}
+              disabled={!comment.trim()}
+              onClick={() => finishComment(true)}
+            >
+              {t('toolbar.addComment')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {status ? (
+        <div className={styles.status} style={toolbarStyle} role="status">
+          {status}
+        </div>
+      ) : null}
+    </>,
     active.layer.host,
   )
 }

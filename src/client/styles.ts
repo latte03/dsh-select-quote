@@ -105,6 +105,18 @@ ${atomRules}
   }
 }
 
+/* Comment phase: the hint sits above the popover's top-left corner (explicit
+   top-left placement comes from placeCommentPop), so the entrance no longer
+   owns the centering shift. */
+@keyframes dsq-toolbar-in-popover-top {
+  from {
+    transform: translateY(4px) scale(0.96);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* 内容层的 rise：悬停面板的列表在用；工具条改用容器 scale 后这条在这里待命。 */
 @keyframes dsq-rise-in {
   from {
@@ -198,6 +210,12 @@ ${atomRules}
 .dsq_toolbar[data-anchor='below'] {
   --dsq-anchor-y: 0%;
   animation-name: dsq-toolbar-in-below;
+}
+
+/* Comment phase: placed at an explicit top-left, 6px above the comment popover. */
+.dsq_toolbar[data-anchor='popover-top'] {
+  transform: none;
+  animation-name: dsq-toolbar-in-popover-top;
 }
 
 /* 按钮行：只负责布局；入场动画在容器上（见 .dsq_toolbar 的 A/B 说明）。 */

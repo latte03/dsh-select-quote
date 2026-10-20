@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { jsx, jsxs } from 'react/jsx-runtime'
 import { scanAnnotatedMessage } from '../protocol/annotation-protocol.ts'
 import { contentBlocksToText, displayTextWithoutQuote } from '../protocol/quote-protocol.ts'
 import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
@@ -64,46 +63,23 @@ export function UserMessageDisplay({
   const images = contentImages(node.data?.content)
   if (!text && images.length === 0 && quotes.length === 0) return null
 
-  return jsx('div', {
-    className: cx(A.colEnd, styles.userRow),
-    children: jsxs('div', {
-      className: cx(A.colEnd, styles.userStack),
-      children: [
-        images.length > 0 && renderMessageImages !== undefined
-          ? jsx(
-              'div',
-              {
-                className: cx(A.colEnd, styles.userImages),
-                'data-message-attachments': true,
-                children: renderMessageImages({
-                  images,
-                  align: 'end',
-                  compact: images.length > 1,
-                }),
-              },
-              'images',
-            )
-          : null,
-        quotes.length > 0
-          ? jsx(
-              TranscriptQuoteCard,
-              { node: { data: { quotes } } },
-              'quotes',
-            )
-          : null,
-        text
-          ? jsx(
-              'div',
-              {
-                className: styles.userBubble,
-                children: text,
-              },
-              'bubble',
-            )
-          : null,
-      ],
-    }),
-  })
+  return (
+    <div className={cx(A.colEnd, styles.userRow)}>
+      <div className={cx(A.colEnd, styles.userStack)}>
+        {images.length > 0 && renderMessageImages !== undefined ? (
+          <div className={cx(A.colEnd, styles.userImages)} data-message-attachments>
+            {renderMessageImages({
+              images,
+              align: 'end',
+              compact: images.length > 1,
+            })}
+          </div>
+        ) : null}
+        {quotes.length > 0 ? <TranscriptQuoteCard node={{ data: { quotes } }} /> : null}
+        {text ? <div className={styles.userBubble}>{text}</div> : null}
+      </div>
+    </div>
+  )
 }
 
 export function SteeringMessageDisplay(props: UserMessageDisplayProps): ReactNode {

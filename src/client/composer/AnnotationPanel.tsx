@@ -6,7 +6,6 @@ import {
   type MutableRefObject,
   type ReactNode,
 } from 'react'
-import { jsx } from 'react/jsx-runtime'
 import { composerCardOf } from '../dom/composer-host.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
 import {
@@ -189,23 +188,23 @@ export function AnnotationPanel({
 
   if (!sessionId || items.length === 0) return null
 
-  return jsx('div', {
-    ref: stackRef,
-    className: cx(A.col, styles.cardStack),
-    children: jsx(AnnotationSummary, {
-      count: items.length,
-      items: items.map((item) => ({
-        id: item.id,
-        title: annotationTitle(item),
-        text: item.text,
-        comment: item.comment,
-      })),
-      onRemoveAll,
-      onItemSelect,
-      onItemRemove,
-      onItemEdit,
-    }),
-  })
+  return (
+    <div ref={stackRef} className={cx(A.col, styles.cardStack)}>
+      <AnnotationSummary
+        count={items.length}
+        items={items.map((item) => ({
+          id: item.id,
+          title: annotationTitle(item),
+          text: item.text,
+          comment: item.comment,
+        }))}
+        onRemoveAll={onRemoveAll}
+        onItemSelect={onItemSelect}
+        onItemRemove={onItemRemove}
+        onItemEdit={onItemEdit}
+      />
+    </div>
+  )
 }
 
 /** Alias kept for overlay registration. */
