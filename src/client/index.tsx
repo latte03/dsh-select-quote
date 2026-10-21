@@ -24,6 +24,7 @@ import {
   type HostUserComponent,
   type UserMessageDisplayProps,
 } from './transcript/UserMessageDisplay.tsx'
+import { pickHostUser } from './transcript/host-user.ts'
 import {
   bindAnnotationSession,
   getAnnotations,
@@ -38,7 +39,7 @@ import { createAnnotationPersistence } from './state/annotation-storage.ts'
  * Selection toolbar is root-scoped (`shell.overlay`) so transcript selections
  * are always observed. Annotation summary stays on the session composer.
  *
- * History cards render **inside** the `user` Chat node view, not on a
+ * History summary renders **inside** the `user` Chat node view, not on a
  * `select-quote` Chat node. `conversation.chat.node` is gated by the shipped
  * `TURN_PROCESS_INDEPENDENT_KINDS` allowlist (system-prompt, user, steering,
  * turn-trigger, turn-process, turn-error, turn-max-tokens, turn-tail): any other
@@ -144,24 +145,22 @@ export function apply(ctx: Context): void {
   })
 
   // History: delegate the bubble to the host's own UserMessageNodeView after
-  // rewriting `node.data.content`, then prepend the annotation cards. The host
+  // rewriting `node.data.content`, then prepend the annotation summary. The host
   // view owns the time/copy actions row, attachments, file cards and reference
   // summaries, so a host change or another plugin's decoration of that row is
   // preserved instead of being shadowed by a private copy.
+  // `UserNode` is the registration below; passing it by identity keeps the
+  // lookup independent of the priority value used to win the slot election.
+  function UserNode(props: UserMessageDisplayProps) {
+    return <UserMessageDisplay {...props} hostUserOf={hostUserOf} />
+  }
   const hostUserOf = (): HostUserComponent | undefined => {
     const entries =
       typeof ctx.slots.entries === 'function'
         ? ctx.slots.entries('conversation.chat.node')
         : []
-    const candidates = entries.filter(
-      (entry) => entry.options?.key === 'user' && entry.options?.priority !== -10,
-    )
-    const named = candidates.find((entry) => componentName(entry.component) === 'UserMessageNodeView')
-    return (named ?? candidates[0])?.component as HostUserComponent | undefined
+    return pickHostUser(entries, UserNode) as HostUserComponent | undefined
   }
-  const UserNode = (props: UserMessageDisplayProps) => (
-    <UserMessageDisplay {...props} hostUserOf={hostUserOf} />
-  )
   ctx.slots.inject('conversation.chat.node', () => {
     ctx.slots.register(
       {
@@ -175,14 +174,6 @@ export function apply(ctx: Context): void {
       UserNode,
     )
   })
-}
-
-/** Component name across memo/forwardRef/plain function shapes. */
-function componentName(component: unknown): string | undefined {
-  const candidate = component as
-    | { type?: { name?: string }; name?: string; displayName?: string }
-    | undefined
-  return candidate?.type?.name ?? candidate?.name ?? candidate?.displayName
 }
 
 /** Invisible session-scoped bridge that publishes sessionId for the root toolbar. */

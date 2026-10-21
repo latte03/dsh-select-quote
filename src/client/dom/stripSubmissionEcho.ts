@@ -17,55 +17,98 @@
 import { ANNOTATIONS_BLOCK_OPEN, ANNOTATIONS_BLOCK_CLOSE, scanAnnotatedMessage } from '../protocol/annotation-protocol.ts'
 
 const ECHO_SELECTOR = '[data-submission-echo]'
-const STRIPPED_ATTR = 'data-dsq-echo-stripped'
+
+/** The subset of DOM the stripper needs; keeps the logic testable without a DOM. */
+export interface EchoNode {
+  readonly children: ArrayLike<unknown>
+  textContent: string | null
+  querySelectorAll(selector: string): ArrayLike<EchoNode>
+}
+
+function carriesProtocol(text: string): boolean {
+  return text.includes(ANNOTATIONS_BLOCK_OPEN) && text.includes(ANNOTATIONS_BLOCK_CLOSE)
+}
 
 /** The deepest run that carries both markers, or null. */
-function protocolRun(row: HTMLElement): HTMLElement | null {
-  for (const el of row.querySelectorAll<HTMLElement>('*')) {
+function protocolRun(row: EchoNode): EchoNode | null {
+  // The row itself may be the text run (a bare element with no children).
+  if (row.children.length === 0 && carriesProtocol(row.textContent ?? '')) return row
+  for (const el of Array.from(row.querySelectorAll('*'))) {
     if (el.children.length > 0) continue
-    const text = el.textContent ?? ''
-    if (text.includes(ANNOTATIONS_BLOCK_OPEN) && text.includes(ANNOTATIONS_BLOCK_CLOSE)) {
-      return el
-    }
+    if (carriesProtocol(el.textContent ?? '')) return el
   }
   return null
 }
 
-function strip(row: HTMLElement): void {
-  if (row.hasAttribute(STRIPPED_ATTR)) return
+/**
+ * Rewrite one echo row's protocol run in place.
+ *
+ * Idempotent: once stripped the run no longer carries both markers, so a
+ * later sweep (after the host re-renders the row) is a no-op rather than a
+ * reason to remember the row forever.
+ */
+export function stripEchoRow(row: EchoNode): boolean {
   const run = protocolRun(row)
-  if (run === null) return
-  const scan = scanAnnotatedMessage(run.textContent ?? '')
-  if (scan.annotations.length === 0) return
+  if (run === null) return false
+  const original = run.textContent ?? ''
+  // A complete block is stripped whether or not its payload is readable: the
+  // echo must never show protocol text.
+  const scan = scanAnnotatedMessage(original)
+  if (scan.rest === original) return false
   run.textContent = scan.rest
-  row.setAttribute(STRIPPED_ATTR, '')
+  return true
 }
 
 /**
  * Watch for local submission echoes and rewrite the protocol block out of
- * them. Runs once immediately, then on every DOM insertion.
+ * them. Runs once immediately, then only on mutations that can affect an
+ * echo row.
  */
 export function watchSubmissionEcho(root?: ParentNode): () => void {
   const scope = root ?? (typeof document === 'undefined' ? undefined : document.body)
   if (!scope) return () => {}
   const sweep = (): void => {
-    for (const row of scope.querySelectorAll<HTMLElement>(ECHO_SELECTOR)) strip(row)
+    for (const row of Array.from(scope.querySelectorAll<HTMLElement>(ECHO_SELECTOR))) stripEchoRow(row)
   }
   sweep()
   if (typeof MutationObserver === 'undefined') return () => {}
-  // Coalesce: streaming replies mutate the transcript constantly, and the echo
-  // only needs one pass per frame (still before paint, so it never flashes).
+
+  // Coalesce to one pass per frame, but collect inside the observer callback:
+  // after `frame` is set, later records still have to land in `pending`.
+  const pending = new Set<HTMLElement>()
   let frame = 0
-  const observer = new MutationObserver(() => {
+  const collect = (records: MutationRecord[]): void => {
+    for (const record of records) {
+      if (record.type === 'characterData') {
+        const row = record.target.parentElement?.closest<HTMLElement>(ECHO_SELECTOR)
+        if (row) pending.add(row)
+        continue
+      }
+      for (const node of Array.from(record.addedNodes)) {
+        const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement
+        if (el === null) continue
+        const row = el.closest<HTMLElement>(ECHO_SELECTOR)
+        if (row) {
+          pending.add(row)
+          continue
+        }
+        for (const inner of Array.from(el.querySelectorAll<HTMLElement>(ECHO_SELECTOR))) pending.add(inner)
+      }
+    }
+  }
+  const observer = new MutationObserver((records) => {
+    collect(records)
     if (frame !== 0) return
     frame = window.requestAnimationFrame(() => {
       frame = 0
-      sweep()
+      for (const row of pending) stripEchoRow(row)
+      pending.clear()
     })
   })
-  observer.observe(scope, { childList: true, subtree: true })
+  observer.observe(scope, { childList: true, subtree: true, characterData: true })
   return () => {
     observer.disconnect()
+    pending.clear()
     if (frame !== 0) window.cancelAnimationFrame(frame)
   }
 }

@@ -31,7 +31,7 @@ const atomRules = Object.entries(ATOMS)
   .map(([name, declarations]) => `.dsq_a_${toKebab(name)} { ${declarations} }`)
   .join('\n')
 
-/** Atom class names, for `cx(styles.card, A.row)`. */
+/** Atom class names, for `cx(styles.summary, A.row)`. */
 export const A = Object.fromEntries(
   Object.keys(ATOMS).map((name) => [name, `dsq_a_${toKebab(name)}`]),
 ) as Record<keyof typeof ATOMS, string>
@@ -764,7 +764,7 @@ body[data-ds-dark-theme] .dsq_annMark {
   --dsq-mark-tint: var(--dsq-accent-tint-dark);
 }
 
-/* Reserve room for the floating quote cards inside the composer card, so the
+/* Reserve room for the floating annotation summary inside the composer card, so the
    attachment rail and the editor flow below them instead of being covered. */
 .dsq_cardPad {
   padding-top: var(--dsq-quote-pad, 88px) !important;

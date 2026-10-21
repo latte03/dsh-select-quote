@@ -5,7 +5,7 @@ import { ensureToolbarStyles, styles } from '../styles.ts'
 import type { ParsedAnnotation } from '../protocol/annotation-protocol.ts'
 import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
 
-/** View payload a user message's cards are rendered from. */
+/** View payload a user message's annotation summary is rendered from. */
 export interface SelectQuoteNodeData {
   readonly quotes: readonly ParsedAnnotation[]
 }

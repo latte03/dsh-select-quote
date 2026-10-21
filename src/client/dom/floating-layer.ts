@@ -39,6 +39,35 @@ const layers = new WeakMap<HTMLElement, FloatingLayer>()
 const itemLayers = new WeakMap<HTMLElement, FloatingLayer>()
 let fallback: FloatingLayer | null = null
 
+const SEAT_SELECTOR = '[data-composer-seat]'
+const CARD_SELECTOR = '[data-composer-card]'
+
+/**
+ * The composer belonging to `scroller`, or the document's first one when the
+ * scroller has no seat in its ancestor chain.
+ *
+ * The desktop layout puts the sticky seat outside the scroll container; a
+ * document-wide lookup picks the first chat on the page, which is wrong when
+ * more than one conversation is mounted. Walk out from the scroller and take
+ * the first seat inside the nearest ancestor that has one.
+ */
+function composerSeatFor(scroller: HTMLElement | null): HTMLElement | null {
+  if (typeof document === 'undefined') return null
+  if (scroller !== null) {
+    for (
+      let el: HTMLElement | null = scroller;
+      el !== null && el !== document.body;
+      el = el.parentElement
+    ) {
+      const seat =
+        el.querySelector<HTMLElement>(SEAT_SELECTOR) ??
+        el.querySelector<HTMLElement>(CARD_SELECTOR)
+      if (seat !== null) return seat
+    }
+  }
+  return document.querySelector<HTMLElement>(SEAT_SELECTOR) ?? document.querySelector<HTMLElement>(CARD_SELECTOR)
+}
+
 /**
  * Top edge of the composer seat, in viewport coordinates.
  *
@@ -48,13 +77,8 @@ let fallback: FloatingLayer | null = null
  * parks popovers under the input box — the bottom edge must be the composer.
  * In the regular layout the seat sits below the scroller, so it changes nothing.
  */
-function composerTop(): number | null {
-  if (typeof document === 'undefined') return null
-  const seat =
-    document.querySelector<HTMLElement>('[data-composer-seat]') ??
-    document.querySelector<HTMLElement>('[data-composer-card]')
-  if (seat === null) return null
-  return seat.getBoundingClientRect().top
+function composerTop(scroller: HTMLElement | null): number | null {
+  return composerSeatFor(scroller)?.getBoundingClientRect().top ?? null
 }
 
 function contentCoords(scroller: HTMLElement, left: number, top: number) {
@@ -89,7 +113,7 @@ function layerFor(scroller: HTMLElement): FloatingLayer {
       const rect = scroller.getBoundingClientRect()
       const top = rect.top + scroller.clientTop
       const rawBottom = top + scroller.clientHeight
-      const cover = composerTop()
+      const cover = composerTop(scroller)
       const bottom = cover !== null && cover > top && cover < rawBottom ? cover : rawBottom
       return new DOMRect(
         rect.left + scroller.clientLeft,
@@ -122,7 +146,7 @@ function fallbackLayer(): FloatingLayer {
     host,
     scroller: document.body,
     bounds: () => {
-      const bottom = composerTop() ?? window.innerHeight
+      const bottom = composerTop(null) ?? window.innerHeight
       return new DOMRect(0, 0, window.innerWidth, Math.max(0, bottom))
     },
     toContent: (left, top) => ({ left, top }),

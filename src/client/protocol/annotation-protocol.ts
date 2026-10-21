@@ -79,11 +79,15 @@ export function composeAnnotatedMessage(
   if (annotations.length === 0) return rest
 
   const payload = annotations.map(toWireItem)
+  // `<` must not appear literally inside the payload: selected text or a
+  // comment containing `</response-annotations>` would close the block early
+  // for every marker-based reader. JSON.parse restores the original text.
+  const json = JSON.stringify(payload).replace(/</g, '\\u003c')
   const block = [
     PROTOCOL_HEADER,
     '',
     ANNOTATIONS_BLOCK_OPEN,
-    JSON.stringify(payload),
+    json,
     ANNOTATIONS_BLOCK_CLOSE,
   ].join('\n')
 
@@ -94,7 +98,7 @@ export function composeAnnotatedMessage(
 /** Remove `# Response annotations:` instructional prose before the JSON block. */
 function stripProtocolHeader(prefix: string): string {
   const marker = prefix.indexOf('# Response annotations:')
-  if (marker >= 0) return ''
+  if (marker >= 0) return prefix.slice(0, marker).replace(/\s+$/, '')
   return prefix.replace(/\s+$/, '')
 }
 
@@ -102,18 +106,38 @@ function stripProtocolHeader(prefix: string): string {
 interface BlockParts {
   readonly before: string
   readonly after: string
-  readonly json: string
+  /** Valid JSON when the payload parses; undefined for a malformed block. */
+  readonly parsed?: unknown
 }
 
 function blockParts(text: string): BlockParts | null {
   const open = text.indexOf(ANNOTATIONS_BLOCK_OPEN)
   if (open < 0) return null
-  const close = text.indexOf(ANNOTATIONS_BLOCK_CLOSE, open + ANNOTATIONS_BLOCK_OPEN.length)
-  if (close < 0) return null
+  const payloadStart = open + ANNOTATIONS_BLOCK_OPEN.length
+  // A close marker may itself live inside a JSON string (older messages were
+  // written before `<` was escaped). Take the first candidate whose payload
+  // parses, not merely the first close marker in the text.
+  const firstClose = text.indexOf(ANNOTATIONS_BLOCK_CLOSE, payloadStart)
+  let close = firstClose
+  while (close >= 0) {
+    const json = text.slice(payloadStart, close).trim()
+    try {
+      return {
+        before: stripProtocolHeader(text.slice(0, open)),
+        after: text.slice(close + ANNOTATIONS_BLOCK_CLOSE.length).replace(/^\s+/, ''),
+        parsed: JSON.parse(json),
+      }
+    } catch {
+      close = text.indexOf(ANNOTATIONS_BLOCK_CLOSE, close + ANNOTATIONS_BLOCK_CLOSE.length)
+    }
+  }
+  // Both markers are present even though the payload is unreadable. Keep the
+  // span so the display layer can strip it: raw protocol text must never reach
+  // the transcript, and no annotation may be recovered from it.
+  if (firstClose < 0) return null
   return {
     before: stripProtocolHeader(text.slice(0, open)),
-    after: text.slice(close + ANNOTATIONS_BLOCK_CLOSE.length).replace(/^\s+/, ''),
-    json: text.slice(open + ANNOTATIONS_BLOCK_OPEN.length, close).trim(),
+    after: text.slice(firstClose + ANNOTATIONS_BLOCK_CLOSE.length).replace(/^\s+/, ''),
   }
 }
 
@@ -121,15 +145,9 @@ function joinedRest(parts: BlockParts): string {
   return [parts.before, parts.after].filter((part) => part.length > 0).join('\n\n').trim()
 }
 
-/** Wire payload as an array; null when the block is not valid JSON. */
+/** Wire payload as an array; null when the block is not an array. */
 function parseWire(parts: BlockParts): unknown[] | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(parts.json)
-  } catch {
-    return null
-  }
-  return Array.isArray(parsed) ? parsed : null
+  return Array.isArray(parts.parsed) ? parts.parsed : null
 }
 
 interface WireBody {
@@ -187,17 +205,20 @@ export interface AnnotationScan {
 /**
  * Read plugin annotations out of a durable message. Tolerates the JSON block
  * and strips it from `rest` so the bubble can show only the user's question.
+ * A complete block with a malformed or non-array payload yields no
+ * annotations but is still stripped — the transcript never shows protocol
+ * text, valid or not.
  */
 export function scanAnnotatedMessage(text: string): AnnotationScan {
   const parts = blockParts(text)
   if (parts === null) {
     return { annotations: [], rest: text }
   }
+  const rest = joinedRest(parts)
   const parsed = parseWire(parts)
   if (parsed === null) {
-    return { annotations: [], rest: text.replace(/^\s+/, '') }
+    return { annotations: [], rest }
   }
-  const rest = joinedRest(parts)
 
   const annotations: ParsedAnnotation[] = []
   for (const entry of parsed) {

@@ -452,7 +452,7 @@ function packedFiles() {
  */
 async function checkComposedDraft() {
   const problems = []
-  const { composeAnnotatedMessage, readComposedDraft } = await import(
+  const { composeAnnotatedMessage, readComposedDraft, scanAnnotatedMessage } = await import(
     new URL('../src/client/protocol/annotation-protocol.ts', import.meta.url).href
   )
   const source = {
@@ -508,6 +508,56 @@ async function checkComposedDraft() {
   if (middle === null || middle.rest !== '前文\n\n后文') {
     problems.push(`middle placement restored ${JSON.stringify(middle?.rest)}`)
   }
+  // A close marker inside selected text or a comment must not end the block
+  // early — new drafts escape it, legacy drafts still carry it literally.
+  const markerText = '原文里有 </response-annotations> 与 <response-annotations>'
+  const markerComment = '评论里也写 </response-annotations>'
+  const tricky = [{ id: 'a3', text: markerText, comment: markerComment, sources: [{ text: markerText }] }]
+  const trickyRead = readComposedDraft(composeAnnotatedMessage('含标记的正文', tricky))
+  if (trickyRead === null) {
+    problems.push('a close marker inside an annotation string broke the composed block')
+  } else {
+    if (trickyRead.rest !== '含标记的正文') {
+      problems.push(`tricky draft restored ${JSON.stringify(trickyRead.rest)}`)
+    }
+    if (trickyRead.annotations[0]?.text !== markerText) {
+      problems.push('tricky draft lost the selected text')
+    }
+    if (trickyRead.annotations[0]?.comment !== markerComment) {
+      problems.push('tricky draft lost the comment')
+    }
+  }
+  const legacyDraft =
+    `<response-annotations>${JSON.stringify([{ text: markerText, annotation: markerComment }])}` +
+    `</response-annotations>\n\n含标记的正文`
+  const legacyRead = readComposedDraft(legacyDraft)
+  if (legacyRead === null || legacyRead.annotations[0]?.text !== markerText) {
+    problems.push('a legacy block with a literal close marker did not read back')
+  }
+  const legacyScan = scanAnnotatedMessage(legacyDraft)
+  if (legacyScan.annotations.length !== 1 || legacyScan.rest !== '含标记的正文') {
+    problems.push(`legacy block display is ${JSON.stringify({ n: legacyScan.annotations.length, rest: legacyScan.rest })}`)
+  }
+  // The display layer must strip a complete block even when its payload is
+  // unreadable or not an array. readComposedDraft stays conservative (above);
+  // scanAnnotatedMessage only loses the annotation, never the markers.
+  for (const [text, want] of [
+    ['<response-annotations>{oops}</response-annotations>', ''],
+    ['<response-annotations>{"text":"x"}</response-annotations>', ''],
+    ['前文\n\n<response-annotations>[1, 2] trailing</response-annotations>\n\n后文', '前文\n\n后文'],
+    [
+      '# Response annotations:\n\n<response-annotations>{oops}</response-annotations>\n\n正文',
+      '正文',
+    ],
+  ]) {
+    const scan = scanAnnotatedMessage(text)
+    if (scan.annotations.length !== 0) {
+      problems.push(`a malformed block produced annotations: ${text}`)
+    }
+    if (scan.rest !== want) {
+      problems.push(`malformed block display is ${JSON.stringify(scan.rest)}, want ${JSON.stringify(want)}`)
+    }
+  }
   return problems
 }
 
@@ -546,6 +596,115 @@ function checkTranscriptSurfaces(code) {
   }
   if (code.includes('dsq_tCardStack')) {
     problems.push('per-annotation transcript cards are back — one block with a hover list is the contract')
+  }
+  return problems
+}
+
+/**
+ * The host lookup must exclude this plugin's own registration by identity,
+ * not by the priority value that happens to win the slot election, and it
+ * must never delegate to an arbitrary wrapper when the host is ambiguous.
+ */
+async function checkHostUser() {
+  const problems = []
+  const { pickHostUser } = await import(
+    new URL('../src/client/transcript/host-user.ts', import.meta.url).href
+  )
+  const self = function UserNode() {}
+  const host = function UserMessageNodeView() {}
+  const other = function OtherUserNode() {}
+  const third = function ThirdUserNode() {}
+  const entry = (component, priority) => ({
+    component,
+    options: { key: 'user', ...(priority === undefined ? {} : { priority }) },
+  })
+  // memo() is an object whose `type` carries the function name.
+  const memoHost = { type: host }
+
+  if (pickHostUser([entry(self, -10), entry(host)], self) !== host) {
+    problems.push('the named host user view was not resolved')
+  }
+  if (pickHostUser([entry(self, -10), entry(memoHost)], self) !== memoHost) {
+    problems.push('a memo-wrapped host user view was not resolved')
+  }
+  if (pickHostUser([entry(self, -10)], self) !== undefined) {
+    problems.push('the plugin resolved its own registration as the host')
+  }
+  if (pickHostUser([entry(self, -10), entry(other, -1)], self) !== other) {
+    problems.push('a renamed host with one non-self candidate was not used')
+  }
+  if (pickHostUser([entry(self, -10), entry(other, -1), entry(third, 0)], self) !== undefined) {
+    problems.push('ambiguous host candidates were guessed instead of falling back')
+  }
+  if (pickHostUser([entry(self, -10), entry(host), entry(other, -1)], self) !== host) {
+    problems.push('another user wrapper beat the named host view')
+  }
+  return problems
+}
+
+/**
+ * Echo stripping is display-only and must be idempotent: the host may re-render
+ * the echo row after the first pass. A run split across siblings is not rebuilt.
+ */
+async function checkEchoStrip() {
+  const problems = []
+  const { composeAnnotatedMessage } = await import(
+    new URL('../src/client/protocol/annotation-protocol.ts', import.meta.url).href
+  )
+  const { stripEchoRow } = await import(
+    new URL('../src/client/dom/stripSubmissionEcho.ts', import.meta.url).href
+  )
+  const block = composeAnnotatedMessage('用户正文', [
+    { id: 'a1', text: '被划中的原文', comment: '这里要改', sources: [{ text: '被划中的原文' }] },
+  ])
+  const leaf = (text) => ({ children: [], textContent: text, querySelectorAll: () => [] })
+  const row = (children) => ({
+    children,
+    textContent: children.map((child) => child.textContent).join(''),
+    querySelectorAll: () => children,
+  })
+
+  const run = leaf(block)
+  const wrapped = row([run])
+  if (!stripEchoRow(wrapped)) problems.push('a wrapped protocol run was not stripped')
+  if (run.textContent !== '用户正文') {
+    problems.push(`stripped echo is ${JSON.stringify(run.textContent)}, want "用户正文"`)
+  }
+  if (stripEchoRow(wrapped)) problems.push('stripping the same echo twice was not idempotent')
+
+  const bare = leaf(block)
+  if (!stripEchoRow(bare) || bare.textContent !== '用户正文') {
+    problems.push('an echo whose row itself is the text run was not stripped')
+  }
+
+  const header = leaf('# Response annotations:\n\n')
+  const body = leaf(block.slice(block.indexOf('<response-annotations>')))
+  const split = row([header, body])
+  if (!stripEchoRow(split) || body.textContent !== '用户正文') {
+    problems.push('the protocol run beside an instructional header was not stripped')
+  }
+  if (header.textContent !== '# Response annotations:\n\n') {
+    problems.push('stripping the protocol run touched the instructional header')
+  }
+
+  const open = leaf('<response-annotations>')
+  const close = leaf('</response-annotations>')
+  const across = row([open, close])
+  if (stripEchoRow(across)) problems.push('a marker pair split across siblings was rebuilt')
+  if (open.textContent !== '<response-annotations>' || close.textContent !== '</response-annotations>') {
+    problems.push('a marker pair split across siblings was mutated')
+  }
+
+  // A complete block with unreadable or non-array JSON is still protocol text:
+  // the echo must drop it rather than painting the payload.
+  for (const broken of [
+    '<response-annotations>{oops}</response-annotations>\n\n用户正文',
+    '<response-annotations>{"text":"x"}</response-annotations>\n\n用户正文',
+  ]) {
+    const run = leaf(broken)
+    if (!stripEchoRow(row([run])) || run.textContent !== '用户正文') {
+      problems.push(`a malformed complete block survived the echo strip: ${broken}`)
+    }
   }
   return problems
 }
@@ -864,10 +1023,10 @@ for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) l
 const persistenceProblems = await checkPersistence()
 const linkProblems = await checkSelectionUrl()
 const metaProblems = checkPackageMeta()
-const userChromeProblems = checkUserChrome(code)
+const userChromeProblems = [...checkUserChrome(code), ...(await checkHostUser())]
 const composedDraftProblems = await checkComposedDraft()
 const rewindProblems = checkRewindRestore(code)
-const surfaceProblems = checkTranscriptSurfaces(code)
+const surfaceProblems = [...checkTranscriptSurfaces(code), ...(await checkEchoStrip())]
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -902,7 +1061,7 @@ if (
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
     `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed, link detection replayed, ` +
-    `user node delegates to the host view, composed annotation blocks read back, ` +
-    `echo stripped and transcript summary single-block, ` +
+    `host view resolution replayed, composed annotation blocks read back, ` +
+    `echo strip replayed, transcript summary single-block, ` +
     `package metadata (locale + icon) resolved and packed`,
 )

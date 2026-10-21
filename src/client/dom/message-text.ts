@@ -3,7 +3,7 @@
  * it as stable character offsets over the message's own text.
  *
  * Offsets are computed over "clean text": the flow item's text nodes with the
- * plugin's own chrome (summary cards, directive chips, anchors) skipped. Marks
+ * plugin's own chrome (summary blocks, directive chips, anchors) skipped. Marks
  * are transparent — their text still counts — so an offset captured before a
  * mark exists stays valid after decoration.
  */

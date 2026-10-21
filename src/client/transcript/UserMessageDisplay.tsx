@@ -70,9 +70,9 @@ function imageAttachments(raw: unknown): unknown[] {
  * block is removed from the text blocks, everything else (attachments, file
  * cards, reference labels, time, copy, and any plugin that portals into the
  * actions row, e.g. dsh-rewind's ↶) stays host-owned and follows host changes.
- * The annotation cards are the only extra DOM, prepended above the host row.
+ * The annotation summary is the only extra DOM, prepended above the host row.
  *
- * Cards must live inside the `user` node view rather than on a
+ * The summary must live inside the `user` node view rather than on a
  * `select-quote` Chat node: `conversation.chat.node` is gated by the shipped
  * `TURN_PROCESS_INDEPENDENT_KINDS` allowlist (system-prompt, user, steering,
  * turn-trigger, turn-process, turn-error, turn-max-tokens, turn-tail), and any
@@ -83,10 +83,10 @@ export function UserMessageDisplay(props: UserMessageDisplayProps): ReactNode {
   const { node, hostUserOf, ...rest } = props
   const raw = contentBlocksToText(node.data?.content)
   const scanned = scanAnnotatedMessage(raw)
-  const text =
-    scanned.annotations.length > 0
-      ? scanned.rest
-      : displayTextWithoutQuote(raw).trim()
+  // The scan strips every complete annotation block, valid or not; the quote
+  // protocol is a separate display fold. Never fall back to the raw text: a
+  // malformed block would paint its JSON into the bubble.
+  const text = displayTextWithoutQuote(scanned.rest).trim()
   const quotes = scanned.annotations
   // Only rewrite when the display text really differs from the original;
   // untouched messages go to the host exactly as the store published them.
