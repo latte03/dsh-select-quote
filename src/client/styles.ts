@@ -56,6 +56,7 @@ body {
   --dsq-line: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   --dsq-line-divider: var(--dsw-alias-border-l4, rgba(0, 0, 0, 0.12));
   --dsq-focus-ring: var(--dsw-alias-button-primary-fill, #1677ff);
+  --dsq-focus-ring-soft: color-mix(in srgb, var(--dsq-accent) 50%, transparent);
   --dsq-fill-hover: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
   --dsq-label: var(--dsw-alias-label-primary, rgba(0, 0, 0, 0.88));
   --dsq-label-inverted: var(--dsw-alias-label-primary-inverted, #fff);
@@ -130,6 +131,17 @@ ${atomRules}
   }
 }
 
+/* Exit of the chip preview: the same 4px travel, reversed. Transform only, so
+   the material layer keeps sampling its backdrop until the node is removed. */
+@keyframes dsq-rise-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(4px);
+  }
+}
+
 /* 宿主菜单材质（官方 material 图层同款）：填充走 --dsw-menu-surface-fill，模糊走
    --dsw-menu-backdrop-filter（恒为 blur(40px) saturate(150%)），亮暗自动翻。
    画在 z-index:-1 的独立图层上，内容在它之上：模糊只取身后的页面，不会把
@@ -139,7 +151,8 @@ ${atomRules}
 .dsq_toolbar::before,
 .dsq_commentPop::before,
 .dsq_summaryHoverInner::before,
-.dsq_touchBar::before {
+.dsq_touchBar::before,
+.dsq_chipPreview::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -164,9 +177,13 @@ ${atomRules}
 .dsq_commentPop,
 .dsq_summaryHoverInner,
 .dsq_touchBar,
-.dsq_touchSheet {
+.dsq_touchSheet,
+.dsq_chipPreview {
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
+  /* Every surface above takes the same elevation; declaring it once here is
+     what keeps the six component blocks free of a copied box-shadow. */
+  box-shadow: var(--dsq-shadow);
 }
 
 /* 浮层挂载与层带（2026-10-20 定，改前先读）：
@@ -206,8 +223,7 @@ ${atomRules}
      由它勾勒轮廓，所以这里不要再画 border，否则描边会和环叠成两条线。 */
   border: 0;
   border-radius: 12px;
-  /* 底色与模糊都在上面的材质图层里，这里不再画背景 */
-  box-shadow: var(--dsq-shadow);
+  /* 底色与模糊都在上面的材质图层里，这里不再画背景；elevation 在共享规则里 */
   pointer-events: auto;
   /* A/B：scale 入场放在容器上（材质图层归它所有）。关键帧自带 translate(-50%,-100%)，
      所以缩放不会破坏居中。若真实客户端里磨砂在放大期间消失，改回内容层方案。 */
@@ -226,10 +242,9 @@ ${atomRules}
   animation-name: dsq-toolbar-in-popover-top;
 }
 
-/* 按钮行：只负责布局；入场动画在容器上（见 .dsq_toolbar 的 A/B 说明）。 */
+/* 按钮行：形状由 A.inlineRow 提供，这里只留间距；入场动画在容器上
+   （见 .dsq_toolbar 的 A/B 说明）。 */
 .dsq_toolbarInner {
-  display: inline-flex;
-  align-items: center;
   gap: 2px;
 }
 
@@ -247,11 +262,17 @@ ${atomRules}
   background: var(--dsq-fill-hover);
 }
 
-.dsq_buttonAddComment {
+/* Accent-filled actions: comment commit, annotation save, chip jump. Only the
+   metrics differ; fill and hover live here once. */
+.dsq_buttonAddComment,
+.dsq_annEditSave,
+.dsq_chipPreviewJump {
   background: var(--dsq-accent);
-  color:#fff;
+  color: #fff;
 }
-.dsq_buttonAddComment:hover {
+.dsq_buttonAddComment:hover,
+.dsq_annEditSave:hover,
+.dsq_chipPreviewJump:hover {
   background: var(--dsq-accent-400);
 }
 
@@ -271,10 +292,10 @@ ${atomRules}
   margin: 0 2px;
 }
 
-.dsq_status {
-  position: absolute;
-  z-index: 3;
-  transform: translate(-50%, 8px);
+/* Toast pill: the desktop status and the touch status share the whole skin;
+   only where they anchor differs. */
+.dsq_status,
+.dsq_touchStatus {
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--dsq-bg-toast);
@@ -283,6 +304,12 @@ ${atomRules}
   line-height: 18px;
   pointer-events: none;
   white-space: nowrap;
+}
+
+.dsq_status {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, 8px);
 }
 
 /* Annotation stack — inside the composer card (input.overlay), ~1/5 width. */
@@ -357,7 +384,9 @@ ${atomRules}
   position: relative;
 }
 
-.dsq_summaryTitle {
+/* Card titles (composer summary / touch sheet) share one type scale. */
+.dsq_summaryTitle,
+.dsq_touchSheetTitle {
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
@@ -384,18 +413,23 @@ ${atomRules}
   }
 }
 
+/* The hover panel and the chip preview are the same floating width; keeping it
+   in one rule means a width tweak lands on both. */
+.dsq_summaryHover,
+.dsq_chipPreview {
+  width: min(320px, calc(100vw - 16px));
+}
+
 .dsq_summaryHover {
   /* \`display: none\` here is the closed state, so this rule must not take the
      flex atoms — the open class below turns display back on. */
   display: none;
   position: fixed;
   z-index: 14;
-  width: min(320px, calc(100vw - 16px));
   flex-direction: column;
-  padding: 12px;
-  /* Facing-side pad is set in JS from placement side; this is the base. */
-  padding-top: 12px;
-  padding-bottom: 12px;
+  /* No side padding: the visible card must share the summary's left edge. The
+     transparent hover bridge is added by place() only on the facing side. */
+  padding: 0;
   background: transparent;
   pointer-events: auto;
   opacity: 0;
@@ -411,14 +445,22 @@ ${atomRules}
   display: flex;
 }
 
+/* Keep the closing panel mounted briefly; the list reverses its rise. */
+.dsq_summaryHoverLeaving {
+  pointer-events: none;
+}
+
+.dsq_summaryHoverLeaving .dsq_summaryList {
+  animation: dsq-rise-out 0.12s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
 .dsq_summaryHoverInner {
   position: relative;
   gap: 4px;
   padding: 4px;
   border-radius: 12px;
   /* 不画 border：--dsq-shadow（宿主的 elevation-prominent）自带 0 0 0 .5px 的
-     描边环，再画一遍会叠成两条线。底色与模糊都在材质图层里。 */
-  box-shadow: var(--dsq-shadow);
+     描边环，再画一遍会叠成两条线。底色与模糊都在材质图层里，elevation 在共享规则里。 */
 }
 
 /* 滚动只放在列表上：材质图层是绝对定位的，留在会滚动的容器里会跟着内容跑掉，
@@ -437,7 +479,8 @@ ${atomRules}
   .dsq_toolbar::before,
   .dsq_commentPop::before,
   .dsq_summaryHoverInner::before,
-  .dsq_touchBar::before {
+  .dsq_touchBar::before,
+  .dsq_chipPreview::before {
     background: var(--dsq-bg-raised);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -457,6 +500,9 @@ ${atomRules}
 
 .dsq_summaryItemHead {
   gap: 6px;
+  /* Normal mode's action buttons set the row height; keep it in edit mode too
+     so the badge and the label never move when the actions disappear. */
+  min-height: 26px;
 }
 
 .dsq_summaryItemBadge {
@@ -496,6 +542,9 @@ ${atomRules}
 
 .dsq_summaryItemMain {
   min-width: 0;
+  /* The lead-in lives on the shared wrapper, not on the normal-mode button, so
+     edit mode has no wrapper to compensate for. */
+  padding-top: 2px;
 }
 
 .dsq_summaryItemButton {
@@ -504,7 +553,9 @@ ${atomRules}
   text-align: left;
   font: inherit;
   border-radius: 8px;
-  padding: 2px 0 0;
+  /* No padding: the 2px lead-in is on .dsq_summaryItemMain, and the UA's
+     default button padding would shift the quote sideways and down. */
+  padding: 0;
 }
 
 .dsq_annAnchor {
@@ -515,18 +566,36 @@ ${atomRules}
   pointer-events: none;
 }
 
-.dsq_summaryItemLabel {
+/* Field labels shared by the hover list and the chip preview. */
+.dsq_summaryItemLabel,
+.dsq_chipPreviewLabel {
   font-size: 11px;
   line-height: 16px;
   color: var(--dsq-label-3);
 }
 
-.dsq_summaryItemText {
+.dsq_summaryItemLabel {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+/* The header label shares the class but sits in a centered flex row. */
+.dsq_summaryItemHead .dsq_summaryItemLabel {
+  margin: 0;
+}
+
+/* Quote/comment body type is shared; only the box behavior differs. */
+.dsq_summaryItemText,
+.dsq_chipPreviewQuote,
+.dsq_chipPreviewComment {
   font-size: 13px;
-  line-height: 18px;
   color: var(--dsq-label);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.dsq_summaryItemText {
+  line-height: 18px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -537,24 +606,22 @@ ${atomRules}
   color: var(--dsq-label-3);
 }
 
-/* Inline edit form rendered inside the hover panel item (no extra layer). */
-.dsq_annEditText {
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--dsq-label);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+/* Inline edit form rendered inside the hover panel item (no extra layer).
+   Shares .dsq_summaryItemText with the read view, but shows the full quote
+   instead of clamp-reading it. */
+.dsq_summaryItemTextEdit {
+  display: block;
   max-height: 132px;
   overflow-y: auto;
-  margin: 2px 0 6px;
+  overscroll-behavior: contain;
 }
 
-.dsq_annEditInput {
+/* Textarea skin shared by the annotation editor and the comment popover; the
+   variants below only set min-height, resize and radius. */
+.dsq_annEditInput,
+.dsq_commentInput {
   width: 100%;
-  min-height: 72px;
-  resize: vertical;
   border: none;
-  border-radius: 10px;
   padding: 8px 10px;
   font: inherit;
   font-size: 13px;
@@ -564,22 +631,39 @@ ${atomRules}
   outline: none;
 }
 
-.dsq_annEditInput::placeholder {
+.dsq_annEditInput::placeholder,
+.dsq_commentInput::placeholder {
   color: var(--dsq-label-3);
 }
 
+.dsq_annEditInput {
+  min-height: 72px;
+  resize: vertical;
+  border-radius: 10px;
+}
+
+.dsq_commentActions,
 .dsq_annEditActions {
   justify-content: flex-end;
+}
+
+.dsq_annEditActions {
   gap: 8px;
   margin-top: 4px;
 }
 
-.dsq_annEditCancel {
-  color: var(--dsq-label-2);
+/* Footer buttons share type and metrics; the save fill comes from the shared
+   accent-action rule above. */
+.dsq_annEditCancel,
+.dsq_annEditSave {
   font: inherit;
   font-size: 13px;
   padding: 4px 12px;
   border-radius: 10px;
+}
+
+.dsq_annEditCancel {
+  color: var(--dsq-label-2);
 }
 
 .dsq_annEditCancel:hover {
@@ -587,21 +671,7 @@ ${atomRules}
 }
 
 .dsq_annEditSave {
-  appearance: none;
-  border: none;
-  background: var(--dsq-accent);
-  color: #fff;
-  font: inherit;
-  font-size: 13px;
   font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: filter 0.12s;
-}
-
-.dsq_annEditSave:hover {
-  background: var(--dsq-accent-400);
 }
 
 .dsq_annEditSave:disabled {
@@ -620,35 +690,98 @@ ${atomRules}
   gap: 8px;
   padding: 8px;
   border-radius: 16px;
-  /* 底色与模糊都在材质图层里 */
-  box-shadow: var(--dsq-shadow);
+  /* 底色与模糊都在材质图层里，elevation 在共享规则里 */
   /* The layer host is pointer-events:none; interactive surfaces opt back in. */
   pointer-events: auto;
 }
 
 .dsq_commentInput {
-  width: 100%;
   min-height: 64px;
   resize: none;
-  border: none;
   border-radius: 8px;
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--dsq-label);
-  background: var(--dsq-fill-hover);
-  outline: none;
-}
-
-.dsq_commentInput::placeholder {
-  color: var(--dsq-label-3);
 }
 
 .dsq_commentActions {
-  display: flex;
-  justify-content: flex-end;
   gap: 6px;
+}
+
+/* Preview for a model-written annotation chip. Body-level fixed (the chat
+   surface's contain: layout would otherwise capture it); hover and click
+   share this one surface, and the button owns the jump. */
+.dsq_chipPreview {
+  position: fixed;
+  z-index: 50;
+  box-sizing: border-box;
+  max-height: min(420px, calc(100vh - 32px));
+  padding: 10px;
+  border-radius: 14px;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+/* Same rise as the annotation card's hover list; on the content, not on the
+   material layer, so backdrop sampling stays put. */
+.dsq_chipPreviewBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: dsq-rise-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dsq_chipPreviewLeaving {
+  pointer-events: none;
+}
+
+.dsq_chipPreviewLeaving .dsq_chipPreviewBody {
+  animation: dsq-rise-out 0.12s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* Header rows: title on the left, the single action on the right. */
+.dsq_chipPreviewHead,
+.dsq_touchSheetHead {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dsq_chipPreviewTitle {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--dsq-label);
+}
+
+.dsq_chipPreviewLabel {
+  margin-top: 2px;
+}
+
+.dsq_chipPreviewQuote,
+.dsq_chipPreviewComment {
+  line-height: 19px;
+  max-height: 108px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dsq_chipPreviewComment {
+  color: var(--dsq-label-2);
+}
+
+.dsq_chipPreviewCommentEmpty {
+  color: var(--dsq-label-3);
+}
+
+.dsq_chipPreviewJump {
+  flex: none;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 /* Touch selection chrome. Fixed to the visual viewport and mounted on body:
@@ -672,7 +805,6 @@ ${atomRules}
   gap: 4px;
   padding: 6px;
   border-radius: 16px;
-  box-shadow: var(--dsq-shadow);
 }
 
 .dsq_touchAction {
@@ -715,21 +847,8 @@ ${atomRules}
   padding: 12px;
   border-radius: 20px;
   background: var(--dsq-bg-raised);
-  box-shadow: var(--dsq-shadow);
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-.dsq_touchSheetHead {
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.dsq_touchSheetTitle {
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 20px;
-  color: var(--dsq-label);
 }
 
 .dsq_touchSheetClose {
@@ -791,14 +910,6 @@ ${atomRules}
   z-index: 63;
   transform: translateX(-50%);
   max-width: calc(100vw - 32px);
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--dsq-bg-toast);
-  color: var(--dsq-label-inverted);
-  font-size: 12px;
-  line-height: 18px;
-  pointer-events: none;
-  white-space: nowrap;
 }
 
 /* Transcript summary — the same block as the composer's, right-aligned under
@@ -812,7 +923,7 @@ ${atomRules}
 
 .dsq_tSummary .dsq_summary {
   width: auto;
-  min-width: 220px;
+  min-width: 160px;
   max-width: min(calc(var(--dsq-chat-width) * 0.72), 520px);
   /* In the composer the card must clear .dsq_cardStack (12); in the transcript
      it is plain content and must stay under the floating layer's host (6/8),
@@ -921,11 +1032,28 @@ ${atomRules}
   animation: dsq-ann-flash 1.4s ease-out;
 }
 
+/* Fallback jump target when the source mark is no longer in the DOM: flash the
+   message that owns it instead of scrolling nowhere. */
+.dsq_annMessageFlash {
+  animation: dsq-ann-message-flash 1.4s ease-out;
+}
+
+@keyframes dsq-ann-message-flash {
+  0% {
+    box-shadow: inset 0 0 0 2px var(--dsq-accent);
+  }
+  100% {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+}
+
 /* Keyboard focus is a first-class state for the toolbar, summary and panel. */
 .dsq_summary:focus-visible,
 .dsq_button:focus-visible,
 .dsq_touchAction:focus-visible,
 .dsq_touchSheetClose:focus-visible,
+.dsq_chipPreviewJump:focus-visible,
+.dsq_annMark:focus-visible,
 .dsq_summaryItemAction:focus-visible,
 .dsq_summaryItemButton:focus-visible,
 .dsq_cardClose:focus-visible,
@@ -937,7 +1065,9 @@ ${atomRules}
 
 .dsq_commentInput:focus-visible,
 .dsq_annEditInput:focus-visible {
-  outline: 2px solid var(--dsq-focus-ring);
+  /* The host's button fill is monochrome (black on light, white on dark); a
+     half-transparent accent ring reads as focus without looking like a border. */
+  outline: 2px solid var(--dsq-focus-ring-soft);
   outline-offset: 1px;
 }
 
@@ -958,6 +1088,9 @@ ${atomRules}
     position: absolute;
     inset: -12px;
   }
+  .dsq_chipPreviewJump {
+    min-height: 44px;
+  }
 }
 
 /* Layer 4 — host surface: keyframes, theme flips, and the two rules that reach
@@ -967,10 +1100,12 @@ ${atomRules}
   0% {
     background: var(--dsq-mark-color);
     color: #fff;
+    box-shadow: 0 0 0 3px var(--dsq-mark-tint);
   }
   100% {
     background: var(--dsq-mark-tint);
     color: inherit;
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 
@@ -1017,6 +1152,7 @@ export const styles = {
   summaryHintPointer: 'dsq_summaryHintPointer',
   summaryHintTouch: 'dsq_summaryHintTouch',
   summaryHover: 'dsq_summaryHover',
+  summaryHoverLeaving: 'dsq_summaryHoverLeaving',
   summaryItem: 'dsq_summaryItem',
   summaryItemLabel: 'dsq_summaryItemLabel',
   summaryItemText: 'dsq_summaryItemText',
@@ -1024,7 +1160,7 @@ export const styles = {
   summaryItemMain: 'dsq_summaryItemMain',
   summaryItemHead: 'dsq_summaryItemHead',
   summaryItemTextEmpty: 'dsq_summaryItemTextEmpty',
-  annEditText: 'dsq_annEditText',
+  summaryItemTextEdit: 'dsq_summaryItemTextEdit',
   annEditInput: 'dsq_annEditInput',
   annEditActions: 'dsq_annEditActions',
   annEditCancel: 'dsq_annEditCancel',
@@ -1039,9 +1175,20 @@ export const styles = {
   annAnchor: 'dsq_annAnchor',
   annMark: 'dsq_annMark',
   annMarkFlash: 'dsq_annMarkFlash',
+  annMessageFlash: 'dsq_annMessageFlash',
   commentPop: 'dsq_commentPop',
   commentInput: 'dsq_commentInput',
   commentActions: 'dsq_commentActions',
+  chipPreview: 'dsq_chipPreview',
+  chipPreviewBody: 'dsq_chipPreviewBody',
+  chipPreviewLeaving: 'dsq_chipPreviewLeaving',
+  chipPreviewHead: 'dsq_chipPreviewHead',
+  chipPreviewTitle: 'dsq_chipPreviewTitle',
+  chipPreviewLabel: 'dsq_chipPreviewLabel',
+  chipPreviewQuote: 'dsq_chipPreviewQuote',
+  chipPreviewComment: 'dsq_chipPreviewComment',
+  chipPreviewCommentEmpty: 'dsq_chipPreviewCommentEmpty',
+  chipPreviewJump: 'dsq_chipPreviewJump',
   touchBar: 'dsq_touchBar',
   touchAction: 'dsq_touchAction',
   touchScrim: 'dsq_touchScrim',

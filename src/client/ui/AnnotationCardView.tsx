@@ -34,10 +34,14 @@ export interface AnnotationSummaryProps {
   readonly onItemEdit?: (index: number, item: AnnotationSummaryItem, comment: string) => void
 }
 
-/** Grace period so pointer transit between the summary and the panel never closes it. */
-const CLOSE_DELAY = 320
+/** Short grace for crossing the 12px bridge; the exit starts right after it. */
+const CLOSE_DELAY = 40
 /** After a viewport change, wait this long before position-checking the pointer. */
 const SETTLE_DELAY = 600
+/** Transparent strip on the facing side; the pointer crosses it in transit. */
+const BRIDGE = 12
+/** Matches the list's leaving keyframe; the panel unmounts after it. */
+const EXIT_MS = 120
 
 /** Stable edit target: item id, with an index fallback for id-less callers. */
 function editKeyOf(item: AnnotationSummaryItem | undefined, index: number): string {
@@ -76,6 +80,9 @@ export function AnnotationSummary({
   const enterPanelRef = useRef(false)
   const panelId = useId()
   const [open, setOpen] = useState(false)
+  const [renderPanel, setRenderPanel] = useState(false)
+  const [closingPanel, setClosingPanel] = useState(false)
+  const exitTimerRef = useRef<number | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
 
@@ -84,15 +91,20 @@ export function AnnotationSummary({
     const pop = popRef.current
     if (!root || !pop) return
     const anchor = root.getBoundingClientRect()
-    const panel = { width: pop.offsetWidth || 300, height: pop.offsetHeight || 220 }
+    const inner = pop.firstElementChild instanceof HTMLElement ? pop.firstElementChild : null
+    const panel = {
+      width: inner?.offsetWidth || pop.offsetWidth || 300,
+      height: (inner?.offsetHeight || pop.offsetHeight || 220) + BRIDGE,
+    }
     // gap 0: the facing transparent pad is the hover bridge (no dead strip).
     // 优先放摘要上方；只有上方确实放不下、且下方更宽裕时才翻下去。
     const { top, left, side } = placePopover(anchor, panel, 'top', 0)
     pop.style.top = `${top}px`
     pop.style.left = `${left}px`
-    // Facing pad overlaps the summary so pointerleave does not fire in transit.
-    pop.style.paddingTop = side === 'bottom' ? '12px' : '12px'
-    pop.style.paddingBottom = side === 'top' ? '12px' : '12px'
+    // Only the facing side gets the bridge. Padding on the sides would shift the
+    // visible card right of the summary's left edge.
+    pop.style.paddingTop = side === 'bottom' ? `${BRIDGE}px` : '0'
+    pop.style.paddingBottom = side === 'top' ? `${BRIDGE}px` : '0'
     pop.dataset.side = side
     pop.style.opacity = '1'
   }, [])
@@ -188,6 +200,34 @@ export function AnnotationSummary({
     return () => document.removeEventListener('pointerdown', onPointerDown, true)
   }, [open, editing])
 
+  // Keep the panel mounted for the exit animation. Re-opening while it is
+  // leaving cancels the timer and revives the same node. Layout effect so the
+  // leaving class lands in the same paint as `open = false`.
+  useLayoutEffect(() => {
+    if (open) {
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current)
+        exitTimerRef.current = null
+      }
+      setClosingPanel(false)
+      setRenderPanel(true)
+      return
+    }
+    if (!renderPanel) return
+    setClosingPanel(true)
+    exitTimerRef.current = window.setTimeout(() => {
+      exitTimerRef.current = null
+      setRenderPanel(false)
+      setClosingPanel(false)
+    }, EXIT_MS)
+    return () => {
+      if (exitTimerRef.current !== null) {
+        window.clearTimeout(exitTimerRef.current)
+        exitTimerRef.current = null
+      }
+    }
+  }, [open, renderPanel])
+
   /** True when the last seen pointer sits on the summary or the panel. */
   const pointerInsideCluster = useCallback((): boolean => {
     const point = lastPointerRef.current
@@ -278,6 +318,9 @@ export function AnnotationSummary({
 
   const onBlur = useCallback(
     (e: { relatedTarget: Node | null }) => {
+      // Editing pins the panel: losing focus to the page (click outside) must
+      // not dismiss the draft. Only leaving edit mode re-arms closing.
+      if (editing !== null) return
       const next = e.relatedTarget
       if (next instanceof Node) {
         if (rootRef.current?.contains(next)) return
@@ -285,7 +328,7 @@ export function AnnotationSummary({
       }
       closePop()
     },
-    [closePop],
+    [closePop, editing],
   )
 
   /** Keyboard focus opens the panel; mouse/touch focus does not. */
@@ -381,11 +424,17 @@ export function AnnotationSummary({
     setEditing(null)
   }, [editing, items, editDraft, onItemEdit])
 
-  const panel = open ? (
+  // `open` renders immediately (placement runs before paint); `renderPanel`
+  // only keeps the node alive while the exit animation plays.
+  const panel = open || renderPanel ? (
     <div
       ref={popRef}
       id={panelId}
-      className={`${styles.summaryHover} ${styles.summaryHoverOpen}`}
+      className={cx(
+        styles.summaryHover,
+        styles.summaryHoverOpen,
+        closingPanel && !open && styles.summaryHoverLeaving,
+      )}
       role="dialog"
       aria-label={t('summary.dialogAria', { count })}
       onPointerEnter={openPop}
@@ -434,7 +483,9 @@ export function AnnotationSummary({
                 </div>
                 {isEditing ? (
                   <div className={styles.summaryItemMain}>
-                    <div className={styles.annEditText}>{item.text}</div>
+                    <div className={cx(styles.summaryItemText, styles.summaryItemTextEdit)}>
+                      {item.text}
+                    </div>
                     <div className={styles.summaryItemLabel}>{t('summary.userComment')}</div>
                     <textarea
                       ref={editInputRef}
@@ -463,7 +514,11 @@ export function AnnotationSummary({
                       >
                         {t('common.cancel')}
                       </button>
-                      <button type="button" className={styles.annEditSave} onClick={commitEdit}>
+                      <button
+                        type="button"
+                        className={cx(A.plain, styles.annEditSave)}
+                        onClick={commitEdit}
+                      >
                         {t('common.save')}
                       </button>
                     </div>

@@ -41,7 +41,7 @@ Each item contains text selected from an earlier message ...
 
 - 读取：`scanAnnotatedMessage()` 剥掉整块，气泡只剩用户正文。展示层只认完整的开闭标记对：JSON 非法或不是数组时不产出批注，但块照样剥掉，协议原文永不出现在对话里；
 - 回填：`readComposedDraft()` 是 `composeAnnotatedMessage()` 的逆。dsh-rewind 撤回时把它读到的持久文本原样写回输入框（`messageTextAt` → `setComposerText`），协议块也会跟着进编辑器；`AnnotationPanel` 检测到完整块后把批注重新挂回待发摘要、草稿还原成用户正文（见关键机制 1）。回填比展示保守：只认完整、JSON 合法且非空数组的块，被截断或手改过的块不碰；
-- 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成可点击 chip；
+- 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成 chip。chip 的 hover / focus / click 都打开预览浮层（触屏点按同样只开预览），原文和评论由 `transcript/quote-registry.ts` 按用户消息 flow key 暂存，chip 通过前一条 mark 的 flow key 取回；跳转由浮层标题栏右侧的小按钮「原文」触发，点 chip 本身不再直接跳。取不到 registry 时退回 mark 文本并隐藏评论区。浮层在 `dom/chipPreview.ts`，body 级 fixed（消息表面的 contain: layout 会劫持 fixed 定位），复用 `placePopover` 做翻转/钳位（默认在上方），内容层用和批注卡列表相同的 `dsq-rise-in`（只动 transform），退场用反向的 `dsq-rise-out`、120ms 后才摘节点；滚动和缩放时重排，chip 被流式重渲染替换时自动关闭；mark 不可见或已被移除时按「批注摘要卡 → 批注所属用户消息 → quote.messageId 来源消息」逐级回退并闪烁，不再点了没反应；
 - **改格式要一起改**：`composeAnnotatedMessage()`（写）、`scanAnnotatedMessage()`（读）、`readComposedDraft()`（撤回回填）、`ANNOTATION_DIRECTIVE_RE`（chip）、`scripts/verify-bundle.mjs`。
 
 **「打开链接」为什么用 `window.open`**：宿主自己的外链处理（`dsh-client-ui-chat` 的 `openExternalLink`）在用户把「链接打开方式」设成侧边栏时，会把 http(s) 链接塞进应用内的浏览器标签——那里加载任意 URL 就是客户端被搞崩的路径。工具条的「打开链接」因此直接 `window.open(url, '_blank', 'noopener,noreferrer')`：桌面主进程的 `setWindowOpenHandler` 只认 http/https，命中就转交 `shell.openExternal`（真·系统默认浏览器），其余协议一律 deny。所以按钮**只对 http(s) 亮起**（`selection-url.ts`），`chrome-extension://` 这类点了也不会有反应——要让它们也进系统浏览器，得宿主改那个白名单，是上游的事。检测逻辑无 DOM 依赖，`verify-bundle` 直接 import 跑用例（含全角括号/尾随标点/大小写/非 http  scheme）。
@@ -104,7 +104,7 @@ Each item contains text selected from an earlier message ...
 
 **6. 悬停摘要面板**
 
-面板 **portal 到 `document.body`**：消息内容里有带 `contain: layout` 的表面、滚动容器带 `container-type`，它们都会成为 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群有 320ms 宽限；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层那 12px padding。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）；编辑目标按批注 `id` 记录，删除其他条目不会串到旁边的批注。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
+面板 **portal 到 `document.body`**：消息内容里有带 `contain: layout` 的表面、滚动容器带 `container-type`，它们都会成为 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群只有 40ms 宽限（够跨桥，退场动画随即开始）；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层只在朝向摘要一侧留的 12px padding（左右不留，面板卡面因此与摘要左缘对齐）。面板退场时保留节点 120ms 播 `dsq-rise-out` 再卸载，期间 `pointer-events: none`。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）；编辑期间指针离开、点击面板外导致失焦都不关闭面板，退出编辑后才恢复关闭；编辑目标按批注 `id` 记录，删除其他条目不会串到旁边的批注。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
 
 - **键盘**：摘要卡可聚焦；Enter 展开并把焦点移到面板第一个控件，↓ 在已展开时进入面板；Tab / Shift+Tab 在面板内循环，Esc 关闭并把焦点还给摘要卡。面板是 React portal 子节点，keydown 会按 React 树冒泡回摘要卡，所以面板处理过的键要 `stopPropagation()`，否则摘要卡的 Tab 会抢回第一个控件。
 - **触屏**：`(hover: none), (pointer: coarse)` 下提示从「悬停查看批注」切成「点按查看批注」；`pointerup` 的 `pointerType === 'touch'` 时点按摘要展开，`pointerleave` 不触发自动关闭（触屏抬手也会发 pointerleave），点外部关闭。操作按钮在 coarse 指针下为 44px；角落关闭按钮保留视觉尺寸，用 `::after` 扩展命中区。
@@ -243,6 +243,7 @@ src/client/dom/annotate-text.ts    # 正文 mark（下划线+序号徽章）的�
 src/client/dom/scrollToAnnotation.ts # 点击批注滚动到正文 mark 并闪烁
 src/client/dom/stripSubmissionEcho.ts # 发送回显气泡里剥掉协议块（只改展示）
 src/client/dom/decorateAnnotationDirectives.ts # 模型回的 :dsh-annotation{index="N"} 渲染成可点 chip
+src/client/dom/chipPreview.ts      # chip 的 hover/focus/click 预览与「跳转到原文」
 src/client/dom/popoverPlacement.ts # 浮层定位（翻转 + 视口夹取）
 src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 等）
 src/client/state/annotation-store.ts # 每会话待发批注状态（内存 Map + 持久化钩子）
@@ -252,6 +253,7 @@ src/client/protocol/annotation-protocol.ts # 批注 wire 格式（含 source 定
 src/client/protocol/quote-protocol.ts      # 旧 > 引用块协议 / U+200B 标记 / 文本工具
 src/client/transcript/host-user.ts     # 从 slot registry 按 key 解析宿主 UserMessageNodeView（纯逻辑，verify 直接 import）
 src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注摘要块（单个块 + 悬停列表）
+src/client/transcript/quote-registry.ts # 用户消息 flow key → 解析后的 quotes（chip 预览取原文/评论）
 src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡：委托宿主 UserMessageNodeView，只改文本块并前置摘要块
 src/client/ui/AnnotationCardView.tsx  # 摘要块与悬停列表面板（portal 到 body、内联编辑）
 src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus）

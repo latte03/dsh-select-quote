@@ -4,7 +4,7 @@
  */
 
 import { ANNOTATION_DIRECTIVE_RE } from '../protocol/annotation-protocol.ts'
-import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.ts'
+import { bindChipPreview, closeChipPreview } from './chipPreview.ts'
 import { t } from '../i18n.ts'
 import { A, cx, styles } from '../styles.ts'
 
@@ -22,8 +22,9 @@ function decorateTextNode(node: Text): void {
   if (!parent || parent.closest(`[data-${DECO}]`)) return
   // Skip code/pre so directives in examples stay literal. Never touch the
   // composer either: at send time the draft briefly holds the raw protocol
-  // block, whose own header quotes `:dsh-annotation{index="N"}`.
-  if (parent.closest('pre, code, [data-dsq-toolbar]')) return
+  // block, whose own header quotes `:dsh-annotation{index="N"}`. The preview
+  // shows user-authored quote/comment text and must stay literal too.
+  if (parent.closest('pre, code, [data-dsq-toolbar], [data-dsq-chip-preview]')) return
   if (parent.closest('textarea, input, [data-lexical-editor="true"]')) return
 
   const frag = document.createDocumentFragment()
@@ -41,11 +42,7 @@ function decorateTextNode(node: Text): void {
     chip.setAttribute('data-dsq-deco', 'true')
     chip.dataset[DECO_KEY] = String(index)
     chip.textContent = t('chip.annotation', { index })
-    chip.addEventListener('click', () => {
-      // The annotation lives in the user turn that precedes this reply.
-      const mark = findAnnotationMarkBefore(index, chip)
-      if (mark) flashAnnotationMark(mark)
-    })
+    bindChipPreview(chip, index)
     frag.append(chip)
     last = m.index + m[0].length
   }
@@ -84,6 +81,7 @@ export function decorateAnnotationDirectives(root?: ParentNode): void {
  * literal, so `decorateTextNode()` returns before it can touch the DOM.
  */
 export function refreshDirectiveChips(root?: ParentNode): void {
+  closeChipPreview(false)
   const el = root ?? (typeof document === 'undefined' ? undefined : document.body)
   if (!el) return
   for (const chip of el.querySelectorAll<HTMLElement>(`[data-${DECO}]`)) {

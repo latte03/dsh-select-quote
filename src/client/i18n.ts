@@ -55,6 +55,9 @@ const zh: LocaleDict = {
   'summary.removeAll': '移除全部划词批注',
 
   'chip.annotation': '批注 {index}',
+  'chip.previewAria': '批注预览',
+  'chip.jump': '原文',
+  'chip.jumpAria': '跳转到原文',
 }
 
 const en: LocaleDict = {
@@ -88,6 +91,9 @@ const en: LocaleDict = {
   'summary.removeAll': 'Remove all annotations',
 
   'chip.annotation': 'Annotation {index}',
+  'chip.previewAria': 'Annotation preview',
+  'chip.jump': 'Original',
+  'chip.jumpAria': 'Jump to original',
 }
 
 /**
@@ -130,6 +136,9 @@ const ru: LocaleDict = {
   'summary.removeAll': 'Удалить все аннотации',
 
   'chip.annotation': 'Аннотация {index}',
+  'chip.previewAria': 'Просмотр аннотации',
+  'chip.jump': 'Оригинал',
+  'chip.jumpAria': 'Перейти к оригиналу',
 }
 
 /** Both shipped host locales, required together by the typed `register()`. */

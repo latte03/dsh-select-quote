@@ -483,7 +483,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   )
 
   const commentActions = (
-    <div className={cx(styles.commentActions, touch && styles.touchActions)}>
+    <div className={cx(A.row, styles.commentActions, touch && styles.touchActions)}>
       <button
         type="button"
         className={cx(A.plain, A.inlineRow, styles.button, touch && styles.touchSecondary)}
