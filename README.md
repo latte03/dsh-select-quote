@@ -120,6 +120,7 @@ fork 后开分支，提交前跑 `pnpm run check`。一个 PR 只讲一件事，
 ## 致谢
 
 - [@imallakov](https://github.com/imallakov)：多语言文案、跨平台构建、装饰器楔死修复与批注归属（PR #2 / #3 / #4）
+- [@Ladersbt](https://github.com/Ladersbt)：批注 chip 悬停预览的需求与反馈（[#9](https://github.com/latte03/dsh-select-quote/issues/9)）
 - [@EliteOtaku](https://github.com/EliteOtaku)：桌面端渲染进程楔死的定位报告与 CDP 探针方法（[#1](https://github.com/latte03/dsh-select-quote/issues/1)）
 
 ## License

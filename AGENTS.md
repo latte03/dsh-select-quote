@@ -22,6 +22,7 @@ DeepSeek Harness（dsh）的 web 客户端插件：对话区**划词加批注**�
 - **不写宿主的语言偏好**（`ctx.locale` 只读）；**不 `require` 任何 Harness Client 包**（插件规范明令禁止，且抛错会清掉整个 slot 条目）。
 - 提交进仓库的脚本**不含个人绝对路径**；`tmp/` 已被 gitignore，别把本地草稿提进去。
 - **发布流程的推送由 agent 完成**（已授权）：release 后执行 `git push --follow-tags origin main`；commit 用中文 conventional 格式。
+- **与 issue 相关的提交要在 message 里引用编号**（`Refs #N`）；确认修复后再用 `Fixes #N` 或手动关闭。
 
 ## 文档
 
