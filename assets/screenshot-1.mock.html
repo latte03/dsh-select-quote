@@ -24,19 +24,19 @@
     --label-secondary: #61666b;
     --label-tertiary: #81858c;
     --link: #4176e6;
+    --accent: #3b82f6;
+    --accent-400: #1677ff;
+    --accent-tint: #eaf3ff;
     --border-l1: rgba(0, 0, 0, 0.04);
     --border-l2: rgba(0, 0, 0, 0.10);
     --border-l4: rgba(0, 0, 0, 0.16);
-    --card-fill: #fafafa;
-    --card-hover: #f5f5f5;
+    --fill-hover: #f5f5f5;
     --bubble: #edf3fe;
     --input-major: #ffffff;
-    /* 宿主菜单材质 token（dsh-client-ui-theme 的 design-platform CSS，亮色） */
-    --menu-fill: rgba(248, 249, 250, .58);
+    --menu-fill: rgba(248, 249, 250, 0.94);
     --menu-backdrop: blur(40px) saturate(150%);
     --elevation-stroke-color: rgba(0, 0, 0, 0.16);
     --elevation-stroke: 0 0 0 .5px var(--elevation-stroke-color);
-    /* 宿主 --dsw-elevation-prominent 的亮色真值（含自带的 0.5px 描边环） */
     --elevation-prominent: var(--elevation-stroke), 0 3px 8px 0 rgba(0, 0, 0, 0.04), 0 0 20px 0 rgba(0, 0, 0, 0.05);
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   }
@@ -49,8 +49,11 @@
     font-family: var(--font); font-size: 14px; line-height: 22px;
     -webkit-font-smoothing: antialiased;
   }
-  .app { position: relative; height: 100%; display: flex; flex-direction: column; }
-  .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; padding-top: 26px; }
+  .app { position: relative; height: 100%; }
+  .chat {
+    height: 100%; display: flex; flex-direction: column; align-items: center;
+    padding-top: 26px;
+  }
   .stream { width: 760px; display: flex; flex-direction: column; gap: 22px; }
 
   /* ---------- 助手消息 ---------- */
@@ -60,77 +63,114 @@
     border: .5px solid var(--border-l2); border-radius: 6px; font-size: 11px; color: var(--label-secondary);
   }
   .msg p { margin: 10px 0 0; color: var(--label-primary); }
-  .msg.spot { padding-top: 16px; }
   .msg code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
     background: #f5f5f5; border-radius: 5px; padding: 1px 5px;
   }
-  .sel { background: #b3d6fe; border-radius: 2px; padding: 1px 0; box-shadow: 0 0 0 1.5px #b3d6fe; }
 
-  /* ---------- 划词浮动工具条 ---------- */
-  .toolbar {
-    position: absolute; z-index: 30; display: flex; align-items: center; gap: 2px;
-    padding: 4px; border: 0; border-radius: 999px;
-    /* 无边框：elevation-prominent 自带的 0 0 0 .5px 描边环负责勾勒轮廓；
-       底色与模糊在下面的材质图层里（宿主 MenuSurface 同款 token） */
-    box-shadow: var(--elevation-prominent);
+  /* 正文里的批注标记：淡色底 + 虚线下划线 + 末尾序号角标 */
+  .mark {
+    position: relative;
+    background: var(--accent-tint);
+    border-radius: 2px;
+    text-decoration: underline dashed var(--accent);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 2px;
   }
-  /* 宿主菜单材质：填充 --dsw-specific-menu / 模糊 --dsw-menu-backdrop-filter，
-     画在 z-index:-1 的独立图层上，模糊只取身后的页面 */
-  .toolbar::before {
-    content: ""; position: absolute; inset: 0; z-index: -1;
-    border-radius: inherit; background: var(--menu-fill);
-    backdrop-filter: var(--menu-backdrop); -webkit-backdrop-filter: var(--menu-backdrop);
+  .mark::after {
+    content: "1";
+    position: absolute;
+    bottom: 8px;
+    left: 100%;
+    display: grid;
+    place-items: center;
+    min-width: 15px;
+    height: 15px;
+    margin-left: 2px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
     pointer-events: none;
   }
-  .toolbar button {
-    appearance: none; border: 0; background: transparent; font: inherit; font-size: 13px; line-height: 20px;
-    color: var(--label-primary); padding: 4px 10px; border-radius: 999px; white-space: nowrap;
-  }
-  .toolbar .divider { width: 1px; height: 14px; margin: 0 2px; background: var(--border-l4); }
 
-  /* ---------- 用户回合：引用卡片 + 气泡 ---------- */
+  /* ---------- 模型回指 chip ---------- */
+  .chip {
+    appearance: none;
+    margin: 0 2px;
+    padding: 0 6px;
+    border: .5px solid var(--border-l2);
+    border-radius: 6px;
+    background: var(--fill-hover);
+    color: var(--link);
+    font: inherit;
+    font-size: 12px;
+    line-height: 18px;
+    cursor: pointer;
+    vertical-align: baseline;
+  }
+
+  /* ---------- 用户回合：批注摘要 + 气泡 ---------- */
   .turn-user { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-  .tstack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
   .bubble {
     max-width: 76%; padding: 10px 16px; border-radius: 22px; background: var(--bubble);
     color: var(--label-primary); line-height: 22px;
   }
 
-  /* ---------- 引用卡片（插件样式） ---------- */
-  .qcard {
+  /* 对话记录里的批注摘要块（未展开） */
+  .summary {
     display: flex; align-items: center; gap: 10px;
-    height: 64px; padding: 10px; width: fit-content; min-width: 0;
-    border: .5px solid var(--border-l2); border-radius: 18px; background: var(--card-fill);
-    color: var(--label-primary); position: relative; overflow: hidden;
+    width: 160px; padding: 8px 10px;
+    border: .5px solid var(--border-l2); border-radius: 18px; background: #fff;
   }
-  .qcard .icon {
-    flex: none; width: 36px; height: 36px; border: .5px solid var(--border-l2); border-radius: 12px;
-    display: grid; place-items: center; background: var(--card-fill); color: var(--link);
-    font-size: 12px; font-weight: 600; letter-spacing: -0.02em;
+  .summary-icon {
+    flex: none; width: 32px; height: 32px; border-radius: 10px;
+    display: grid; place-items: center;
+    background: var(--fill-hover); color: var(--link);
+    font-size: 13px; font-weight: 600;
   }
-  .qcard .body { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
-  .qcard .title {
-    font-size: 14px; font-weight: 500; line-height: 22px; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
+  .summary-title { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--label-primary); }
+  .summary-hint { font-size: 12px; line-height: 18px; color: var(--label-tertiary); }
+
+  /* ---------- chip 预览浮层 ---------- */
+  .preview {
+    position: absolute; z-index: 30;
+    left: 672px; top: 376px;
+    display: flex; flex-direction: column; gap: 6px;
+    width: 320px; padding: 10px;
+    border-radius: 14px;
+    background: var(--menu-fill);
+    backdrop-filter: var(--menu-backdrop); -webkit-backdrop-filter: var(--menu-backdrop);
+    /* 插件把浮层的描边环覆写成 border-l1，比宿主默认的 elevation 更淡 */
+    box-shadow: 0 0 0 .5px var(--border-l1), 0 3px 8px 0 rgba(0, 0, 0, 0.04), 0 0 20px 0 rgba(0, 0, 0, 0.05);
   }
-  .qcard .sub { font-size: 12px; line-height: 18px; color: var(--label-tertiary); white-space: nowrap; }
-  .qcard .close {
-    position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 6px;
-    display: grid; place-items: center; color: var(--label-tertiary); font-size: 14px; line-height: 1;
-    background: var(--card-hover);
+  .preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .preview-title { font-size: 13px; font-weight: 600; line-height: 18px; color: var(--label-primary); }
+  .jump {
+    appearance: none; border: 0; flex: none;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    min-height: 28px; padding: 0 9px; border-radius: 7px;
+    background: var(--accent); color: #fff;
+    font: inherit; font-size: 12px; font-weight: 500; line-height: 1;
+    white-space: nowrap; cursor: pointer;
   }
-  .qcard.big .icon { width: 40px; height: 40px; font-size: 13px; }
+  .jump svg { width: 12px; height: 12px; }
+  .preview-label { margin-top: 2px; font-size: 11px; line-height: 16px; color: var(--label-tertiary); }
+  .preview-quote, .preview-comment {
+    font-size: 13px; line-height: 19px; color: var(--label-primary);
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .preview-comment { color: var(--label-secondary); }
 
   /* ---------- 输入区 ---------- */
-  .composer { flex: none; display: flex; justify-content: center; padding: 0 0 10px; }
+  .composer { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; padding: 0 0 10px; }
   .composer-card {
     width: 760px; padding-top: 8px; border-radius: 22px; background: var(--input-major);
     box-shadow: var(--elevation-prominent); display: flex; flex-direction: column; gap: 12px;
   }
-  .qrow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; padding: 12px 0 0 12px; }
-  .qrow .qcard { max-width: 190px; }
-  .qrow .qcard .icon { width: 36px; height: 36px; }
   .editor { padding: 0 16px; min-height: 24px; color: var(--label-primary); }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 8px 8px; }
   .tools, .trailing { display: flex; align-items: center; gap: 12px; }
@@ -157,81 +197,58 @@
     <div class="stream">
 
       <div class="turn-user">
-        <div class="bubble">引用是怎么进到消息里的？</div>
+        <div class="bubble">批注是怎么跟着消息发给模型的？</div>
       </div>
 
-      <!-- 助手回答 1 -->
+      <!-- 被批注的原文：淡色底 + 虚线 + 序号 -->
       <div class="msg">
-        <div class="status"><span class="n">2</span> 已处理</div>
-        <p><code>QuoteCard.tsx</code> 持有待发的引用，<code>transcript-parse.ts</code> 负责把引用块从气泡里剥掉。</p>
-      </div>
-
-      <!-- 助手回答 2（含被划选的句子） -->
-      <div class="msg spot">
         <div class="status"><span class="n">1</span> 已处理</div>
-        <p>关键在这：<span class="sel" id="target">引用只在发送瞬间折进消息，卡片本身从不写进草稿</span>。</p>
+        <p><span class="mark">选中的原文和评论会随下一条消息交给模型</span></p>
+        <p>正文里只留下标记。</p>
       </div>
 
-      <!-- 用户回合：引用卡片在气泡上方 -->
+      <!-- 已发送回合：摘要块在用户气泡上方 -->
       <div class="turn-user">
-        <div class="tstack">
-          <div class="qcard big">
-            <div class="icon">AI</div>
-            <div class="body">
-              <div class="title">前者负责在发送瞬间把引用折进消息</div>
-              <div class="sub">选中的文本</div>
-            </div>
-          </div>
-          <div class="qcard big">
-            <div class="icon">AI</div>
-            <div class="body">
-              <div class="title">卡片外观只由 styles.ts 定义</div>
-              <div class="sub">选中的文本</div>
-            </div>
+        <div class="summary">
+          <div class="summary-icon">1</div>
+          <div class="summary-body">
+            <div class="summary-title">1 条批注</div>
+            <div class="summary-hint">悬停查看批注</div>
           </div>
         </div>
-        <div class="bubble">这两处的职责边界在哪？</div>
+        <div class="bubble">那模型怎么知道说的是哪一段？</div>
       </div>
 
-      <!-- 助手回答 2 -->
+      <!-- 模型回指 chip；预览浮层由脚本贴在 chip 旁边 -->
       <div class="msg">
         <div class="status"><span class="n">1</span> 已处理</div>
-        <p>边界很干净：<code>QuoteCard.tsx</code> 只管生命周期（何时写入草稿、何时清除），<code>styles.ts</code> 只管视觉，改样式不会碰到注入逻辑。</p>
+        <p>模型不需要重复原文，只要在回答里标出它指的是哪一段：<button class="chip" id="chip">批注 1</button></p>
+        <p>标记留在原文里，摘要和评论跟着消息走。</p>
         <div class="status" style="margin-top: 12px;"><span class="n">3</span> 执行工具 3 次，其中 1 次失败</div>
       </div>
 
     </div>
   </div>
 
-  <!-- 划词浮动工具条：贴在选中行上方 -->
-  <div class="toolbar" id="toolbar" style="left: 0; top: 0;">
-    <button>复制</button>
-    <span class="divider"></span>
-    <button>添加到任务</button>
+  <!-- chip 预览：默认在 chip 上方，这里按实际钳位逻辑放在右下方，避免遮住摘要 -->
+  <div class="preview" id="preview">
+    <div class="preview-head">
+      <span class="preview-title">批注 1</span>
+      <button class="jump">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+        <span>原文</span>
+      </button>
+    </div>
+    <div class="preview-label">选中的文本</div>
+    <div class="preview-quote">选中的原文和评论会随下一条消息交给模型</div>
+    <div class="preview-label">用户评论</div>
+    <div class="preview-comment">这里说的「下一条消息」包括图片吗？</div>
   </div>
 
-  <!-- 输入区：引用卡片横向排列 + 正文 + 工具栏 -->
+  <!-- 输入区 -->
   <div class="composer">
     <div class="composer-card">
-      <div class="qrow">
-        <div class="qcard">
-          <div class="icon">AI</div>
-          <div class="body">
-            <div class="title">前者负责在发送瞬间…</div>
-            <div class="sub">选中的文本</div>
-          </div>
-          <div class="close">×</div>
-        </div>
-        <div class="qcard">
-          <div class="icon">AI</div>
-          <div class="body">
-            <div class="title">卡片外观只由 styles…</div>
-            <div class="sub">选中的文本</div>
-          </div>
-          <div class="close">×</div>
-        </div>
-      </div>
-      <div class="editor">帮我对比这两段引用的职责边界</div>
+      <div class="editor">那评论为空时还会保留批注吗？</div>
       <div class="row">
         <div class="tools">
           <div class="iconbtn">
@@ -264,12 +281,21 @@
   </div>
 </div>
 <script>
-  // 与真实实现一致：贴在被选中的那一行上方 12px，水平居中于选区
-  const target = document.getElementById('target');
-  const toolbar = document.getElementById('toolbar');
-  const rect = target.getBoundingClientRect();
-  toolbar.style.left = (rect.left + rect.width / 2 - toolbar.offsetWidth / 2) + 'px';
-  toolbar.style.top = (rect.top - 12 - toolbar.offsetHeight) + 'px';
+  // chip 预览：优先放在 chip 下方，右侧对齐；越界时收回视口并翻到上方。
+  const chip = document.getElementById('chip');
+  const preview = document.getElementById('preview');
+  const rect = chip.getBoundingClientRect();
+  const margin = 8;
+  let left = rect.right + margin;
+  let top = rect.bottom + margin;
+  if (left + preview.offsetWidth > window.innerWidth - margin) {
+    left = window.innerWidth - margin - preview.offsetWidth;
+  }
+  if (top + preview.offsetHeight > window.innerHeight - margin) {
+    top = rect.top - margin - preview.offsetHeight;
+  }
+  preview.style.left = left + 'px';
+  preview.style.top = top + 'px';
 </script>
 </body>
 </html>

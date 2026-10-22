@@ -9,9 +9,9 @@
 - **对话记录**：已发送消息仍由宿主气泡渲染（时间、复制、撤回都在），批注收成一块摘要，悬停（触屏点按）展开列表
 - **界面语言**：跟随 dsh 自己的语言设置，简体中文 / English / Русский
 
-![screenshot](https://raw.githubusercontent.com/latte03/dsh-select-quote/main/assets/screenshot-1.png)
+![批注摘要与 chip 预览](https://raw.githubusercontent.com/latte03/dsh-select-quote/main/assets/screenshot-1.png)
 
-<sub>示意图（按产品真实设计 token 渲染，源文件 `assets/screenshot-1.mock.html`）</sub>
+<sub>示意图：正文标记、批注摘要与 chip 预览（按产品真实设计 token 渲染，源文件 `assets/screenshot-1.mock.html`）</sub>
 
 ---
 
