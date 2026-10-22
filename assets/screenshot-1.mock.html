@@ -138,7 +138,7 @@
   /* ---------- chip 预览浮层 ---------- */
   .preview {
     position: absolute; z-index: 30;
-    left: 672px; top: 376px;
+    left: 582px; top: 376px;
     display: flex; flex-direction: column; gap: 6px;
     width: 320px; padding: 10px;
     border-radius: 14px;
@@ -286,16 +286,18 @@
   const preview = document.getElementById('preview');
   const rect = chip.getBoundingClientRect();
   const margin = 8;
-  let left = rect.right + margin;
-  let top = rect.bottom + margin;
-  if (left + preview.offsetWidth > window.innerWidth - margin) {
-    left = window.innerWidth - margin - preview.offsetWidth;
+  // Do not name these `top` / `left`: `top` collides with window.top and the
+  // whole classic script dies with a SyntaxError.
+  let x = rect.right + margin;
+  let y = rect.bottom + margin;
+  if (x + preview.offsetWidth > window.innerWidth - margin) {
+    x = window.innerWidth - margin - preview.offsetWidth;
   }
-  if (top + preview.offsetHeight > window.innerHeight - margin) {
-    top = rect.top - margin - preview.offsetHeight;
+  if (y + preview.offsetHeight > window.innerHeight - margin) {
+    y = rect.top - margin - preview.offsetHeight;
   }
-  preview.style.left = left + 'px';
-  preview.style.top = top + 'px';
+  preview.style.left = x + 'px';
+  preview.style.top = y + 'px';
 </script>
 </body>
 </html>
