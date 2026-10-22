@@ -219,7 +219,7 @@
         <div class="bubble">那模型怎么知道说的是哪一段？</div>
       </div>
 
-      <!-- 模型回指 chip；预览浮层由脚本贴在 chip 旁边 -->
+      <!-- 模型回指 chip -->
       <div class="msg">
         <div class="status"><span class="n">1</span> 已处理</div>
         <p>模型不需要重复原文，只要在回答里标出它指的是哪一段：<button class="chip" id="chip">批注 1</button></p>
@@ -230,7 +230,7 @@
     </div>
   </div>
 
-  <!-- chip 预览：默认在 chip 上方，这里按实际钳位逻辑放在右下方，避免遮住摘要 -->
+  <!-- chip 预览：固定在 chip 右下方，避开摘要块 -->
   <div class="preview" id="preview">
     <div class="preview-head">
       <span class="preview-title">批注 1</span>
@@ -280,24 +280,5 @@
     </div>
   </div>
 </div>
-<script>
-  // chip 预览：优先放在 chip 下方，右侧对齐；越界时收回视口并翻到上方。
-  const chip = document.getElementById('chip');
-  const preview = document.getElementById('preview');
-  const rect = chip.getBoundingClientRect();
-  const margin = 8;
-  // Do not name these `top` / `left`: `top` collides with window.top and the
-  // whole classic script dies with a SyntaxError.
-  let x = rect.right + margin;
-  let y = rect.bottom + margin;
-  if (x + preview.offsetWidth > window.innerWidth - margin) {
-    x = window.innerWidth - margin - preview.offsetWidth;
-  }
-  if (y + preview.offsetHeight > window.innerHeight - margin) {
-    y = rect.top - margin - preview.offsetHeight;
-  }
-  preview.style.left = x + 'px';
-  preview.style.top = y + 'px';
-</script>
 </body>
 </html>
