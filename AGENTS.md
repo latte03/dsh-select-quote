@@ -21,7 +21,7 @@ DeepSeek Harness（dsh）的 web 客户端插件：对话区**划词加批注**�
 - **颜色只走 `--dsq-*` 别名**（`styles.ts` 四层：token / 原子 / 组件 / 宿主），组件层不直接写 `--dsw-*`；改完 CSS 要刷新页面或 `sync:desktop`。
 - **不写宿主的语言偏好**（`ctx.locale` 只读）；**不 `require` 任何 Harness Client 包**（插件规范明令禁止，且抛错会清掉整个 slot 条目）。
 - 提交进仓库的脚本**不含个人绝对路径**；`tmp/` 已被 gitignore，别把本地草稿提进去。
-- **`git push` 由用户自己做**，除非他当次明确授权；commit 用中文 conventional 格式。
+- **发布流程的推送由 agent 完成**（已授权）：release 后执行 `git push --follow-tags origin main`；commit 用中文 conventional 格式。
 
 ## 文档
 
