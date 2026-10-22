@@ -202,6 +202,60 @@ export function adoptPersistedAnnotations(sessionId: string): void {
   notify()
 }
 
+/** Same ids in the same order, with the only mutable field (comment) equal. */
+function sameAnnotations(
+  a: readonly SelectionAnnotation[],
+  b: readonly SelectionAnnotation[],
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every((item, i) => {
+      const other = b[i]
+      return other !== undefined && item.id === other.id && (item.comment ?? '') === (other.comment ?? '')
+    })
+  )
+}
+
+/**
+ * Re-read a session after another tab wrote its storage key.
+ *
+ * Storage is the shared source of truth: every local mutation persists
+ * synchronously, so this tab's memory can only be stale relative to it. The
+ * stored array replaces the local one (last writer wins) — merging would
+ * resurrect annotations the other tab already sent and cleared.
+ *
+ * `null` is the `localStorage.clear()` event: reload every partition this tab
+ * holds. Sessions that are neither cached nor active are ignored; binding the
+ * session later reads storage anyway.
+ */
+export function adoptStorageAnnotations(sessionId: string | null): void {
+  if (!persistence) return
+  if (sessionId === null) {
+    let changed = false
+    for (const key of [...bySession.keys()]) {
+      if (key === MEMORY_KEY) continue
+      const stored = persistence.load(key)
+      const current = bySession.get(key)
+      if (stored.length === 0) {
+        bySession.delete(key)
+        changed = true
+      } else if (current === undefined || !sameAnnotations(stored, current)) {
+        bySession.set(key, [...stored])
+        changed = true
+      }
+    }
+    if (changed) notify()
+    return
+  }
+  if (!bySession.has(sessionId) && sessionId !== runtime.sessionId) return
+  const stored = persistence.load(sessionId)
+  const current = bySession.get(sessionId) ?? EMPTY
+  if (sameAnnotations(stored, current)) return
+  if (stored.length === 0) bySession.delete(sessionId)
+  else bySession.set(sessionId, [...stored])
+  notify()
+}
+
 export function annotationTitle(annotation: SelectionAnnotation): string {
   return previewTitle(annotation.text)
 }

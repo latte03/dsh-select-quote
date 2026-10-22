@@ -65,11 +65,14 @@ body {
   --dsq-bubble: var(--dsw-specific-bubble, rgba(0, 0, 0, 0.05));
   --dsq-menu: var(--dsw-menu-surface-fill, rgba(248, 249, 250, .58));
   --dsq-menu-backdrop: var(--dsw-menu-backdrop-filter, blur(40px) saturate(150%));
+  --dsq-scrim: rgba(0, 0, 0, 0.32);
   --dsq-accent-400: var(--dsw-static-blue-400, #1677ff);
   --dsq-accent: var(--dsw-static-blue-500, #3b82f6);
   --dsq-accent-tint: var(--dsw-static-blue-50p, #eaf3ff);
   --dsq-accent-tint-hover: var(--dsw-static-blue-75, #e5f0ff);
   --dsq-accent-tint-dark: var(--dsw-static-blue-950, #172554);
+  --dsq-summary-bg: var(--dsw-alias-bg-layer-2, #fff);
+  --dsq-mark-hover: var(--dsw-static-blue-75, #e5f0ff);
   --dsq-neutral-50: var(--dsw-static-neutral-50, #fafafa);
   --dsq-neutral-100: var(--dsw-static-neutral-100, #f5f5f5);
   --dsq-neutral-800: var(--dsw-static-neutral-800, #292929);
@@ -135,7 +138,8 @@ ${atomRules}
    菜单用；这里按需求用 surface-fill，所以我们的浮层会比宿主自己的菜单更透。 */
 .dsq_toolbar::before,
 .dsq_commentPop::before,
-.dsq_summaryHoverInner::before {
+.dsq_summaryHoverInner::before,
+.dsq_touchBar::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -158,7 +162,9 @@ ${atomRules}
    整条链才在浮层元素上取值。 */
 .dsq_toolbar,
 .dsq_commentPop,
-.dsq_summaryHoverInner {
+.dsq_summaryHoverInner,
+.dsq_touchBar,
+.dsq_touchSheet {
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
 }
@@ -176,8 +182,10 @@ ${atomRules}
    现在把两件事交回宿主布局：
    - 滚动容器负责裁剪：浮层随内容上移，到容器上边缘就被裁掉，自然滑进 header
      下面，和正文一致；
-   - host 的 z-index 固定 6（见 floating-layer.ts）：低于 composer 的 7，高于
+   - host 的 z-index 平时 6（见 floating-layer.ts）：低于 composer 的 7，高于
      内容里吸顶元素的 6（同 z 时 host 追加在滚动容器末尾，DOM 次序压过它们）。
+     评论步骤打开期间抬到 8：摘要卡在 composer 座位里（z 7），会伸进滚动区，
+     6 的评论泡会被它盖住；关闭评论即还原，空闲工具条仍不压输入框。
    host 内部次序：status 3 > toolbar 2 > commentPop 1。
 
    摘要块（composer 与历史消息）在内容普通流里，不参与这套层带；悬停面板仍是
@@ -330,7 +338,7 @@ ${atomRules}
   padding: 8px 10px;
   border: 0.5px solid var(--dsq-line);
   border-radius: 18px;
-  background: var(--dsq-neutral-50);
+  background: var(--dsq-summary-bg);
   pointer-events: auto;
   user-select: none;
 }
@@ -360,6 +368,20 @@ ${atomRules}
   font-size: 12px;
   line-height: 18px;
   color: var(--dsq-label-3);
+}
+
+/* Hover wording is wrong on touch; show one line, not both. */
+.dsq_summaryHintTouch {
+  display: none;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .dsq_summaryHintPointer {
+    display: none;
+  }
+  .dsq_summaryHintTouch {
+    display: block;
+  }
 }
 
 .dsq_summaryHover {
@@ -414,7 +436,8 @@ ${atomRules}
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .dsq_toolbar::before,
   .dsq_commentPop::before,
-  .dsq_summaryHoverInner::before {
+  .dsq_summaryHoverInner::before,
+  .dsq_touchBar::before {
     background: var(--dsq-bg-raised);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -628,6 +651,156 @@ ${atomRules}
   gap: 6px;
 }
 
+/* Touch selection chrome. Fixed to the visual viewport and mounted on body:
+   the OS selection menu owns the space around the selected text, and the soft
+   keyboard owns the bottom, so neither content coordinates nor the scroller's
+   clipping can place this correctly. Only rendered on coarse pointers. */
+.dsq_touchBar,
+.dsq_touchSheet {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  box-sizing: border-box;
+  width: min(520px, calc(100vw - 16px));
+  transform: translateX(-50%);
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+.dsq_touchBar {
+  z-index: 60;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 16px;
+  box-shadow: var(--dsq-shadow);
+}
+
+.dsq_touchAction {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  color: var(--dsq-label);
+  font: inherit;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.dsq_touchAction span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsq_touchAction:active {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_touchScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  background: var(--dsq-scrim);
+  touch-action: none;
+}
+
+.dsq_touchSheet {
+  z-index: 62;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 20px;
+  background: var(--dsq-bg-raised);
+  box-shadow: var(--dsq-shadow);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dsq_touchSheetHead {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dsq_touchSheetTitle {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsq-label);
+}
+
+.dsq_touchSheetClose {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px 0;
+  border-radius: 12px;
+  color: var(--dsq-label-2);
+}
+
+.dsq_touchSheetClose:active {
+  background: var(--dsq-fill-hover);
+}
+
+/* Keep the selected words visible after the sheet covers the page: on touch the
+   reader has no hover to re-orient, so the sheet carries its own quote. */
+.dsq_touchQuote {
+  border-left: 2px solid var(--dsq-accent);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label-2);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 16px keeps iOS from zooming the page when the field is focused. */
+.dsq_touchComment {
+  min-height: 88px;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.dsq_touchActions {
+  gap: 8px;
+}
+
+.dsq_touchActions .dsq_button {
+  flex: 1;
+  min-height: 44px;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.dsq_touchSecondary {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_touchStatus {
+  position: fixed;
+  left: 50%;
+  z-index: 63;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--dsq-bg-toast);
+  color: var(--dsq-label-inverted);
+  font-size: 12px;
+  line-height: 18px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 /* Transcript summary — the same block as the composer's, right-aligned under
    the user bubble. One block per message; the hover list carries every
    annotation with its selected text and comment. */
@@ -641,6 +814,10 @@ ${atomRules}
   width: auto;
   min-width: 220px;
   max-width: min(calc(var(--dsq-chat-width) * 0.72), 520px);
+  /* In the composer the card must clear .dsq_cardStack (12); in the transcript
+     it is plain content and must stay under the floating layer's host (6/8),
+     otherwise a hovered comment popover is painted beneath it. */
+  z-index: 1;
 }
 
 /* Replacement user bubble (quote block stripped from display). */
@@ -737,11 +914,50 @@ ${atomRules}
 }
 
 .dsq_annMark:hover {
-  background: var(--dsq-accent-tint-hover);
+  background: var(--dsq-mark-hover);
 }
 
 .dsq_annMarkFlash {
   animation: dsq-ann-flash 1.4s ease-out;
+}
+
+/* Keyboard focus is a first-class state for the toolbar, summary and panel. */
+.dsq_summary:focus-visible,
+.dsq_button:focus-visible,
+.dsq_touchAction:focus-visible,
+.dsq_touchSheetClose:focus-visible,
+.dsq_summaryItemAction:focus-visible,
+.dsq_summaryItemButton:focus-visible,
+.dsq_cardClose:focus-visible,
+.dsq_annEditCancel:focus-visible,
+.dsq_annEditSave:focus-visible {
+  outline: 2px solid var(--dsq-focus-ring);
+  outline-offset: 2px;
+}
+
+.dsq_commentInput:focus-visible,
+.dsq_annEditInput:focus-visible {
+  outline: 2px solid var(--dsq-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Touch: 44px minimum targets. Icon-only corners keep their visual size and
+   grow an invisible hit area; toolbar actions grow in place. */
+@media (hover: none), (pointer: coarse) {
+  .dsq_button,
+  .dsq_annEditCancel,
+  .dsq_annEditSave {
+    min-height: 44px;
+  }
+  .dsq_summaryItemAction {
+    width: 44px;
+    height: 44px;
+  }
+  .dsq_cardClose::after {
+    content: "";
+    position: absolute;
+    inset: -12px;
+  }
 }
 
 /* Layer 4 — host surface: keyframes, theme flips, and the two rules that reach
@@ -762,6 +978,7 @@ ${atomRules}
    --dsq-* alias follows it. Only values we own ourselves need restating. */
 body[data-ds-dark-theme] .dsq_annMark {
   --dsq-mark-tint: var(--dsq-accent-tint-dark);
+  --dsq-mark-hover: var(--dsw-static-blue-800, #1e40af);
 }
 
 /* Reserve room for the floating annotation summary inside the composer card, so the
@@ -797,6 +1014,8 @@ export const styles = {
   summaryBody: 'dsq_summaryBody',
   summaryTitle: 'dsq_summaryTitle',
   summaryHint: 'dsq_summaryHint',
+  summaryHintPointer: 'dsq_summaryHintPointer',
+  summaryHintTouch: 'dsq_summaryHintTouch',
   summaryHover: 'dsq_summaryHover',
   summaryItem: 'dsq_summaryItem',
   summaryItemLabel: 'dsq_summaryItemLabel',
@@ -823,6 +1042,18 @@ export const styles = {
   commentPop: 'dsq_commentPop',
   commentInput: 'dsq_commentInput',
   commentActions: 'dsq_commentActions',
+  touchBar: 'dsq_touchBar',
+  touchAction: 'dsq_touchAction',
+  touchScrim: 'dsq_touchScrim',
+  touchSheet: 'dsq_touchSheet',
+  touchSheetHead: 'dsq_touchSheetHead',
+  touchSheetTitle: 'dsq_touchSheetTitle',
+  touchSheetClose: 'dsq_touchSheetClose',
+  touchQuote: 'dsq_touchQuote',
+  touchComment: 'dsq_touchComment',
+  touchActions: 'dsq_touchActions',
+  touchSecondary: 'dsq_touchSecondary',
+  touchStatus: 'dsq_touchStatus',
   tSummary: 'dsq_tSummary',
   userRow: 'dsq_userRow',
   userStack: 'dsq_userStack',

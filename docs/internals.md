@@ -18,7 +18,7 @@ pnpm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 t
 
 **为什么有 `verify`**：`tsdown` 不做类型检查，一个语法坏掉的 bundle 也能构建"成功"，而这是唯一能在浏览器之外发现这类错误的手段——它把 `lib/client.js` 放进假的 `window.__ModuleLoader__` 里跑一遍，用 mock ctx 调 `apply()`，逐项核对注册结果。改动 `src/client/index.tsx` 的注册项时，记得同步 `scripts/verify-bundle.mjs` 里的 `EXPECTED`。（最初的事故现场见 [`archive/investigations.md`](archive/investigations.md)。）
 
-**本地跑起来**：`dev.patch.yml` 里的插件路径必须是**绝对路径**（checkout 不在 profile 的 `node_modules` 里，Loader 没有包名可解析）。换机器/换目录时改那一行；该文件不随 npm 包发布，发布版走 `cordis.patch.yml`（按包名）。
+**本地跑起来**：把 `dev.patch.example.yml` 复制成 `dev.patch.yml`（后者已 gitignore），插件路径必须是**绝对路径**（checkout 不在 profile 的 `node_modules` 里，Loader 没有包名可解析）。换机器/换目录时改那一行；本地 patch 不进仓库、不随 npm 包发布，发布版走 `cordis.patch.yml`（按包名）。
 
 **桌面客户端的热更新（`sync:desktop`）**：宿主把 `@deepseek-ai/dsh-client-hmr` 挂在 web 组合包里（`dsh-web-app/cordis.patch.yml` 注明 always mounted，没有产物变化时静默）。它的 node 半每 500ms `statSync` 每个 roster 行 client 产物的 `mtimeMs/ctimeMs/size`，签名一变就调 `clientModules.rebuilt(id)` 重算 revision，并经 SSE `/plugins/events` 广播 `{type:"rebuilt",id,rev}`；浏览器半收到即 `ctx.modules.entries.reload(id, rev)`，只重载这一个插件模块。产物按 `?rev=<hash>` 取，新 revision 天然绕过 immutable 缓存。因此 `scripts/sync-desktop.mjs` 要做的只有一件事：**让被监听的那个文件内容变化**——它按 `$DSH_HOME`（默认 `~/.dsh`）+ profile（`--profile` / `$DSH_PROFILE`，默认 `desktop`）定位已安装副本，只在字节不同的时候写，避免空重载。换 package 版本（`pnpm add` / 市场更新）仍然必须重启客户端，热路径只覆盖产物字节。
 
@@ -67,7 +67,7 @@ Each item contains text selected from an earlier message ...
 
 **1. 批注不进草稿，只在发送瞬间注入**
 
-摘要块不是草稿的"可视化"，而是唯一的表示。草稿始终保持用户真正输入的内容，JSON 块在**发送动作的捕获阶段**才折进去：`document` 上的 `keydown`（无修饰键的 Enter）或 `click`（composer 卡片内 DOM 顺序上的最后一个 `button`，且不是停止按钮——停止按钮渲染的是 `svg rect`）。捕获阶段早于 composer 自己的处理器，因此它读到的草稿已经包含批注块。见 `src/client/composer/useSendIntercept.ts`。
+摘要块不是草稿的"可视化"，而是唯一的表示。草稿始终保持用户真正输入的内容，JSON 块在**发送动作的捕获阶段**才折进去：`document` 上的 `keydown`（宿主会提交的 Enter 手势：Enter / Ctrl+Enter / Cmd+Enter；Shift+Enter 换行，Alt、AltGraph 与 IME 合成不提交，判定见 `composer-host.ts` 的 `isSubmitKey`）或 `click`（composer 卡片内 DOM 顺序上的最后一个 `button`，且不是停止按钮——停止按钮渲染的是 `svg rect`）。捕获阶段早于 composer 自己的处理器，因此它读到的草稿已经包含批注块。见 `src/client/composer/useSendIntercept.ts`。
 
 反向路径只有一个入口：**检测到完整协议块**。dsh-rewind 撤回时直接读持久消息的 `data.content` 并把文本写回 composer（不经过本插件），协议块也会跟着进编辑器。`AnnotationPanel` 的 layout effect 用 `readComposedDraft()` 把块拆回批注与正文：批注带 `source` 定位重新挂回待发摘要（`restoreAnnotations()`，同 text+comment 去重），编辑器里只留用户自己写的字。触发条件是**完整且 JSON 合法**的块；发送手势刚折进去的那份由 `foldingRef` 排除，普通地提到 `<response-annotations>` 的草稿不会被改写，IME 合成期间也一律跳过。展示层（`scanAnnotatedMessage()` 与回显剥离）的分工不同：只要开闭标记完整就剥掉，不要求 JSON 可读。写入时 JSON 里的 `<` 会转义成 `\u003c`（选中文本或评论自带闭合标记也不会提前截断）；读旧消息时按候选闭合位置逐个试解析，兼容没有转义的历史块。
 
@@ -89,14 +89,14 @@ Each item contains text selected from an earlier message ...
 
 **4. 对话记录：委托宿主视图 + 摘要块内联在 `user` 节点里**
 
-- `UserMessageDisplay.tsx` 以 `priority: -10` 替换 `user` 节点，但**不重画气泡、附件和动作行**：`host-user.ts` 从 `ctx.slots.entries('conversation.chat.node')` 里按组件身份排除自己，再找 `componentName() === 'UserMessageNodeView'` 的那条（兼容 memo 的 `.type.name` 与 forwardRef 的 `.render.name`），原样渲染 `<UserMessageNodeView {...kitProps} node={rewrittenNode} />`。宿主若改名，只有一个非自己候选时才敢用它；候选多于一个就返回 `undefined`，走下面的纯文本回退，不赌顺序。`rewrittenNode` 只改 `data.content`：把协议块从文本块里剥掉（完整块无论 JSON 是否合法都剥），图片/文件/其它块保留。时间、复制、附件、文件卡片、引用摘要，以及所有往动作行 portal 的插件（dsh-rewind 的 ↶）都仍由宿主渲染；宿主升级或别的插件改这一行，这里自动跟上（[issue #8](https://github.com/latte03/dsh-select-quote/issues/8)）。
+- `UserMessageDisplay.tsx` 以 `priority: -10` 替换 `user` 与 `steering` 两个节点（宿主把同一个 `UserMessageNodeView` 注册在这两个 key 下），但**不重画气泡、附件和动作行**：`host-user.ts` 从 `ctx.slots.entries('conversation.chat.node')` 里按 **key + 组件身份**排除自己，再找 `componentName() === 'UserMessageNodeView'` 的那条（兼容 memo 的 `.type.name` 与 forwardRef 的 `.render.name`），原样渲染 `<UserMessageNodeView {...kitProps} node={rewrittenNode} />`。宿主若改名，只有一个非自己候选时才敢用它；候选多于一个就返回 `undefined`，走下面的纯文本回退，不赌顺序。`rewrittenNode` 只改 `data.content`：把协议块从文本块里剥掉（完整块无论 JSON 是否合法都剥），图片/文件/其它块保留。时间、复制、附件、文件卡片、引用摘要，以及所有往动作行 portal 的插件（dsh-rewind 的 ↶）都仍由宿主渲染；宿主升级或别的插件改这一行，这里自动跟上（[issue #8](https://github.com/latte03/dsh-select-quote/issues/8)）。
 - 委托的是宿主组件，所以 session 注册必须带 `locale: 'chat'`，让宿主拿到它自己的 `t`（复制/已复制等文案）；kit 的其余 props（`renderFactorySlot`、`loadImage`、hooks）原样透传。
 - 摘要块（`<TranscriptQuoteCard>`）是唯一新增的 DOM，放在委托组件**前面**：顺序是 摘要块 → 宿主 `userRow`。只改文本时不渲染空泡——`text` 为空时宿主自己的 `showBubble` 也会跳过；批注-only 消息因此只剩摘要块与宿主动作行。
 - 宿主视图解析失败（宿主改了内部组件名）时退回只读文本气泡，**绝不补一份私有的动作行**：宁可降级，也不要重新长出一份会跟宿主漂移的 chrome。
 - `TranscriptQuoteCard.tsx` 渲染**一个** `AnnotationSummary`（和输入框完全同款）：块上只显示条数，悬停列表里逐条展示**选中文本 + 用户评论**，点条目滚回正文对应 mark。一条消息无论有几条批注都只有一个块——不要退回"一条批注一张卡"的排布。
-- **发送瞬间还有一层宿主 UI**：本地回显气泡（`[data-submission-echo]`）由聊天流直接渲染提交文本，不经过 `conversation.chat.node`，慢接口下会把整段协议摆在屏幕上。`dom/stripSubmissionEcho.ts` 在回显的纯文本 run 上做一次展示层剥离：行本身或最深叶子任一持有完整块就改写（被会话 chip 等拆分的结构不动，完整块的 JSON 非法或不是数组也照剥），持久消息里的块不受影响。MutationObserver 只看新增节点与 `characterData`，命中行后在下一帧统一处理；剥离是幂等的，宿主重建文本节点后还能再剥一次。`pnpm run verify` 的 `TRANSCRIPT SURFACE` 闸同时守回显和单块摘要，回显部分有 DOM 桩行为用例。
+- **发送瞬间还有一层宿主 UI**：本地回显气泡（`[data-submission-echo]`）由聊天流直接渲染提交文本，不经过 `conversation.chat.node`，慢接口下会把整段协议摆在屏幕上；运行中提交的消息还会在排队面板（`[data-queue-dock]`）里按原始 wire 内容预览同样的协议块。`dom/stripSubmissionEcho.ts` 在这两类表面上做展示层剥离：回显行本身或最深叶子持有完整块就改写（被会话 chip 拆分的结构不动）；队列预览走宿主的 `conversation.user.text` 工厂，文本被拆成逐词 `<span>`，开/闭标签永远不在同一叶子里，因此改为重写**最内层同时持有两端的纯文本容器**（每条排队行一个，行的图标/操作按钮不动），完整块的 JSON 非法或不是数组也照剥；持久消息里的块不受影响。MutationObserver 只看新增节点与 `characterData`，命中行后在下一帧统一处理；剥离是幂等的，宿主重建文本节点后还能再剥一次。`pnpm run verify` 的 `TRANSCRIPT SURFACE` 闸同时守回显、排队预览和单块摘要，剥离部分有 DOM 桩行为用例。
 
-> **摘要块必须挂在 `user` 节点上**：`conversation.chat.node` 虽能注册任意 key，但 `ui-chat` 用 allowlist `TURN_PROCESS_INDEPENDENT_KINDS` 决定节点能否脱离「Turn 过程折叠块」；不在表里的 key 会被判为 turn-process 成员，Turn 折叠后被加 `hidden`——**挂载了、然后被隐藏**，且不报错。诊断方法：注册的节点永远先查这张表，再怀疑注册/匹配/解析链路（代码与定位过程见 [`archive/investigations.md`](archive/investigations.md)）。
+> **摘要块必须挂在 `user` / `steering` 节点上**：`conversation.chat.node` 虽能注册任意 key，但 `ui-chat` 用 allowlist `TURN_PROCESS_INDEPENDENT_KINDS` 决定节点能否脱离「Turn 过程折叠块」；不在表里的 key 会被判为 turn-process 成员，Turn 折叠后被加 `hidden`——**挂载了、然后被隐藏**，且不报错。诊断方法：注册的节点永远先查这张表，再怀疑注册/匹配/解析链路（代码与定位过程见 [`archive/investigations.md`](archive/investigations.md)）。
 
 **5. 正文 Mark：虚线下划线 + 末尾序号角标**
 
@@ -104,7 +104,11 @@ Each item contains text selected from an earlier message ...
 
 **6. 悬停摘要面板**
 
-面板 **portal 到 `document.body`**：消息内容里有带 `contain: layout` 的表面、滚动容器带 `container-type`，它们都会成为 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群有 320ms 宽限；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层那 12px padding。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
+面板 **portal 到 `document.body`**：消息内容里有带 `contain: layout` 的表面、滚动容器带 `container-type`，它们都会成为 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群有 320ms 宽限；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层那 12px padding。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）；编辑目标按批注 `id` 记录，删除其他条目不会串到旁边的批注。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
+
+- **键盘**：摘要卡可聚焦；Enter 展开并把焦点移到面板第一个控件，↓ 在已展开时进入面板；Tab / Shift+Tab 在面板内循环，Esc 关闭并把焦点还给摘要卡。面板是 React portal 子节点，keydown 会按 React 树冒泡回摘要卡，所以面板处理过的键要 `stopPropagation()`，否则摘要卡的 Tab 会抢回第一个控件。
+- **触屏**：`(hover: none), (pointer: coarse)` 下提示从「悬停查看批注」切成「点按查看批注」；`pointerup` 的 `pointerType === 'touch'` 时点按摘要展开，`pointerleave` 不触发自动关闭（触屏抬手也会发 pointerleave），点外部关闭。操作按钮在 coarse 指针下为 44px；角落关闭按钮保留视觉尺寸，用 `::after` 扩展命中区。
+- **触屏的划词 chrome**：coarse pointer 下工具条和评论泡改走 `document.body` 级 fixed，不再挂滚动容器。操作条贴 visual viewport 底部（`visualViewport` 算软键盘 inset，再加 `env(safe-area-inset-bottom)`），评论是底部抽屉：带上选中原文预览、输入框 16px 防 iOS 聚焦缩放、按钮 44px，`maxHeight` 跟 visual viewport 走。抽屉打开时不自动聚焦评论框，关闭后也不把焦点抢回 composer，避免软键盘第二次弹出。细指针（鼠标）仍走内容坐标 + 滚动容器裁剪。
 
 **7. 划词只在对话区生效**
 
@@ -165,17 +169,19 @@ Each item contains text selected from an earlier message ...
 |---|---|
 | `state/annotation-persistence.ts` | 纯逻辑：载荷编解码、保留策略。不碰 DOM，`verify-bundle` 直接 import 它跑无头用例 |
 | `state/annotation-storage.ts` | 环境探测：有 localStorage 就用纯 localStorage 后端，没有就退内存。单独放一份是为了让纯逻辑模块不碰 `globalThis` |
-| `state/annotation-store.ts` | 内存 Map + 持久化钩子；`bindAnnotationSession()` 绑定会话并在微任务里 adopt |
+| `state/annotation-store.ts` | 内存 Map + 持久化钩子；`bindAnnotationSession()` 绑定会话并在微任务里 adopt；`adoptStorageAnnotations()` 处理其它标签的 storage 变更 |
 
 - **键**：`dsh.select-quote.annotations.<sessionId>`，载荷 `{v, updatedAt, items}`。和草稿同一个形状，所以刷新、切会话、重启的行为与草稿一致。
 - **写时机**：每次增删改之后立刻写（没有防抖，和草稿一样）。`clearAnnotations()` 连键一起删——发送即清，失败不回滚。
 - **恢复时机**：会话 id 绑定时（composer 挂载 / 切会话）。`bindAnnotationSession` 在渲染期被调用，所以 adopt 走 `queueMicrotask`，避免在别人的 render 里 `setState`。内存里已有的条目按 id 覆盖恢复值（只可能是更新的），绑定前落在 `pending` 桶里的也会一起搬过去。
-- **mark 为什么还对得上**：待发批注的 mark id 就是批注自己的 `id`（`ann_<时间戳>_<随机>`），随载荷一起存，刷新后重新装饰得到同一个 mark；历史侧由 `TranscriptQuoteCard` 生成 `dqsm_<消息flowKey>_<序号>`，同一条消息内稳定。`index` 取列表下标，摘要条目点回去照样能找到。
+- **跨标签**：`apply()` 的持久化 effect 监听 `window.storage`，按 `dsh.select-quote.annotations.<sessionId>` 重新加载并**替换**本地分区（last-write-wins）。本地每次变更都同步写存储，所以收到事件时内存只会比存储旧；替换而不是合并，才不会把另一个标签已经发送清空的批注复活。`key === null`（`localStorage.clear()`）时重读本标签持有的全部分区。非活动且未缓存的分区忽略，绑定会话时自然会读存储。
+- **mark 为什么还对得上**：待发批注的 mark id 就是批注自己的 `id`（`ann_<时间戳>_<随机>`），随载荷一起存，刷新后重新装饰得到同一个 mark；历史侧由 `TranscriptQuoteCard` 生成 `dqsm_<消息flowKey>_<序号>`，同一条消息内稳定。`index` 取列表下标，摘要条目点回去照样能找到；删除前面的批注时，`applyAnnotationMarks` 会同步已有 mark 的 `data-dsq-ann-index`，不重新包裹文本，摘要与正文角标始终一致。
 - **保留**：最近 20 个会话 + 7 天，双条件，`apply()` 时扫一遍自己前缀。宿主自己不回收 per-session 键（本机实测留着 9 个会话的 `dsh.sidebar-right.v1.*`），所以这活儿归插件。
 - **为什么不用宿主的 client-store**：新版插件规范明确**不要 require Harness Client 包**（原话：它们随时会变、纯 JS 无类型检查、抛错会把你整个 slot 条目清掉），而我们的后端选择发生在 `apply()` 的 effect 里——`defineStore().create()` 只要因为宿主改 API 而抛，就是 issue #7 那类"启动健康检查未激活 → 无错误信息的硬失败"。况且宿主的持久化底层本来就是 localStorage（构造时整值读入、每次变更整值写回、键 `${persist}.${scopeKey}`），与直接后端**同键同形**，换过来零迁移、零数据丢失；
 - **对账**：挂载时双向对齐 marker 与批注列表（批注空 + 草稿有 marker → 抹掉；有批注 + marker 缺 → 补上），两边都幂等，和 `useDraftMarker` 的那次写入不冲突。**合成期间一律不写草稿**：宿主 store 的 draft 在 `compositionstart` 后会瞬态变空（候选串还没进 store），此时补写 marker 会让编辑器内容被整体替换，拼音第一个字符直接消失。`useComposing()` 在 document 捕获段听 composition 事件，对账 effect 见到就跳过；等 `compositionend`、候选文本作为一次 draft 变更落地，effect 自然会重跑。
-- **不做的**：没有 sessionId 就只在内存（宿主能在打字前就 mint 好会话，这条是"不该发生"的退路）；多标签同会话 last-write-wins，不做跨页同步；hero 换工作区宿主只搬 draft + 附件，批注落在死 id 上，不处理；fork 会话宿主发全新 id，批注不继承。
-- **验**：`pnpm run verify` 里用 query-bust 的 import 拿到第二个模块实例当"刷新"，跑一遍「存 → 清内存 → 回灌 → 对账 → 清除 → 保留」，另外单测 `bindAnnotationSession` 的同步发布 + 微任务 adopt。浏览器实测另算。
+- **不做的**：没有 sessionId 就只在内存（宿主能在打字前就 mint 好会话，这条是"不该发生"的退路）；hero 换工作区宿主只搬 draft + 附件，批注落在死 id 上，不处理；fork 会话宿主发全新 id，批注不继承。跨标签只做 last-write-wins，不做字段级合并（跨页同时编辑同一条时后写覆盖）。
+- **验**：`pnpm run verify` 里用 query-bust 的 import 拿到第二个模块实例当"刷新"，跑一遍「存 → 清内存 → 回灌 → 对账 → 清除 → 保留」，另用两个实例共享一份 Map 存储验证跨标签写入/清空/回填；单测 `bindAnnotationSession` 的同步发布 + 微任务 adopt。浏览器实测另算。
+- **性能实测（2026-10-22，dsh 0.2.1-rc.2，Chrome）**：34 条批注 / 98 条消息，流式 15.6s 采样 937 帧，p95 17.2ms、最大 33.3ms，无 >50ms 长任务；滚动 + 工具条跟随 120 帧，p95 17.5ms、无长任务；JS heap 61MB → 61MB。空闲期优化：没有 job 时不调度 mark 的 rAF，没有待剥离表面时不调度回声的 rAF。历史 `dqsm_*` job 与已渲染批注一一对应；当前宿主不卸载旧消息，未观察到随时间增长，暂不做卸载清理（宿主若引入虚拟列表需补）。`bySession` 只保留有未发批注的会话，持久化本身限制 20 个会话 / 7 天。
 
 **12. 插件页的标题、描述、图标（包展示元信息）**
 
@@ -196,10 +202,11 @@ Each item contains text selected from an earlier message ...
 工具条不是「出现后常驻」的面板，存亡完全由**当前选区**决定，`refresh()` 是唯一入口（`pointerup` / `selectionchange` / `keyup` / `resize` / `scroll` 都只是触发它）：
 
 - **出现**：拖拽结束（`pointerup`）后读一次活选区——非空、在对话区、不在输入框/工具条自身里；
-- **挂载**：`dom/floating-layer.ts` 从选区所在的 flow item 往上找**真正的滚动容器**（桌面抽屉布局是 `.ST7X_W_scrollBody`，此时 `.icaHSq_scroll` 的计算 overflow 是 visible；普通布局是 `.icaHSq_scroll`），在容器里挂一个零尺寸的 absolute host（必要时把容器补成 `position: relative`），浮层 portal 进去。坐标是**相对滚动内容**的，所以滚动时工具条/评论泡随正文一起走，不需要逐帧重定位；容器负责裁剪——滚到容器上边缘就滑进 header 下面，和正文一致。host 的 `z-index` 固定 **6**：低于 composer seat 的 7（不穿过输入框），高于内容里吸顶元素的 6；
+- **挂载**：`dom/floating-layer.ts` 从选区所在的 flow item 往上找**真正的滚动容器**（桌面抽屉布局是 `.ST7X_W_scrollBody`，此时 `.icaHSq_scroll` 的计算 overflow 是 visible；普通布局是 `.icaHSq_scroll`），在容器里挂一个零尺寸的 absolute host（必要时把容器补成 `position: relative`），浮层 portal 进去。坐标是**相对滚动内容**的，所以滚动时工具条/评论泡随正文一起走，不需要逐帧重定位；容器负责裁剪——滚到容器上边缘就滑进 header 下面，和正文一致。host 的 `z-index` 平时 **6**：低于 composer seat 的 7（不穿过输入框），高于内容里吸顶元素的 6；**评论步骤打开期间抬到 8**——摘要卡在 composer 座位里、会伸进滚动区，z 6 的评论泡会被它盖住；关闭评论立即还原，空闲工具条仍不会压输入框；
 - **跟随**：滚动时仍会触发 `refresh()`（合并同一 tick 的多次事件），但选区的**内容坐标**不变，`setActive` 去重后不重渲染。真正需要重排的只有 resize / 布局变化，以及内容顶部选中时改为挂在首行下方的翻转（`below`）；
 - **收起**：选区真的没了、或**选中行的首行完全滚出视口**（`isFirstLineOnScreen`，没有可锚定的东西了）。滚回去会重新出现；半可见时由容器裁剪，不再用视口边缘钳位；
 - **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。**「下方」的可用边界是 composer seat 的顶边，不是滚动容器自己的盒子**（`floating-layer.ts` 的 `bounds().bottom` 取两者较小值）：桌面布局里 composer 是 sticky、z-7 覆盖在滚动容器下半段，用容器盒子会把评论泡放到输入框底下（[data-composer-seat]，缺失时退回 [data-composer-card]；seat 从当前滚动容器沿祖先链就近解析，不取文档里第一个，避免多窗格时钳到别的输入框）。评论阶段工具条本身（「添加批注…」提示）改放到评论泡**上方、左对齐**，底边距评论泡顶边 6px；顶部空间不够时翻到评论泡下方。它和评论泡的重排都由 `placeCommentPop` 负责。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要块同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
+- **触屏不走这套**：coarse pointer 下工具条/评论泡换成了 body 级 fixed 的底部操作条与评论抽屉（见机制 6 的触屏条目），因为系统选择菜单和软键盘占据了选区锚定所需的同一块空间；`placeCommentPop` 在触屏下直接返回，评论阶段也不再抬 host 的 z-index。
 
 ## 浮层名词与层带
 
@@ -207,14 +214,16 @@ Each item contains text selected from an earlier message ...
 
 | 名称 | 类名 | 挂载位置 | z-index | 作用 |
 |---|---|---|---|---|
-| 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6） | 复制 / 添加到任务 / 打开链接；评论阶段缩成提示 |
+| 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6 / 评论阶段 8） | 复制 / 添加到任务 / 打开链接；评论阶段缩成提示 |
 | 状态提示 | `.dsq_status` | 同上 | 3 | 复制失败等瞬时提示 |
 | 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方；评论阶段「添加批注…」提示条在它上方左对齐、间距 6px |
+| 触屏操作条 | `.dsq_touchBar` | `document.body`（fixed） | 60 | coarse pointer 下替代工具条：复制 / 添加到任务 / 打开链接，贴 visual viewport 底部 |
+| 触屏评论抽屉 | `.dsq_touchSheet` | 同上 | 62（遮罩 61） | coarse pointer 下替代评论泡：选中原文预览 + 可选评论 + 跳过/添加 |
 | 悬浮摘要 | `.dsq_summaryHover` | `document.body`（fixed） | 14 | 摘要块的悬停列表（composer 与历史消息共用） |
-| 摘要块 | `.dsq_summary` | composer 内（`conversation.input.overlay`）/ 历史用户气泡上方 | 13 | 「N 条批注」入口；历史侧外包 `.dsq_tSummary` 右对齐 |
+| 摘要块 | `.dsq_summary` | composer 内（`conversation.input.overlay`）/ 历史用户气泡上方 | 13（composer）/ 1（历史） | 「N 条批注」入口；历史侧外包 `.dsq_tSummary` 右对齐。历史卡必须留在内容层，否则会盖住 6/8 的评论泡 |
 | 摘要容器 | `.dsq_cardStack` | composer 卡片内 | 12 | 输入框上方的摘要容器 |
 
-- 工具条/状态/评论泡共用一个 host：host 的 6 低于 composer seat 的 7，又被滚动容器裁剪，所以既不会穿过输入框，也会随正文滑进 header 下面（机制 13）。三者的内部次序是 status 3 > toolbar 2 > commentPop 1。
+- 工具条/状态/评论泡共用一个 host：平时 host 的 6 低于 composer seat 的 7，又被滚动容器裁剪，所以既不会穿过输入框，也会随正文滑进 header 下面（机制 13）。评论步骤打开时 host 抬到 8，让评论泡盖过伸进滚动区的摘要卡；关闭即还原。三者的内部次序是 status 3 > toolbar 2 > commentPop 1。
 - 摘要块/摘要容器在 composer seat（z 7，自成层叠上下文）内部，12/13 只在 composer 内比较；悬浮摘要是 body 级 fixed，14 属于页面根层叠上下文。
 
 ## 目录结构
@@ -228,6 +237,7 @@ src/client/composer/useSendIntercept.ts      # 发送手势时把待发批注折
 src/client/composer/useDraftMarker.ts        # U+200B 让"只有批注"时发送按钮可用
 src/client/dom/selection.ts        # 选区快照、工具条定位、复制、聚焦输入框
 src/client/dom/floating-layer.ts   # 找到对话滚动容器，挂内容坐标的浮层 host（裁剪 + 层带）
+src/client/ui/touch.ts             # coarse pointer / visualViewport 探测（触屏底部操作条与抽屉）
 src/client/dom/message-text.ts     # 消息纯净文本遍历、选区→字符偏移定位
 src/client/dom/annotate-text.ts    # 正文 mark（下划线+序号徽章）的注册表与装饰
 src/client/dom/scrollToAnnotation.ts # 点击批注滚动到正文 mark 并闪烁
@@ -240,7 +250,7 @@ src/client/state/annotation-persistence.ts # 持久化纯逻辑：载荷、保�
 src/client/state/annotation-storage.ts     # 环境探测（localStorage / 空），不碰 require
 src/client/protocol/annotation-protocol.ts # 批注 wire 格式（含 source 定位）
 src/client/protocol/quote-protocol.ts      # 旧 > 引用块协议 / U+200B 标记 / 文本工具
-src/client/transcript/host-user.ts     # 从 slot registry 解析宿主 UserMessageNodeView（纯逻辑，verify 直接 import）
+src/client/transcript/host-user.ts     # 从 slot registry 按 key 解析宿主 UserMessageNodeView（纯逻辑，verify 直接 import）
 src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注摘要块（单个块 + 悬停列表）
 src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡：委托宿主 UserMessageNodeView，只改文本块并前置摘要块
 src/client/ui/AnnotationCardView.tsx  # 摘要块与悬停列表面板（portal 到 body、内联编辑）
@@ -253,9 +263,9 @@ src/client/context.d.ts            # 客户端 Context 服务的类型补充
 scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装（--watch 时每次重建都重新包装）
 scripts/sync-desktop.mjs           # 把 lib/ 写进桌面 profile 已安装副本，借宿主热更新（--watch 常驻）
 scripts/dev-desktop.mjs            # 拉起 build --watch + sync --watch 两个子进程，任一退出就收摊
-scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 8 项，另查三种语言词典齐备、包展示元信息与发货清单）
+scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 9 项，另查三种语言词典齐备、包展示元信息与发货清单）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
-dev.patch.yml                      # 本地 --patch 开发层（绝对路径，不发布）
+dev.patch.example.yml              # 本地 --patch 开发层模板（复制为 gitignored 的 dev.patch.yml）
 docs/internals.md                  # 本文档（现存机制；历史记录在 docs/archive/）
 docs/archive/                      # 历史调查记录（只读存档，结论已并入正文）
 locale/                            # 插件页展示元信息（en/zh/ru 的 meta.title / meta.description，宿主不激活插件即可读）
@@ -267,16 +277,16 @@ lib/                               # 构建产物（已提交，运行时直接�
 
 - `[data-composer-card]` 属性存在，且主发送按钮是卡片内 DOM 顺序上最后一个 `button`；停止按钮渲染 `svg rect`；
 - 桌面（overlay）布局里 `[data-composer-seat]` 是 sticky、z 7 的输入区，**滚动容器的盒子会延伸**到它背后——浮层可放置区域的下边界要取它的顶边；seat 要从当前滚动容器的祖先链里就近找，不能取 `document` 里第一个（多窗格会钳错）；
-- 提交瞬间宿主渲染本地回显 `[data-submission-echo]`（含 `clock: start` 动作行），走 `conversation.chat.user.content` / `conversation.user.text` 工厂，不经过 `conversation.chat.node`；
+- 提交瞬间宿主渲染本地回显 `[data-submission-echo]`（含 `clock: start` 动作行），走 `conversation.chat.user.content` / `conversation.user.text` 工厂，不经过 `conversation.chat.node`；运行中提交的消息在排队面板 `[data-queue-dock]` 里用同一份 wire 内容渲染预览（`_7yHdaG_preview`，类名带 hash，只认 dock 属性）；这两处都要做展示层剥离；
 - `user/message` 事件的内容在 `data.content`（不是 `data.message.content`）；
 - 深色属性 `data-ds-dark-theme` 由 `dsh-client-ui-layout` 挂在 `body`；
 - 槽位名 `shell.overlay` / `conversation.input.overlay` / `conversation.chat.node` 及其 props（`useInput`、`inputActions.setDraft`）；
-- `ctx.slots.entries('conversation.chat.node')` 可枚举全部条目（包括被遮蔽的宿主条目）；宿主内置 `user` 视图的 `component.type.name` 是 `UserMessageNodeView`、`options` 只有 `key`（没有 `priority`）——插件自己的注册项要用组件身份排除，不能靠 `priority` 值；宿主改名时只有唯一的非自己候选才可退用，多候选必须走纯文本回退。委托渲染时要把 kit 里的 `renderFactorySlot`、`loadImage` 与 hooks 原样透传，并给注册项声明 `locale: 'chat'`——否则宿主的复制/已复制文案拿不到词典。`conversation.chat.user.content` 工厂（子槽 `conversation.chat.user.images` 渲染图片）由宿主视图自己调用，插件不再直接碰；**`renderMessageImages` 不是 0.2.1-rc.2 的宿主 prop**；
+- `ctx.slots.entries('conversation.chat.node')` 可枚举全部条目（包括被遮蔽的宿主条目）；宿主把同一个 `UserMessageNodeView` 同时注册在 `user` 与 `steering` 两个 key 下，`component.type.name` 是 `UserMessageNodeView`、`options` 只有 `key`（没有 `priority`）——插件自己的注册项要用组件身份排除，不能靠 `priority` 值（解析时还要按 key 过滤，两个 key 的宿主项不能互相借用）；宿主改名时只有唯一的非自己候选才可退用，多候选必须走纯文本回退。委托渲染时要把 kit 里的 `renderFactorySlot`、`loadImage` 与 hooks 原样透传，并给注册项声明 `locale: 'chat'`——否则宿主的复制/已复制文案拿不到词典。`conversation.chat.user.content` 工厂（子槽 `conversation.chat.user.images` 渲染图片）由宿主视图自己调用，插件不再直接碰；**`renderMessageImages` 不是 0.2.1-rc.2 的宿主 prop**；
 - `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
 - dsh-rewind 的撤回读持久 `user` / `steering` 节点的文本块（`block.type === 'text'`）并原样写回 composer——消息里的任何文本协议都会回到编辑器，所以本插件必须能把它反向还原（见关键机制 1）；
 - 开发期依赖：`client-hmr` 挂在 web 组合包里，按 500ms 轮询 client 产物并经 `/plugins/events` 推 `rebuilt`（`sync:desktop` 的热更新路径）；
 - 插件页展示元信息的读取约定：`<包名>/locale/en.json` 为发现入口、同目录其余 `*.json` 为各语言词典、`<包名>/icon` 为图标，全部经 Node ESM 解析且**不激活插件**（见关键机制 12）；这些路径必须在 `exports` 与 `files` 里都出现；
-- **对话滚动容器与浮层挂载（0.2.1-rc.2 复核）**：`_6Qf49G_frame` 是 `position:relative; z-index:auto`，不建层叠上下文；对话 header（`ST7X_W_header`，"标准模式"那一排）是滚动容器**之外**的非定位 flex 子项，composer seat 是 `position: sticky; z-index: 7`。因此 body 级 positioned 浮层无论 z-index 多低都会压过 header（非定位元素永远输给 positioned 元素）——这正是旧版 z-index 降到 0 仍浮在 header 上的原因。工具条/评论泡改挂进滚动容器：桌面抽屉布局滚的是 `.ST7X_W_scrollBody`（`.icaHSq_scroll` 此时是 visible），普通布局滚 `.icaHSq_scroll`；host 在容器内 `position:absolute`、z-index 6（低于 composer 7），靠容器裁剪实现"滑进 header 下面"（见机制 13）。宿主顶栏座位 `_6Qf49G_leadingSeat` 是 z-15、全帧 overlay 层 z-20，仅 `darwin && sidebarCollapsed` 时挂载；宿主菜单 100、弹层 1100-1250、模态 900-1005；
+- **对话滚动容器与浮层挂载（0.2.1-rc.2 复核）**：`_6Qf49G_frame` 是 `position:relative; z-index:auto`，不建层叠上下文；对话 header（`ST7X_W_header`，"标准模式"那一排）是滚动容器**之外**的非定位 flex 子项，composer seat 是 `position: sticky; z-index: 7`。因此 body 级 positioned 浮层无论 z-index 多低都会压过 header（非定位元素永远输给 positioned 元素）——这正是旧版 z-index 降到 0 仍浮在 header 上的原因。工具条/评论泡改挂进滚动容器：桌面抽屉布局滚的是 `.ST7X_W_scrollBody`（`.icaHSq_scroll` 此时是 visible），普通布局滚 `.icaHSq_scroll`；host 在容器内 `position:absolute`、z-index 6（低于 composer 7；评论阶段抬到 8），靠容器裁剪实现"滑进 header 下面"（见机制 13）。宿主顶栏座位 `_6Qf49G_leadingSeat` 是 z-15、全帧 overlay 层 z-20，仅 `darwin && sidebarCollapsed` 时挂载；宿主菜单 100、弹层 1100-1250、模态 900-1005；
 - macOS 顶部净空由 `--dsh-frame-overlay-top` 给出（`--dsh-frame-top-clearance:48px` + 20px = **68px**，全屏时 20px），要算顶部空间时读它；
 - 宿主菜单/弹层是 z-index 100（菜单）与 1100-1250（弹层），模态 900-1005，都在我们之上；它们同样把 `--dsw-elevation-stroke-color` 覆写成 `--dsw-alias-border-l1`（"覆层不描边"，与本插件一致）。
 - **已失效的旧类名**（0.2.0-rc.2 时期）：`.nyYjTG_file`（文件卡片几何）、`.I17U7q_follow`（对话滚动区）随 0.2.1-rc.2 重构消失。消息行的 `data-chat-flow-key` 仍在，另有 `data-chat-anchor-key` / `data-chat-group-key` / `data-chat-flow-kind` / `data-chat-turn`。
@@ -291,9 +301,9 @@ lib/                               # 构建产物（已提交，运行时直接�
 | 在消息列表最底部划词时，评论泡被输入框盖住 | `floating-layer.ts` 的 `bounds().bottom` 是否还是滚动容器底边：必须取 composer seat 顶边（`[data-composer-seat]`，缺失退回 `[data-composer-card]`）与容器底边的较小值，否则桌面布局里容器盒子的下半段在 composer 后面；seat 还必须按当前滚动容器就近解析（机制 13） |
 | 点空白处批注没了 | 应当保留：批注在点「添加到任务」时已保存，空白点击只会关闭评论泡（见机制 13）。若真丢了，查 `openComment` 是否走到 `saveSelection` |
 | 输入框里出现协议原文 | 发送前的注入没生效：确认草稿里存在 U+200B（发送按钮应可用），以及 composer 结构未变（`[data-composer-card]`） |
-| 发送后、模型返回前的气泡里出现整段协议 | 这是宿主的本地回显（`[data-submission-echo]`），不走本插件的 chat node。查 `watchSubmissionEcho()` 是否注册（`pnpm run verify` 的 `TRANSCRIPT SURFACE` 闸，回显有 DOM 桩行为用例）；完整块无论 JSON 是否合法都该被剥掉，仍有原文说明回显文本被会话 chip 拆成多个 run——按设计不重建（只处理包含完整块的单个 run，行本身是文本时会直接剥行） |
+| 发送后、模型返回前的气泡或排队预览里出现整段协议 | 这是宿主的本地回显（`[data-submission-echo]`）或排队面板预览（`[data-queue-dock]`），都不走本插件的 chat node。查 `watchSubmissionEcho()` 是否注册（`pnpm run verify` 的 `TRANSCRIPT SURFACE` 闸，两类表面都有 DOM 桩行为用例）；完整块无论 JSON 是否合法都该被剥掉。回显仍有原文，说明文本被会话 chip 拆成多个 run——按设计不重建（只处理包含完整块的单个 run，行本身是文本时会直接剥行）；队列预览仍有原文，查最内层纯文本容器是否被工厂套了非文本子节点（`textContainers` 只选不含子候选的容器） |
 | 撤回（dsh-rewind 的 ↶）后输入框里是整段协议 JSON | 撤回把持久文本原样写回 composer，正常应由 `readComposedDraft()` 反向还原成正文 + 待发摘要卡。先看 `pnpm run verify` 的 `COMPOSED DRAFT` / `REWIND RESTORE` 两道闸；再用 DevTools 确认写回的是**完整且 JSON 合法**的块——被截断或手改过的块按设计不碰，以免误删用户草稿 |
-| 对话记录里没有摘要块 | 该 `user/message` 事件的 `data.content` 是否含批注块；摘要块由 `user` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 的 `user` 单元是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
+| 对话记录里没有摘要块 | 该 `user/message`（插话发送则是 steering）事件的 `data.content` 是否含批注块；摘要块由 `user` / `steering` 节点的 `UserMessageDisplay` 内联渲染，先查 `conversation.chat.node` 对应 key 是否注册成功，再查是否被 Turn 过程折叠隐藏（见关键机制 4） |
 | 带图片的消息在记录里只剩摘要块、图片没了 | `UserMessageDisplay` 是否成功解析并渲染了宿主 `UserMessageNodeView`；图片/文件由宿主视图从改写后的 `node.data.content` 自己渲染 |
 | 用户消息下方的时间 / 复制（以及 dsh-rewind 的 ↶）整行消失 | 先查宿主视图解析：`ctx.slots.entries('conversation.chat.node')` 里是否还有 `UserMessageNodeView`，注册项是否带 `locale: 'chat'`；`pnpm run verify` 的 `USER CHROME` 闸会回放身份排除与候选选择。**不要再自己补动作行**——这正是 issue #8 的复发路径 |
 | 改了 CSS 不生效 | `<style>` 只注入一次，刷新页面 |

@@ -1,5 +1,5 @@
 import { useEffect, type MutableRefObject } from 'react'
-import { composerCardOf, willSubmit } from '../dom/composer-host.ts'
+import { composerCardOf, isSubmitKey, willSubmit } from '../dom/composer-host.ts'
 import { composeAnnotatedMessage } from '../protocol/annotation-protocol.ts'
 import { clearAnnotations, getAnnotations } from '../state/annotation-store.ts'
 
@@ -40,9 +40,7 @@ export function useSendIntercept({
     }
 
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey)
-        return
-      if (event.isComposing) return
+      if (!isSubmitKey(event)) return
       const target = event.target
       if (!(target instanceof HTMLElement) || !target.isContentEditable) return
       const card = composerCardOf(target)

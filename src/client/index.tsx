@@ -21,17 +21,19 @@ import {
 import { ensureToolbarStyles } from './styles.ts'
 import {
   UserMessageDisplay,
-  type HostUserComponent,
+  type HostNodeComponent,
   type UserMessageDisplayProps,
 } from './transcript/UserMessageDisplay.tsx'
-import { pickHostUser } from './transcript/host-user.ts'
+import { pickHostNode } from './transcript/host-user.ts'
 import {
+  adoptStorageAnnotations,
   bindAnnotationSession,
   getAnnotations,
   setAnnotationPersistence,
   subscribeAnnotations,
 } from './state/annotation-store.ts'
 import { createAnnotationPersistence } from './state/annotation-storage.ts'
+import { sessionIdOfKey } from './state/annotation-persistence.ts'
 
 /**
  * Browser half of dsh-select-quote.
@@ -100,12 +102,27 @@ export function apply(ctx: Context): void {
   }, 'dsh-select-quote: pending annotation marks')
 
   // Pending annotations survive a refresh the way the draft does: both live in
-  // localStorage, under this plugin's own key prefix.
+  // localStorage, under this plugin's own key prefix. A `storage` event means
+  // another tab wrote (or cleared) one of those keys; re-read it before this
+  // tab's next edit can overwrite the newer state with its stale array.
   ctx.effect(() => {
     const port = createAnnotationPersistence()
     setAnnotationPersistence(port)
     port.prune()
-    return () => setAnnotationPersistence(null)
+    const onStorage = (event: StorageEvent): void => {
+      if (event.storageArea !== null && event.storageArea !== window.localStorage) return
+      if (event.key === null) {
+        adoptStorageAnnotations(null)
+        return
+      }
+      const sessionId = sessionIdOfKey(event.key)
+      if (sessionId !== null) adoptStorageAnnotations(sessionId)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      setAnnotationPersistence(null)
+    }
   }, 'dsh-select-quote: annotation persistence')
 
   // Root: always mounted selection toolbar + comment popover.
@@ -149,31 +166,47 @@ export function apply(ctx: Context): void {
   // view owns the time/copy actions row, attachments, file cards and reference
   // summaries, so a host change or another plugin's decoration of that row is
   // preserved instead of being shadowed by a private copy.
-  // `UserNode` is the registration below; passing it by identity keeps the
-  // lookup independent of the priority value used to win the slot election.
-  function UserNode(props: UserMessageDisplayProps) {
-    return <UserMessageDisplay {...props} hostUserOf={hostUserOf} />
-  }
-  const hostUserOf = (): HostUserComponent | undefined => {
+  //
+  // `steering` is the same host bubble registered under another key; a
+  // steering send carries the same protocol block, so it needs the same
+  // rewrite. Each wrapper passes itself by identity so the lookup never
+  // resolves the plugin's own registration as the host.
+  const hostNodeOf = (
+    key: 'user' | 'steering',
+    self: unknown,
+  ): HostNodeComponent | undefined => {
     const entries =
       typeof ctx.slots.entries === 'function'
         ? ctx.slots.entries('conversation.chat.node')
         : []
-    return pickHostUser(entries, UserNode) as HostUserComponent | undefined
+    return pickHostNode(entries, self, key) as HostNodeComponent | undefined
   }
-  ctx.slots.inject('conversation.chat.node', () => {
-    ctx.slots.register(
-      {
-        name: 'conversation.chat.node',
-        key: 'user',
-        priority: -10,
-        // The delegated host view needs its own translator for the copy
-        // tooltip; the chat namespace is the one it is written against.
-        locale: 'chat',
-      },
-      UserNode,
+  function UserNode(props: UserMessageDisplayProps) {
+    return <UserMessageDisplay {...props} hostNodeOf={() => hostNodeOf('user', UserNode)} />
+  }
+  function SteeringNode(props: UserMessageDisplayProps) {
+    return (
+      <UserMessageDisplay {...props} hostNodeOf={() => hostNodeOf('steering', SteeringNode)} />
     )
-  })
+  }
+  for (const [key, View] of [
+    ['user', UserNode],
+    ['steering', SteeringNode],
+  ] as const) {
+    ctx.slots.inject('conversation.chat.node', () => {
+      ctx.slots.register(
+        {
+          name: 'conversation.chat.node',
+          key,
+          priority: -10,
+          // The delegated host view needs its own translator for the copy
+          // tooltip; the chat namespace is the one it is written against.
+          locale: 'chat',
+        },
+        View,
+      )
+    })
+  }
 }
 
 /** Invisible session-scoped bridge that publishes sessionId for the root toolbar. */

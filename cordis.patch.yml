@@ -12,7 +12,8 @@
 #
 # Local development from a checkout cannot use this file — the checkout is not
 # in the profile's node_modules, so the loader has no name to resolve. Use
-# `dev.patch.yml` (absolute path) with `dsh web --patch` instead.
+# `dev.patch.yml` (copied from `dev.patch.example.yml`, absolute path) with
+# `dsh web --patch` instead.
 - insert:
     - id: select-quote
       name: 'dsh-select-quote'

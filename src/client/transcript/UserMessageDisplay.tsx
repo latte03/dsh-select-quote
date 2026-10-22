@@ -5,7 +5,7 @@ import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
 import { TranscriptQuoteCard } from './TranscriptQuoteCard.tsx'
 
 /** The host's own Chat node view, rendered with a rewritten `node` prop. */
-export type HostUserComponent = ComponentType<Record<string, unknown>>
+export type HostNodeComponent = ComponentType<Record<string, unknown>>
 
 export interface UserMessageDisplayProps {
   node: {
@@ -16,8 +16,8 @@ export interface UserMessageDisplayProps {
       skillNames?: unknown
     }
   }
-  /** Resolves the host `UserMessageNodeView` from the live slot registry. */
-  hostUserOf?: () => HostUserComponent | undefined
+  /** Resolves the host `UserMessageNodeView` for this key from the slot registry. */
+  hostNodeOf?: () => HostNodeComponent | undefined
   /** Authorized image loader, used only by the hostless fallback bubble. */
   loadImage?: (attachment: unknown) => string | undefined
   [key: string]: unknown
@@ -80,7 +80,7 @@ function imageAttachments(raw: unknown): unknown[] {
  */
 export function UserMessageDisplay(props: UserMessageDisplayProps): ReactNode {
   ensureToolbarStyles()
-  const { node, hostUserOf, ...rest } = props
+  const { node, hostNodeOf, ...rest } = props
   const raw = contentBlocksToText(node.data?.content)
   const scanned = scanAnnotatedMessage(raw)
   // The scan strips every complete annotation block, valid or not; the quote
@@ -106,7 +106,7 @@ export function UserMessageDisplay(props: UserMessageDisplayProps): ReactNode {
   )
   const cards =
     quotes.length > 0 ? <TranscriptQuoteCard node={{ data: { quotes } }} /> : null
-  const Host = hostUserOf?.()
+  const Host = hostNodeOf?.()
 
   if (Host !== undefined) {
     return (
@@ -142,8 +142,4 @@ export function UserMessageDisplay(props: UserMessageDisplayProps): ReactNode {
       </div>
     </>
   )
-}
-
-export function SteeringMessageDisplay(props: UserMessageDisplayProps): ReactNode {
-  return UserMessageDisplay(props)
 }

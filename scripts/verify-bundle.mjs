@@ -36,6 +36,7 @@ const EXPECTED = [
   { kind: 'slots.register', label: 'conversation.input.overlay / select-quote-card' },
   { kind: 'slots.register', label: 'conversation.input.overlay / select-quote-session-bridge' },
   { kind: 'slots.register', label: 'conversation.chat.node / user' },
+  { kind: 'slots.register', label: 'conversation.chat.node / steering' },
   { kind: 'locale.language', label: 'ru' },
   { kind: 'locale.register', label: 'select-quote (en, zh)' },
   { kind: 'locale.register', label: 'select-quote (ru)' },
@@ -250,6 +251,12 @@ function checkUserChrome(code) {
   if (code.includes('renderMessageImages')) {
     problems.push('renderMessageImages is not a host prop — pass the node through the host view')
   }
+  if (!code.includes('isSubmitKey')) {
+    problems.push('composer send intercept does not use isSubmitKey — modified Enter gestures skip the fold')
+  }
+  if (!/addEventListener\(["']storage["']/.test(code)) {
+    problems.push('annotation store has no storage listener — another tab can overwrite newer state')
+  }
   return problems
 }
 
@@ -442,6 +449,49 @@ function packedFiles() {
 }
 
 /**
+ * Every host submit gesture must fold annotations before the composer reads
+ * its draft. Plain Enter, Ctrl+Enter and Meta+Enter submit; Shift+Enter,
+ * Alt/AltGraph, the two modifiers together, and IME are not submits.
+ */
+async function checkSendKey() {
+  const problems = []
+  const { isSubmitKey } = await import(
+    new URL('../src/client/dom/composer-host.ts', import.meta.url).href
+  )
+  const base = {
+    key: 'Enter',
+    shiftKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    isComposing: false,
+  }
+  const key = (over) => ({ ...base, ...over })
+  for (const [name, event] of [
+    ['Enter', key({})],
+    ['Ctrl+Enter', key({ ctrlKey: true })],
+    ['Meta+Enter', key({ metaKey: true })],
+  ]) {
+    if (!isSubmitKey(event)) problems.push(`${name} is not treated as a submit gesture`)
+  }
+  for (const [name, event] of [
+    ['Shift+Enter', key({ shiftKey: true })],
+    ['Alt+Enter', key({ altKey: true })],
+    ['Ctrl+Meta+Enter', key({ ctrlKey: true, metaKey: true })],
+    ['Shift+Meta+Enter', key({ shiftKey: true, metaKey: true })],
+    ['IME Enter', key({ isComposing: true })],
+    ['non-Enter', key({ key: 'a' })],
+    [
+      'AltGraph Enter',
+      { ...key({}), getModifierState: (name) => name === 'AltGraph' },
+    ],
+  ]) {
+    if (isSubmitKey(event)) problems.push(`${name} would fold annotations for a non-submit gesture`)
+  }
+  return problems
+}
+
+/**
  * The composer-side inverse of the send fold.
  *
  * dsh-rewind refills a withdrawn message verbatim — it reads the durable text
@@ -580,16 +630,19 @@ function checkRewindRestore(code) {
 /**
  * Surfaces that bypass the chat-node slot.
  *
- * The optimistic submission echo (`[data-submission-echo]`) is painted by the
- * chat flow from the composer draft, so it shows the protocol block until the
- * durable message lands — it must be stripped in place. History annotations
- * group into ONE summary block per message (count + hover list), never one
- * card per annotation.
+ * The optimistic submission echo (`[data-submission-echo]`) and queued-message
+ * previews (`[data-queue-dock]`) are painted by the chat flow from the draft
+ * or wire content, so both show the protocol block — they must be stripped in
+ * place. History annotations group into ONE summary block per message (count +
+ * hover list), never one card per annotation.
  */
 function checkTranscriptSurfaces(code) {
   const problems = []
   if (!code.includes('data-submission-echo')) {
     problems.push('submission echo is not stripped — a slow turn shows the raw protocol block')
+  }
+  if (!code.includes('data-queue-dock') || !code.includes('stripQueueDock')) {
+    problems.push('queue dock preview is not stripped — a queued send shows the raw protocol block')
   }
   if (!code.includes('dsq_tSummary')) {
     problems.push('transcript summary block is missing — annotations must group into one block')
@@ -605,39 +658,53 @@ function checkTranscriptSurfaces(code) {
  * not by the priority value that happens to win the slot election, and it
  * must never delegate to an arbitrary wrapper when the host is ambiguous.
  */
-async function checkHostUser() {
+async function checkHostNode() {
   const problems = []
-  const { pickHostUser } = await import(
+  const { pickHostNode } = await import(
     new URL('../src/client/transcript/host-user.ts', import.meta.url).href
   )
   const self = function UserNode() {}
   const host = function UserMessageNodeView() {}
   const other = function OtherUserNode() {}
   const third = function ThirdUserNode() {}
-  const entry = (component, priority) => ({
+  const entry = (component, priority, key = 'user') => ({
     component,
-    options: { key: 'user', ...(priority === undefined ? {} : { priority }) },
+    options: { key, ...(priority === undefined ? {} : { priority }) },
   })
   // memo() is an object whose `type` carries the function name.
   const memoHost = { type: host }
 
-  if (pickHostUser([entry(self, -10), entry(host)], self) !== host) {
+  if (pickHostNode([entry(self, -10), entry(host)], self, 'user') !== host) {
     problems.push('the named host user view was not resolved')
   }
-  if (pickHostUser([entry(self, -10), entry(memoHost)], self) !== memoHost) {
+  if (pickHostNode([entry(self, -10), entry(memoHost)], self, 'user') !== memoHost) {
     problems.push('a memo-wrapped host user view was not resolved')
   }
-  if (pickHostUser([entry(self, -10)], self) !== undefined) {
+  if (pickHostNode([entry(self, -10)], self, 'user') !== undefined) {
     problems.push('the plugin resolved its own registration as the host')
   }
-  if (pickHostUser([entry(self, -10), entry(other, -1)], self) !== other) {
+  if (pickHostNode([entry(self, -10), entry(other, -1)], self, 'user') !== other) {
     problems.push('a renamed host with one non-self candidate was not used')
   }
-  if (pickHostUser([entry(self, -10), entry(other, -1), entry(third, 0)], self) !== undefined) {
+  if (
+    pickHostNode([entry(self, -10), entry(other, -1), entry(third, 0)], self, 'user') !== undefined
+  ) {
     problems.push('ambiguous host candidates were guessed instead of falling back')
   }
-  if (pickHostUser([entry(self, -10), entry(host), entry(other, -1)], self) !== host) {
+  if (
+    pickHostNode([entry(self, -10), entry(host), entry(other, -1)], self, 'user') !== host
+  ) {
     problems.push('another user wrapper beat the named host view')
+  }
+  // The host registers the same component under steering; the lookup must not
+  // borrow the user entry (and vice versa).
+  if (pickHostNode([entry(host, 0, 'steering'), entry(other, 0, 'user')], self, 'steering') !== host) {
+    problems.push('the steering host view was not resolved by key')
+  }
+  if (
+    pickHostNode([entry(host, 0, 'user'), entry(other, 0, 'steering')], self, 'steering') !== other
+  ) {
+    problems.push('a steering lookup resolved the user view')
   }
   return problems
 }
@@ -651,7 +718,7 @@ async function checkEchoStrip() {
   const { composeAnnotatedMessage } = await import(
     new URL('../src/client/protocol/annotation-protocol.ts', import.meta.url).href
   )
-  const { stripEchoRow } = await import(
+  const { stripEchoRow, stripQueueDock } = await import(
     new URL('../src/client/dom/stripSubmissionEcho.ts', import.meta.url).href
   )
   const block = composeAnnotatedMessage('用户正文', [
@@ -695,6 +762,51 @@ async function checkEchoStrip() {
     problems.push('a marker pair split across siblings was mutated')
   }
 
+  // Queue previews come from the host's word-splitting text factory: the
+  // markers live in different leaves, so the flat echo strategy cannot see a
+  // complete block. The innermost text container must be rewritten instead,
+  // one per queued row, leaving sibling actions untouched.
+  const branch = (children, text) => {
+    const descendants = children.flatMap((child) => [
+      child,
+      ...Array.from(child.querySelectorAll('*')),
+    ])
+    const node = {
+      children,
+      querySelectorAll: () => descendants,
+      contains: (other) => descendants.includes(other),
+    }
+    if (text === undefined) {
+      Object.defineProperty(node, 'textContent', {
+        get: () => children.map((child) => child.textContent).join(''),
+      })
+    } else {
+      node.textContent = text
+    }
+    return node
+  }
+  const previewOf = (source) => {
+    const words = [
+      leaf(source.slice(0, Math.floor(source.length / 2))),
+      leaf(source.slice(Math.floor(source.length / 2))),
+    ]
+    return branch(words, source)
+  }
+  const firstText = previewOf(block)
+  const secondText = previewOf(block.replace('用户正文', '第二条正文'))
+  const action = leaf('')
+  const firstRow = branch([firstText, action])
+  const secondRow = branch([secondText])
+  const dock = branch([firstRow, secondRow])
+  if (!stripQueueDock(dock)) problems.push('queue dock previews were not stripped')
+  if (firstText.textContent !== '用户正文' || secondText.textContent !== '第二条正文') {
+    problems.push('a queue dock with two previews kept protocol text')
+  }
+  if (firstRow.children.length !== 2 || firstRow.children[1] !== action) {
+    problems.push('stripping a queue preview rebuilt the whole row')
+  }
+  if (stripQueueDock(dock)) problems.push('stripping the same queue dock twice was not idempotent')
+
   // A complete block with unreadable or non-array JSON is still protocol text:
   // the echo must drop it rather than painting the payload.
   for (const broken of [
@@ -717,7 +829,64 @@ async function checkPersistence() {
   const plainStorage = memoryStorage()
   await replay(() => createStoragePersistence(plainStorage), plainStorage, problems, 'localStorage')
   await checkBinding(problems)
+  await checkCrossTab(problems)
   return problems
+}
+
+/**
+ * Two tabs, one localStorage. A write in one tab must be adopted by the other;
+ * once a tab sends (clear), the stale tab must not re-persist the old array.
+ */
+async function checkCrossTab(problems) {
+  const { createStoragePersistence } = await import(
+    new URL('../src/client/state/annotation-persistence.ts', import.meta.url).href
+  )
+  const storage = memoryStorage()
+  const key = 'dsh.select-quote.annotations.session-tabs'
+  const tabA = await freshStore()
+  const tabB = await freshStore()
+  tabA.setAnnotationPersistence(createStoragePersistence(storage))
+  tabB.setAnnotationPersistence(createStoragePersistence(storage))
+  tabA.bindAnnotationSession('session-tabs')
+  tabB.bindAnnotationSession('session-tabs')
+  await flush()
+
+  tabA.saveAnnotation(undefined, { text: 'tab A item', sources: [{ text: 'tab A item' }] })
+  await flush()
+  tabB.adoptStorageAnnotations('session-tabs')
+  if (tabB.getAnnotations().length !== 1 || tabB.getAnnotations()[0]?.text !== 'tab A item') {
+    problems.push('cross-tab: a write in tab A was not adopted by tab B')
+  }
+
+  // A sends: its clear is the newest state. B must drop the stale copy, and a
+  // later B write must not resurrect what A already sent.
+  tabA.clearAnnotations()
+  await flush()
+  tabB.adoptStorageAnnotations('session-tabs')
+  if (tabB.getAnnotations().length !== 0) {
+    problems.push('cross-tab: tab B kept annotations tab A already sent')
+  }
+  tabB.saveAnnotation(undefined, { text: 'tab B item', sources: [{ text: 'tab B item' }] })
+  await flush()
+  const stored = JSON.parse(storage.getItem(key) ?? 'null')
+  if (!stored || stored.items.length !== 1 || stored.items[0].text !== 'tab B item') {
+    problems.push('cross-tab: a stale tab resurrected sent annotations')
+  }
+
+  // A write from the other tab reaches this one.
+  tabB.saveAnnotation(undefined, { text: 'tab B second', sources: [{ text: 'tab B second' }] })
+  await flush()
+  tabA.adoptStorageAnnotations('session-tabs')
+  if (tabA.getAnnotations().length !== 2) {
+    problems.push('cross-tab: a concurrent write in tab B was not adopted by tab A')
+  }
+
+  // localStorage.clear() reports key === null; held partitions must go too.
+  storage.removeItem(key)
+  tabA.adoptStorageAnnotations(null)
+  if (tabA.getAnnotations().length !== 0) {
+    problems.push('cross-tab: localStorage.clear() left a stale partition')
+  }
 }
 
 /** Map-backed `KeyValueStorage`: the port the backend runs on. */
@@ -753,6 +922,8 @@ function loadFactory(code, storage) {
           definition = value
         },
       },
+      addEventListener() {},
+      removeEventListener() {},
     },
     localStorage: localStorageFacade(storage),
     console,
@@ -1023,7 +1194,8 @@ for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) l
 const persistenceProblems = await checkPersistence()
 const linkProblems = await checkSelectionUrl()
 const metaProblems = checkPackageMeta()
-const userChromeProblems = [...checkUserChrome(code), ...(await checkHostUser())]
+const userChromeProblems = [...checkUserChrome(code), ...(await checkHostNode())]
+const sendKeyProblems = await checkSendKey()
 const composedDraftProblems = await checkComposedDraft()
 const rewindProblems = checkRewindRestore(code)
 const surfaceProblems = [...checkTranscriptSurfaces(code), ...(await checkEchoStrip())]
@@ -1040,6 +1212,7 @@ if (
   linkProblems.length > 0 ||
   metaProblems.length > 0 ||
   userChromeProblems.length > 0 ||
+  sendKeyProblems.length > 0 ||
   composedDraftProblems.length > 0 ||
   rewindProblems.length > 0 ||
   surfaceProblems.length > 0
@@ -1053,6 +1226,7 @@ if (
   for (const problem of linkProblems) console.error(`LINK: ${problem}`)
   for (const problem of metaProblems) console.error(`PACKAGE META: ${problem}`)
   for (const problem of userChromeProblems) console.error(`USER CHROME: ${problem}`)
+  for (const problem of sendKeyProblems) console.error(`SEND KEY: ${problem}`)
   for (const problem of composedDraftProblems) console.error(`COMPOSED DRAFT: ${problem}`)
   for (const problem of rewindProblems) console.error(`REWIND RESTORE: ${problem}`)
   for (const problem of surfaceProblems) console.error(`TRANSCRIPT SURFACE: ${problem}`)
@@ -1060,8 +1234,8 @@ if (
 }
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
-    `copy complete for ${[...languages].sort().join('/')}, annotation persistence replayed, link detection replayed, ` +
-    `host view resolution replayed, composed annotation blocks read back, ` +
+    `copy complete for ${[...languages].sort().join('/')}, annotation persistence + cross-tab sync replayed, link detection replayed, ` +
+    `host view resolution replayed, send gestures replayed, composed annotation blocks read back, ` +
     `echo strip replayed, transcript summary single-block, ` +
     `package metadata (locale + icon) resolved and packed`,
 )

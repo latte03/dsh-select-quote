@@ -119,18 +119,23 @@ function decorateBySearch(item: HTMLElement, job: AnnotationJob): boolean {
   if (needle.length < 2) return false
   // Second pattern tolerates block boundaries: selection text carries newlines
   // the DOM concatenation does not, so words may adjoin with zero whitespace.
-  const patterns = [needle, needle.split(/\s+/).map(escapeRegExp).join('\\s*')]
+  // It must be a real RegExp — `indexOf` would search for the literal "\s*".
+  const patterns = [
+    new RegExp(escapeRegExp(needle), 'g'),
+    new RegExp(needle.split(/\s+/).map(escapeRegExp).join('\\s*'), 'g'),
+  ]
   for (const pattern of patterns) {
-    let at = full.indexOf(pattern)
-    while (at >= 0) {
-      const located = cleanTextRange(item, at, at + pattern.length)
+    for (const match of full.matchAll(pattern)) {
+      const at = match.index ?? 0
+      const length = match[0].length
+      if (length === 0) continue
+      const located = cleanTextRange(item, at, at + length)
       if (located) {
         const pieces = overlappingEntries(located.entries, located.from, located.to)
         if (pieces.length > 0 && !isMarked(pieces) && wrapRange(item, job, located.from, located.to)) {
           return true
         }
       }
-      at = full.indexOf(pattern, at + 1)
     }
   }
   return false
@@ -145,6 +150,22 @@ function decorateJob(item: HTMLElement, job: AnnotationJob): boolean {
   return decorateBySearch(item, job)
 }
 
+/**
+ * Existing marks are kept, but their ordinal is owned by the job: removing an
+ * earlier annotation renumbers the rest without re-wrapping the text. Only the
+ * final fragment carries the badge.
+ */
+function refreshMarkIndex(item: HTMLElement, job: AnnotationJob): boolean {
+  const marks = Array.from(
+    item.querySelectorAll<HTMLElement>(`[${MARK_ATTR}="${attrValue(job.markId)}"]`),
+  )
+  if (marks.length === 0) return false
+  const last = marks[marks.length - 1]
+  const next = String(job.index)
+  if (last.getAttribute(INDEX_ATTR) !== next) last.setAttribute(INDEX_ATTR, next)
+  return true
+}
+
 /** Apply every registered job whose message is currently rendered. */
 export function applyAnnotationMarks(root?: ParentNode): void {
   if (jobs.size === 0) return
@@ -152,13 +173,20 @@ export function applyAnnotationMarks(root?: ParentNode): void {
   if (!scope) return
   for (const job of [...jobs.values()]) {
     const items = flowItems(job.messageId, scope)
+    let decorated = false
     for (const item of items) {
-      if (item.querySelector(`[${MARK_ATTR}="${attrValue(job.markId)}"]`)) break
+      // Refresh every rendered copy that already carries the mark, including
+      // copies after the first one that owns the decoration.
+      if (refreshMarkIndex(item, job)) {
+        decorated = true
+        continue
+      }
+      if (decorated) continue
       // Cheap pre-filter for locator-less jobs, which scan every message.
       if (job.messageId === '' && !item.textContent?.includes(job.text.trim().slice(0, 16))) {
         continue
       }
-      if (decorateJob(item, job)) break
+      if (decorateJob(item, job)) decorated = true
     }
   }
 }
@@ -232,6 +260,8 @@ export function watchAnnotationMarks(root?: ParentNode): () => void {
   applyAnnotationMarks(el)
   let frame = 0
   const schedule = (): void => {
+    // Nothing to maintain until a job exists; upsert applies synchronously.
+    if (jobs.size === 0) return
     if (frame !== 0) return
     frame = window.requestAnimationFrame(() => {
       frame = 0

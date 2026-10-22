@@ -8,3 +8,6 @@ lib/.client-build/
 .env
 .env.*
 tmp/
+
+# 每台机器自己的本地 patch（绝对路径）；仓库只提供 dev.patch.example.yml
+dev.patch.yml

@@ -21,6 +21,12 @@ import { flowItemOf } from './message-text.ts'
 const HOST_ATTR = 'data-dsq-layer'
 /** Below the composer seat (sticky, z-index 7); above in-content stickies (6). */
 const HOST_Z = 6
+/**
+ * Raised while the comment step is open. The composer summary card lives in
+ * the seat (z 7) and can extend over the scroller area; the popover, clipped
+ * to the scroller, would otherwise paint underneath it.
+ */
+const HOST_Z_ABOVE_COMPOSER = 8
 
 export interface FloatingLayer {
   /** Portal target inside the scroll container. */
@@ -32,6 +38,8 @@ export interface FloatingLayer {
   toContent(left: number, top: number): { left: number; top: number }
   /** Content coordinates → viewport point (inverse of `toContent`). */
   fromContent(left: number, top: number): { left: number; top: number }
+  /** Lift the host above the composer seat while a popover overlaps it. */
+  setAboveComposer(above: boolean): void
 }
 
 const layers = new WeakMap<HTMLElement, FloatingLayer>()
@@ -130,6 +138,9 @@ function layerFor(scroller: HTMLElement): FloatingLayer {
         top: top + rect.top + scroller.clientTop - scroller.scrollTop,
       }
     },
+    setAboveComposer: (above) => {
+      host.style.zIndex = String(above ? HOST_Z_ABOVE_COMPOSER : HOST_Z)
+    },
   }
   layers.set(scroller, layer)
   return layer
@@ -151,6 +162,9 @@ function fallbackLayer(): FloatingLayer {
     },
     toContent: (left, top) => ({ left, top }),
     fromContent: (left, top) => ({ left, top }),
+    setAboveComposer: (above) => {
+      host.style.zIndex = String(above ? HOST_Z_ABOVE_COMPOSER : HOST_Z)
+    },
   }
   return fallback
 }

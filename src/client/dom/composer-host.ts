@@ -22,6 +22,29 @@ export function willSubmit(card: HTMLElement, draft: string): boolean {
   return draft.trim().length > 0 || card.querySelector('img') !== null
 }
 
+/**
+ * True for the Enter gestures the host submits: plain Enter, Ctrl+Enter, and
+ * Meta+Enter. Mirrors the host composer's Enter command: Shift+Enter inserts
+ * a newline; Alt, AltGraph, the two modifiers together, and IME composition
+ * are ignored. Used to fold annotations for every real submit gesture.
+ */
+export function isSubmitKey(event: {
+  key: string
+  shiftKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+  altKey: boolean
+  isComposing: boolean
+  getModifierState?: (key: string) => boolean
+}): boolean {
+  if (event.key !== 'Enter') return false
+  if (event.shiftKey || event.altKey) return false
+  if (event.ctrlKey && event.metaKey) return false
+  if (event.isComposing) return false
+  if (event.getModifierState?.('AltGraph') === true) return false
+  return true
+}
+
 /** Focus the resident composer editor and park the caret at the end. */
 export function focusComposer(): void {
   const editor =

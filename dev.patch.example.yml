@@ -1,0 +1,15 @@
+# Local development layer for dsh-select-quote.
+#
+# Copy this file to dev.patch.yml (gitignored), replace <CHECKOUT> with the
+# checkout's absolute path, then:
+#
+#   cp dev.patch.example.yml dev.patch.yml
+#   dsh web --patch "$PWD/dev.patch.yml"
+#
+# The loader resolves roster rows by package name, and a checkout is NOT
+# installed in the profile's node_modules, so this layer must point at the
+# host-half entry file by ABSOLUTE PATH. The published package uses
+# `cordis.patch.yml` (package name) instead.
+- insert:
+    - id: select-quote
+      name: '<CHECKOUT>/src/index.ts'
