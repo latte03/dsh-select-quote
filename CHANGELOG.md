@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.9](https://github.com/latte03/dsh-select-quote/compare/v0.3.8...v0.3.9) (2026-10-22)
+
+### Features
+
+* 完善触屏划词交互与批注同步 ([9b1391d](https://github.com/latte03/dsh-select-quote/commit/9b1391d9ec5d50116b2ed3da0ac8757581769393))
+* 统一批注 chip 预览与浮层交互 ([0d491d2](https://github.com/latte03/dsh-select-quote/commit/0d491d2215cfac4b1bf35d7cd1d5b7bc6ffaf622))
+
+### Bug Fixes
+
+* 加固批注协议与宿主委托边界 ([1fb5fbf](https://github.com/latte03/dsh-select-quote/commit/1fb5fbf34ba5e741f49136d14e7be81d9cec299f))
+
 ## [0.3.8](https://github.com/latte03/dsh-select-quote/compare/v0.3.7...v0.3.8) (2026-10-20)
 
 ### Bug Fixes
