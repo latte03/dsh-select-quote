@@ -654,6 +654,9 @@ function checkTranscriptSurfaces(code) {
   if (!code.includes('--dsq-ann-badge-x') || !code.includes('--dsq-ann-badge-y')) {
     problems.push('badge collision offsets are not wired into the annotation mark')
   }
+  if (!code.includes('dsh-select-quote: mark preview') || !code.includes('mark.previewAria')) {
+    problems.push('transcript marks have no click/keyboard preview')
+  }
   return problems
 }
 
@@ -1281,72 +1284,6 @@ async function checkMenuTrigger() {
  * ordinals on the same pixels, and edge bounds must move the stack upward
  * instead of off-screen.
  */
-async function checkBadgeLayout() {
-  const problems = []
-  const { placeBadges, BADGE_WIDTH, BADGE_HEIGHT } = await import(
-    new URL('../src/client/dom/badge-layout.ts', import.meta.url).href
-  )
-  if (BADGE_HEIGHT !== 15 || BADGE_WIDTH < 15) {
-    problems.push(`badge box is ${BADGE_WIDTH}x${BADGE_HEIGHT}, want at least 15x15`)
-  }
-  const anchor = (x, y) => ({ x, y, width: BADGE_WIDTH, height: BADGE_HEIGHT })
-  const expect = (label, got, want) => {
-    if (JSON.stringify(got) !== JSON.stringify(want)) {
-      problems.push(`${label}: ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
-    }
-  }
-
-  expect('single badge', placeBadges([anchor(10, 10)]), [{ dx: 0, dy: 0 }])
-  expect('two badges, same end', placeBadges([anchor(10, 10), anchor(10, 10)]), [
-    { dx: 0, dy: 0 },
-    { dx: 28, dy: 0 },
-  ])
-  expect(
-    'three badges, same end',
-    placeBadges([anchor(10, 10), anchor(10, 10), anchor(10, 10)]),
-    [
-      { dx: 0, dy: 0 },
-      { dx: 28, dy: 0 },
-      { dx: 56, dy: 0 },
-    ],
-  )
-  expect(
-    'fourth badge stacks upward',
-    placeBadges([anchor(10, 10), anchor(10, 10), anchor(10, 10), anchor(10, 10)]),
-    [
-      { dx: 0, dy: 0 },
-      { dx: 28, dy: 0 },
-      { dx: 56, dy: 0 },
-      { dx: 0, dy: -18 },
-    ],
-  )
-  expect('nearby but separate badges', placeBadges([anchor(10, 10), anchor(200, 10)]), [
-    { dx: 0, dy: 0 },
-    { dx: 0, dy: 0 },
-  ])
-  expect('different lines do not collide', placeBadges([anchor(10, 10), anchor(10, 40)]), [
-    { dx: 0, dy: 0 },
-    { dx: 0, dy: 0 },
-  ])
-  expect(
-    'right edge sends the second badge up',
-    placeBadges([anchor(10, 10), anchor(10, 10)], { right: 50 }),
-    [
-      { dx: 0, dy: 0 },
-      { dx: 0, dy: -18 },
-    ],
-  )
-  expect(
-    'no room falls back to the resting spot',
-    placeBadges([anchor(10, 10), anchor(10, 10)], { right: 0, top: 1000 }),
-    [
-      { dx: 0, dy: 0 },
-      { dx: 0, dy: 0 },
-    ],
-  )
-  return problems
-}
-
 /** The Host shortcut commands: defaults, regions, and selection gating. */
 async function checkShortcutCommands() {
   const problems = []
@@ -1912,7 +1849,6 @@ const sendKeyProblems = await checkSendKey()
 const composedDraftProblems = await checkComposedDraft()
 const rewindProblems = checkRewindRestore(code)
 const surfaceProblems = [...checkTranscriptSurfaces(code), ...(await checkEchoStrip())]
-const badgeProblems = await checkBadgeLayout()
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -1940,8 +1876,7 @@ if (
   shortcutProblems.length > 0 ||
   hostConfigProblems.length > 0 ||
   patchIdentityProblems.length > 0 ||
-  surfaceProblems.length > 0 ||
-  badgeProblems.length > 0
+  surfaceProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
@@ -1967,14 +1902,13 @@ if (
   for (const problem of hostConfigProblems) console.error(`HOST CONFIG: ${problem}`)
   for (const problem of patchIdentityProblems) console.error(`ROW IDENTITY: ${problem}`)
   for (const problem of surfaceProblems) console.error(`TRANSCRIPT SURFACE: ${problem}`)
-  for (const problem of badgeProblems) console.error(`BADGE LAYOUT: ${problem}`)
   process.exit(1)
 }
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
     `copy complete for ${[...languages].sort().join('/')}, annotation persistence + cross-tab sync replayed, link detection replayed, ` +
     `host view resolution replayed, send gestures replayed, composed annotation blocks read back, ` +
-    `echo strip replayed, transcript summary single-block, badge collision layout replayed, ` +
+    `echo strip replayed, transcript summary single-block, mark preview wired, ` +
     `host config + bundle settings section wired (defaults, live update, invalid-value fallback, no-service fallback), ` +
     `right-click ownership + shortcut commands replayed (two actions, defaults, selection gating, live registration, catalog mirror), ` +
     `package metadata (locale + icon) resolved and packed`,

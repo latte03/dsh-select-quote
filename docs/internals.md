@@ -6,13 +6,14 @@
 
 ```bash
 pnpm run typecheck   # tsc --noEmit，应无输出
+pnpm run test        # Vitest 纯逻辑用例（角标/定位/配置/快捷键矩阵）
 pnpm run build       # 产出 lib/index.js 与 lib/client.js
 pnpm run watch       # 增量重建
 pnpm run sync:desktop        # 把 lib/ 推给桌面客户端已安装的副本（热更新）
 pnpm run sync:desktop -- --watch
 pnpm run dev:desktop         # 上面两个一起开：增量重建 + 推送（scripts/dev-desktop.mjs 拉起两个子进程）
 pnpm run verify      # 无头执行 lib/client.js：10 项贡献都注册上，三种语言词典键与占位符齐备，外加包展示元信息（locale + icon）按宿主规则解析、打包
-pnpm run check       # typecheck + build + verify（提交前跑这个）
+pnpm run check       # typecheck + test + build + verify（提交前跑这个；CI 同款）
 pnpm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
 
@@ -41,7 +42,7 @@ Each item contains text selected from an earlier message ...
 
 - 读取：`scanAnnotatedMessage()` 剥掉整块，气泡只剩用户正文。展示层只认完整的开闭标记对：JSON 非法或不是数组时不产出批注，但块照样剥掉，协议原文永不出现在对话里；
 - 回填：`readComposedDraft()` 是 `composeAnnotatedMessage()` 的逆。dsh-rewind 撤回时把它读到的持久文本原样写回输入框（`messageTextAt` → `setComposerText`），协议块也会跟着进编辑器；`AnnotationPanel` 检测到完整块后把批注重新挂回待发摘要、草稿还原成用户正文（见关键机制 1）。回填比展示保守：只认完整、JSON 合法且非空数组的块，被截断或手改过的块不碰；
-- 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成 chip。chip 的 hover / focus / click 都打开预览浮层（触屏点按同样只开预览），原文和评论由 `transcript/quote-registry.ts` 按用户消息 flow key 暂存，chip 通过前一条 mark 的 flow key 取回；跳转由浮层标题栏右侧的小按钮「原文」触发，点 chip 本身不再直接跳。取不到 registry 时退回 mark 文本并隐藏评论区。浮层在 `dom/chipPreview.ts`，body 级 fixed（消息表面的 contain: layout 会劫持 fixed 定位），复用 `placePopover` 做翻转/钳位（默认在上方），内容层用和批注卡列表相同的 `dsq-rise-in`（只动 transform），退场用反向的 `dsq-rise-out`、120ms 后才摘节点；滚动和缩放时重排，chip 被流式重渲染替换时自动关闭；mark 不可见或已被移除时按「批注摘要卡 → 批注所属用户消息 → quote.messageId 来源消息」逐级回退并闪烁，不再点了没反应；
+- 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成 chip。chip 的 hover / focus / click 都打开预览浮层（触屏点按同样只开预览），原文和评论由 `transcript/quote-registry.ts` 按用户消息 flow key 暂存，chip 通过前一条 mark 的 flow key 取回；跳转由浮层标题栏右侧的小按钮「原文」触发，点 chip 本身不再直接跳。取不到 registry 时退回 mark 文本并隐藏评论区。浮层在 `dom/chipPreview.ts`，body 级 fixed（消息表面的 contain: layout 会劫持 fixed 定位），复用 `placePopover` 做翻转/钳位（默认在上方），内容层用和批注卡列表相同的 `dsq-rise-in`（只动 transform），退场用反向的 `dsq-rise-out`、120ms 后才摘节点；滚动和缩放时重排，chip 被流式重渲染替换时自动关闭；mark 不可见或已被移除时按「批注摘要卡 → 批注所属用户消息 → quote.messageId 来源消息」逐级回退并闪烁，不再点了没反应；正文 mark 复用同一浮层：最后一个片段（带角标）有 `role=button` / `tabIndex=0` 和本地化 aria-label，点击或 Enter/Space 打开预览，待发批注按 store id 取原文/评论，历史批注按 `dqsm_` id 走 quote-registry，预览里不出现「原文」按钮；绑定用 document 级委托，宿主重渲染替换 mark 不会泄漏监听；
 - **改格式要一起改**：`composeAnnotatedMessage()`（写）、`scanAnnotatedMessage()`（读）、`readComposedDraft()`（撤回回填）、`ANNOTATION_DIRECTIVE_RE`（chip）、`scripts/verify-bundle.mjs`。
 
 **「打开链接」为什么用 `window.open`**：宿主自己的外链处理（`dsh-client-ui-chat` 的 `openExternalLink`）在用户把「链接打开方式」设成侧边栏时，会把 http(s) 链接塞进应用内的浏览器标签——那里加载任意 URL 就是客户端被搞崩的路径。工具条的「打开链接」因此直接 `window.open(url, '_blank', 'noopener,noreferrer')`：桌面主进程的 `setWindowOpenHandler` 只认 http/https，命中就转交 `shell.openExternal`（真·系统默认浏览器），其余协议一律 deny。所以按钮**只对 http(s) 亮起**（`selection-url.ts`），`chrome-extension://` 这类点了也不会有反应——要让它们也进系统浏览器，得宿主改那个白名单，是上游的事。检测逻辑无 DOM 依赖，`verify-bundle` 直接 import 跑用例（含全角括号/尾随标点/大小写/非 http  scheme）。
@@ -159,7 +160,7 @@ Each item contains text selected from an earlier message ...
 
 **为什么必须由宿主说了算**：桌面版是 Electron 外壳，渲染进程带着 `--lang=en-US` 启动，`navigator.language` 因此报 en，而用户在设置里选的是中文——插件若自查 `navigator`，界面会和产品反着来。宿主自己在 Client 挂载前通过 `__DSH_LOCALE__` 拿到 Host preference 与有序 OS 语言列表，这条通道只有 `ctx.locale` 能读；偏好本身持久化在 profile 的 `cordis.patch.yml` 里（`- id: locale / config.preference`）。
 
-**即时切换**：React 侧经 `useLocale()`（`useSyncExternalStore` 挂在 `subscribe` 与 `revision` 上）重渲染；chip 是直接写 DOM 的，所以在 `apply()` 里订阅一次 `refreshDirectiveChips()` 重写文案。写 DOM 的订阅不会触发第 9 节那个循环——新文本不含指令字面量，`decorateTextNode()` 在入口就返回。
+**即时切换**：React 侧经 `useLocale()`（`useSyncExternalStore` 挂在 `subscribe` 与 `revision` 上）重渲染；chip 和正文 mark 是直接写 DOM 的，所以在 `apply()` 里订阅一次 `refreshDirectiveChips()` / `refreshAnnotationMarkLabels()` 重写文案。写 DOM 的订阅不会触发第 9 节那个循环——新文本不含指令字面量，`decorateTextNode()` 在入口就返回。
 
 **复数**：宿主的词典是「键 → 单个模板字符串」，没有复数概念。带 `{count}` 的文案因此拆成 `key.one` / `key.few` / `key.many` / `key.other`，由 `i18n.ts` 按语言挑形式，挑不到就退 `key.other`。`pnpm run verify` 按复数组比对三种语言：组必须都存在，且**每组必须有 `.other`**，占位符名也不允许漂移——漏一个键会渲染出键名本身，漏一个占位符会把 `{count}` 直接印在界面上。
 
@@ -252,6 +253,7 @@ Each item contains text selected from an earlier message ...
 ## 目录结构
 
 ```
+.github/workflows/check.yml        # CI：push/PR 上跑 pnpm run check
 src/index.ts                       # Node 半：导出 schemastery Config（triggerMode / shortcut，全部 volatile）与空 apply
 src/shared/identity.ts             # 包名、Loader 行 id、配置槽 key 的唯一来源
 src/client/index.tsx               # Client 半入口：注册 Slot、配置跟随、语言词典与装饰观察者
@@ -276,7 +278,7 @@ src/client/dom/badge-layout.ts     # 角标碰撞避让的纯几何（右移两�
 src/client/dom/scrollToAnnotation.ts # 点击批注滚动到正文 mark 并闪烁
 src/client/dom/stripSubmissionEcho.ts # 发送回显气泡里剥掉协议块（只改展示）
 src/client/dom/decorateAnnotationDirectives.ts # 模型回的 :dsh-annotation{index="N"} 渲染成可点 chip
-src/client/dom/chipPreview.ts      # chip 的 hover/focus/click 预览与「跳转到原文」
+src/client/dom/chipPreview.ts      # chip 的 hover/focus/click 预览 + 正文 mark 的点击/键盘回看（共用浮层）
 src/client/dom/popoverPlacement.ts # 浮层定位（翻转 + 视口夹取）
 src/client/dom/comment-placement.ts # 评论泡/提示条的纯几何（上下翻转 + 夹取，可单测）
 src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 等）

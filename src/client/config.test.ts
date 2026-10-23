@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_CONFIG, normalizeConfig, resolveTriggers } from './config.ts'
+
+describe('normalizeConfig', () => {
+  it('falls back to the defaults for a missing or malformed snapshot', () => {
+    expect(normalizeConfig(undefined)).toEqual(DEFAULT_CONFIG)
+    expect(normalizeConfig(null)).toEqual(DEFAULT_CONFIG)
+    expect(normalizeConfig({ triggerMode: 'nope', shortcut: 'yes' })).toEqual(DEFAULT_CONFIG)
+  })
+
+  it('keeps known values and each field independently', () => {
+    expect(normalizeConfig({ triggerMode: 'both' })).toEqual({
+      triggerMode: 'both',
+      shortcut: false,
+    })
+    expect(normalizeConfig({ shortcut: true })).toEqual({
+      triggerMode: 'auto',
+      shortcut: true,
+    })
+  })
+})
+
+describe('resolveTriggers', () => {
+  it.each([
+    ['auto', { auto: true, contextMenu: false, shortcut: false }],
+    ['contextmenu', { auto: false, contextMenu: true, shortcut: false }],
+    ['both', { auto: true, contextMenu: true, shortcut: false }],
+  ] as const)('maps %s to its entry points', (triggerMode, want) => {
+    expect(resolveTriggers({ triggerMode, shortcut: false })).toEqual(want)
+  })
+
+  it('keeps the shortcut switch independent of the trigger mode', () => {
+    expect(resolveTriggers({ triggerMode: 'both', shortcut: true })).toEqual({
+      auto: true,
+      contextMenu: true,
+      shortcut: true,
+    })
+  })
+})

@@ -10,9 +10,11 @@ import {
   watchAnnotationDirectives,
 } from './dom/decorateAnnotationDirectives.ts'
 import {
+  refreshAnnotationMarkLabels,
   syncPendingAnnotationJobs,
   watchAnnotationMarks,
 } from './dom/annotate-text.ts'
+import { bindAnnotationMarkPreview } from './dom/chipPreview.ts'
 import { watchSubmissionEcho } from './dom/stripSubmissionEcho.ts'
 import {
   bindLocale,
@@ -89,7 +91,11 @@ export function apply(ctx: Context): void {
   })
   // Chips are direct DOM rather than React state, so they need their own pass.
   ctx.effect(
-    () => subscribeLocale(() => refreshDirectiveChips()),
+    () =>
+      subscribeLocale(() => {
+        refreshDirectiveChips()
+        refreshAnnotationMarkLabels()
+      }),
     'dsh-select-quote: chip language',
   )
 
@@ -138,6 +144,8 @@ export function apply(ctx: Context): void {
   ctx.effect(() => watchAnnotationDirectives(), 'dsh-select-quote: annotation directives')
   // Underline + ordinal badges on annotated text; survive transcript re-renders.
   ctx.effect(() => watchAnnotationMarks(), 'dsh-select-quote: annotation marks')
+  // Click/keyboard preview for those marks (the same panel as model chips).
+  ctx.effect(() => bindAnnotationMarkPreview(), 'dsh-select-quote: mark preview')
   // The optimistic send echo paints the composer draft, protocol block included.
   ctx.effect(() => watchSubmissionEcho(), 'dsh-select-quote: submission echo')
   // Pending annotations mark their source text the moment they are added.

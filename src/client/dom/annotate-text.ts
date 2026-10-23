@@ -8,6 +8,7 @@
  * MutationObserver, because React re-renders replace the marked nodes.
  */
 
+import { t } from '../i18n.ts'
 import { styles } from '../styles.ts'
 import type { SelectionAnnotation } from '../state/annotation-store.ts'
 import { BADGE_HEIGHT, BADGE_WIDTH, placeBadges } from './badge-layout.ts'
@@ -66,12 +67,28 @@ function isMarked(pieces: readonly { entry: { node: Text } }[]): boolean {
   return first.entry.node.parentElement?.closest(`[${MARK_ATTR}]`) != null
 }
 
+function markLabel(index: number): string {
+  return t('mark.previewAria', { index })
+}
+
+/** The badge fragment is the keyboard entry into that annotation's preview. */
+function makeBadgeInteractive(mark: HTMLElement, index: number): void {
+  mark.tabIndex = 0
+  mark.setAttribute('role', 'button')
+  mark.setAttribute('aria-haspopup', 'dialog')
+  const label = markLabel(index)
+  if (mark.getAttribute('aria-label') !== label) mark.setAttribute('aria-label', label)
+}
+
 function createMark(job: AnnotationJob, withIndex: boolean): HTMLSpanElement {
   const mark = document.createElement('span')
   mark.className = styles.annMark
   mark.setAttribute(MARK_ATTR, job.markId)
   // Only the last fragment carries the ordinal, so the corner badge shows once.
-  if (withIndex) mark.setAttribute(INDEX_ATTR, String(job.index))
+  if (withIndex) {
+    mark.setAttribute(INDEX_ATTR, String(job.index))
+    makeBadgeInteractive(mark, job.index)
+  }
   return mark
 }
 
@@ -167,7 +184,17 @@ function refreshMarkIndex(item: HTMLElement, job: AnnotationJob): boolean {
   const last = marks[marks.length - 1]
   const next = String(job.index)
   if (last.getAttribute(INDEX_ATTR) !== next) last.setAttribute(INDEX_ATTR, next)
+  makeBadgeInteractive(last, job.index)
   return true
+}
+
+/** Refresh the localized labels after a language switch (marks survive renders). */
+export function refreshAnnotationMarkLabels(): void {
+  if (typeof document === 'undefined') return
+  for (const mark of document.querySelectorAll<HTMLElement>(`[${INDEX_ATTR}]`)) {
+    const index = Number(mark.getAttribute(INDEX_ATTR) ?? 0)
+    if (index > 0) makeBadgeInteractive(mark, index)
+  }
 }
 
 /**

@@ -44,8 +44,9 @@
     "sync:desktop": "node scripts/sync-desktop.mjs",
     "dev:desktop": "node scripts/dev-desktop.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "verify": "node scripts/verify-bundle.mjs",
-    "check": "pnpm run typecheck && pnpm run build && pnpm run verify",
+    "check": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run verify",
     "release": "pnpm run check && commit-and-tag-version"
   },
   "dsh": {
@@ -83,6 +84,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tsdown": "0.23.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^5.0.5"
   }
 }

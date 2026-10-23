@@ -62,6 +62,7 @@ const zh: LocaleDict = {
 
   'chip.annotation': '批注 {index}',
   'chip.previewAria': '批注预览',
+  'mark.previewAria': '查看第 {index} 条批注',
   'chip.jump': '原文',
   'chip.jumpAria': '跳转到原文',
 
@@ -116,6 +117,7 @@ const en: LocaleDict = {
 
   'chip.annotation': 'Annotation {index}',
   'chip.previewAria': 'Annotation preview',
+  'mark.previewAria': 'View annotation {index}',
   'chip.jump': 'Original',
   'chip.jumpAria': 'Jump to original',
 
@@ -179,6 +181,7 @@ const ru: LocaleDict = {
 
   'chip.annotation': 'Аннотация {index}',
   'chip.previewAria': 'Просмотр аннотации',
+  'mark.previewAria': 'Открыть аннотацию {index}',
   'chip.jump': 'Оригинал',
   'chip.jumpAria': 'Перейти к оригиналу',
 

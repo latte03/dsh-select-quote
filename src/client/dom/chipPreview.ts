@@ -13,6 +13,7 @@ import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.t
 import { placePopover } from './popoverPlacement.ts'
 import { scrollToAnnotation } from './scrollToAnnotation.ts'
 import { t } from '../i18n.ts'
+import { getAnnotations } from '../state/annotation-store.ts'
 import { A, cx, styles } from '../styles.ts'
 import { messageQuotes } from '../transcript/quote-registry.ts'
 
@@ -44,6 +45,7 @@ let onScroll: (() => void) | null = null
 let onResize: (() => void) | null = null
 let leavingBox: HTMLDivElement | null = null
 let leavingTimer = 0
+let markBindingCleanup: (() => void) | null = null
 
 function cancelTimers(): void {
   if (showTimer !== 0) window.clearTimeout(showTimer)
@@ -240,12 +242,19 @@ function jumpToMark(event: MouseEvent): void {
   if (text) scrollToAnnotation(index, text)
 }
 
-function buildPreview(index: number, quoteText: string, comment: string | null): HTMLDivElement {
+function buildPreview(
+  index: number,
+  quoteText: string,
+  comment: string | null,
+  withJump = true,
+): HTMLDivElement {
   const box = document.createElement('div')
   box.className = cx(A.col, styles.chipPreview)
   box.setAttribute('data-dsq-chip-preview', 'true')
   box.setAttribute('role', 'dialog')
   box.setAttribute('aria-label', t('chip.previewAria'))
+  box.tabIndex = -1
+  jumpButton = null
 
   const body = document.createElement('div')
   body.className = styles.chipPreviewBody
@@ -257,18 +266,21 @@ function buildPreview(index: number, quoteText: string, comment: string | null):
   title.className = styles.chipPreviewTitle
   title.textContent = t('chip.annotation', { index })
 
-  jumpButton = document.createElement('button')
-  jumpButton.type = 'button'
-  jumpButton.className = cx(A.plain, A.inlineRow, styles.chipPreviewJump)
-  jumpButton.setAttribute('data-dsq-chip-jump', 'true')
-  jumpButton.setAttribute('aria-label', t('chip.jumpAria'))
-  jumpButton.title = t('chip.jumpAria')
-  jumpButton.insertAdjacentHTML('afterbegin', JUMP_ICON)
-  const jumpLabel = document.createElement('span')
-  jumpLabel.textContent = t('chip.jump')
-  jumpButton.append(jumpLabel)
-  jumpButton.addEventListener('click', jumpToMark)
-  head.append(title, jumpButton)
+  head.append(title)
+  if (withJump) {
+    jumpButton = document.createElement('button')
+    jumpButton.type = 'button'
+    jumpButton.className = cx(A.plain, A.inlineRow, styles.chipPreviewJump)
+    jumpButton.setAttribute('data-dsq-chip-jump', 'true')
+    jumpButton.setAttribute('aria-label', t('chip.jumpAria'))
+    jumpButton.title = t('chip.jumpAria')
+    jumpButton.insertAdjacentHTML('afterbegin', JUMP_ICON)
+    const jumpLabel = document.createElement('span')
+    jumpLabel.textContent = t('chip.jump')
+    jumpButton.append(jumpLabel)
+    jumpButton.addEventListener('click', jumpToMark)
+    head.append(jumpButton)
+  }
   body.append(head)
 
   appendLabel(body, t('common.selectedText'))
@@ -301,6 +313,40 @@ function buildPreview(index: number, quoteText: string, comment: string | null):
   })
 
   return box
+}
+
+/** Show and watch one preview; `activeChip` is the element it belongs to. */
+function mountPreview(box: HTMLDivElement, anchor: DOMRect): void {
+  preview = box
+  box.style.visibility = 'hidden'
+  document.body.append(box)
+  // Keep the flex display while measuring; toggling display changes wrapping
+  // and produces a shorter panel than the one actually painted.
+  const panel = { width: box.offsetWidth || 320, height: box.offsetHeight || 180 }
+  const { top, left } = placePopover(anchor, panel, 'top', GAP)
+  box.style.top = `${top}px`
+  box.style.left = `${left}px`
+  box.style.visibility = ''
+  const animated = box.querySelector<HTMLElement>(`.${styles.chipPreviewBody}`)
+  if (animated) animated.style.animation = ''
+
+  onDocPointerDown = (event) => {
+    const target = event.target
+    if (!(target instanceof Node)) return
+    if (box.contains(target) || activeChip?.contains(target)) return
+    closeChipPreview(false)
+  }
+  document.addEventListener('pointerdown', onDocPointerDown, true)
+
+  onScroll = scheduleReposition
+  document.addEventListener('scroll', onScroll, true)
+  onResize = scheduleReposition
+  window.addEventListener('resize', onResize)
+
+  observer = new MutationObserver(() => {
+    if (activeChip && !activeChip.isConnected) closeChipPreview(false)
+  })
+  observer.observe(document.body, { childList: true, subtree: true })
 }
 
 function showChipPreview(chip: HTMLElement, index: number, nextPinned: boolean): void {
@@ -345,37 +391,120 @@ function showChipPreview(chip: HTMLElement, index: number, nextPinned: boolean):
   pinned = nextPinned
 
   const box = buildPreview(index, text, quote ? (quote.comment ?? '').trim() : null)
-  preview = box
-  box.style.visibility = 'hidden'
-  document.body.append(box)
-  // Keep the flex display while measuring; toggling display changes wrapping
-  // and produces a shorter panel than the one actually painted.
-  const panel = { width: box.offsetWidth || 320, height: box.offsetHeight || 180 }
-  const anchor = chip.getBoundingClientRect()
-  const { top, left } = placePopover(anchor, panel, 'top', GAP)
-  box.style.top = `${top}px`
-  box.style.left = `${left}px`
-  box.style.visibility = ''
-  const animated = box.querySelector<HTMLElement>(`.${styles.chipPreviewBody}`)
-  if (animated) animated.style.animation = ''
+  mountPreview(box, chip.getBoundingClientRect())
+}
 
-  onDocPointerDown = (event) => {
-    const target = event.target
-    if (!(target instanceof Node)) return
-    if (box.contains(target) || activeChip?.contains(target)) return
-    closeChipPreview(false)
+interface MarkAnnotation {
+  readonly text: string
+  readonly comment: string
+  readonly ownerKey: string | null
+  readonly messageId: string | null
+}
+
+/**
+ * Resolve the annotation behind a transcript mark. Durable marks carry a
+ * `dqsm_` id and read their quote from the user turn's registry; pending marks
+ * carry the store id and read the live list, so a comment edited after
+ * decoration still shows up.
+ */
+function annotationOfMark(mark: HTMLElement): MarkAnnotation | null {
+  const id = mark.getAttribute('data-dsq-ann-mark') ?? ''
+  const index = Number(mark.getAttribute('data-dsq-ann-index') ?? 0)
+  if (index <= 0) return null
+  if (id.startsWith('dqsm_')) {
+    const ownerKey = quotesOwnerOf(mark)
+    const quote = ownerKey ? messageQuotes(ownerKey)?.[index - 1] : undefined
+    if (!ownerKey || !quote) return null
+    const text = quote.text.trim()
+    return text
+      ? {
+          text,
+          comment: (quote.comment ?? '').trim(),
+          ownerKey,
+          messageId: quote.messageId ?? null,
+        }
+      : null
   }
-  document.addEventListener('pointerdown', onDocPointerDown, true)
+  const item = getAnnotations().find((annotation) => annotation.id === id)
+  if (!item) return null
+  const text = item.text.trim()
+  return text
+    ? {
+        text,
+        comment: (item.comment ?? '').trim(),
+        ownerKey: null,
+        messageId: item.sources[0]?.messageId ?? null,
+      }
+    : null
+}
 
-  onScroll = scheduleReposition
-  document.addEventListener('scroll', onScroll, true)
-  onResize = scheduleReposition
-  window.addEventListener('resize', onResize)
+function showMarkPreview(mark: HTMLElement, focus: boolean): void {
+  if (!mark.isConnected) return
+  const index = Number(mark.getAttribute('data-dsq-ann-index') ?? 0)
+  if (index <= 0) return
+  if (activeChip === mark && preview) {
+    pinned = true
+    return
+  }
+  const data = annotationOfMark(mark)
+  if (!data) return
+  cancelTimers()
+  closeChipPreview(false)
+  flushLeavingPreview()
+  activeChip = mark
+  activeMark = mark
+  activeOwnerKey = data.ownerKey
+  activeMessageId = data.messageId
+  activeText = data.text
+  activeIndex = index
+  pinned = true
+  // The mark is already in view, so the preview has nothing to jump to.
+  const box = buildPreview(index, data.text, data.comment, false)
+  mountPreview(box, mark.getBoundingClientRect())
+  if (focus) box.focus({ preventScroll: true })
+}
 
-  observer = new MutationObserver(() => {
-    if (activeChip && !activeChip.isConnected) closeChipPreview(false)
-  })
-  observer.observe(document.body, { childList: true, subtree: true })
+/**
+ * Click/keyboard previews for the ordinal badge fragments in transcript
+ * marks. Delegated on the document: marks are replaced by host re-renders and
+ * binding every fragment would leak listeners across those passes.
+ */
+export function bindAnnotationMarkPreview(): () => void {
+  if (typeof document === 'undefined') return () => {}
+  if (markBindingCleanup) return markBindingCleanup
+  const markOf = (target: EventTarget | null): HTMLElement | null => {
+    if (!(target instanceof Element)) return null
+    return target.closest<HTMLElement>('[data-dsq-ann-mark]')
+  }
+  const onClick = (event: MouseEvent): void => {
+    const mark = markOf(event.target)
+    if (!mark) return
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed) return
+    showMarkPreview(mark, false)
+  }
+  const onKeyDown = (event: KeyboardEvent): void => {
+    const mark = markOf(event.target)
+    if (!mark) return
+    if (event.key === 'Escape' && preview !== null) {
+      event.preventDefault()
+      closeChipPreview(true)
+      return
+    }
+    if ((event.key === 'Enter' || event.key === ' ') && mark.hasAttribute('data-dsq-ann-index')) {
+      event.preventDefault()
+      showMarkPreview(mark, true)
+    }
+  }
+  document.addEventListener('click', onClick)
+  document.addEventListener('keydown', onKeyDown)
+  const cleanup = (): void => {
+    document.removeEventListener('click', onClick)
+    document.removeEventListener('keydown', onKeyDown)
+    markBindingCleanup = null
+  }
+  markBindingCleanup = cleanup
+  return cleanup
 }
 
 /** Close the preview. `restoreFocus` is for a deliberate Escape. */

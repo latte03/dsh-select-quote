@@ -74,7 +74,7 @@ export function placeBadges(
     for (let row = 0; row < MAX_ROWS; row += 1) {
       for (let column = 0; column < MAX_COLUMNS; column += 1) {
         const dx = column * STEP_X
-        const dy = -row * STEP_Y
+        const dy = row === 0 ? 0 : -row * STEP_Y
         if (!fits(anchor, dx, dy, bounds)) continue
         const candidate = { ...anchor, x: anchor.x + dx, y: anchor.y + dy }
         if (placed.some((box) => overlaps(candidate, box))) continue
