@@ -1197,22 +1197,32 @@ ${atomRules}
   padding: 2px 0;
 }
 
+/* Both settings rows follow the Host pattern: copy on the left, control on
+   the right. The trigger control wraps below only when the row is too narrow. */
 .dsq_settingsSection {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 
 .dsq_settingsCopy {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 3px;
+}
+
+.dsq_settingsSection .dsq_settingsCopy {
+  flex: 1 1 240px;
 }
 
 .dsq_settingsLabel {
   color: var(--dsq-label);
   font-size: 13px;
   font-weight: 500;
+  line-height: 18px;
 }
 
 .dsq_settingsHint {
@@ -1269,8 +1279,9 @@ ${atomRules}
 
 .dsq_seg {
   display: inline-flex;
-  align-self: flex-start;
+  flex: none;
   gap: 2px;
+  margin-left: auto;
   padding: 2px;
   border-radius: 8px;
   background: var(--dsq-fill-hover);
