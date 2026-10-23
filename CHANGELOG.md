@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.10](https://github.com/latte03/dsh-select-quote/compare/v0.3.9...v0.3.10) (2026-10-23)
+
+### Features
+
+* 划词入口配置、右键菜单、双快捷键与角标避让 ([7727c8f](https://github.com/latte03/dsh-select-quote/commit/7727c8f3d264a44db5caab7b64bd72644de2045a))
+
 ## [0.3.9](https://github.com/latte03/dsh-select-quote/compare/v0.3.8...v0.3.9) (2026-10-22)
 
 ### Features
