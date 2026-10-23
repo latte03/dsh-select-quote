@@ -103,7 +103,11 @@ Each item contains text selected from an earlier message ...
 
 **5. 正文 Mark：虚线下划线 + 末尾序号角标**
 
-划中的文本在**原消息正文**里留下 `.dsq_annMark`：高亮色**虚线**下划线（`--dsw-static-blue-500`）+ 淡蓝底 + 圆形序号徽章。徽章是上标角标，挂在划词**末尾**（多片段选区只挂在最后一个片段），不挡阅读。**徽章绝对定位、不占行内宽度**：加批注不会改变段落换行、也不会把后面的字挤走；跨行选区时用 `bottom` 而不是 `top` 定位——inline 包含块的底边才是最后一行，`top` 会按第一行算，徽章飞到段首。角标用 `z-index: 2` 压在原生选区高亮和后续 mark 的底色之上：选区贴到角标、或相邻批注的底色盖过来时，数字仍完整可见。**多个批注结尾重合或靠得很近**时，`dom/badge-layout.ts` 的 `placeBadges()` 做纯几何贪心避让：每个角标先试原位，再向右错开两格（每格 28px），还冲突就向上叠（每格 18px），同时受滚动容器右/上边界约束；结果写成 `--dsq-ann-badge-x/y`，由 `::after` 的 `transform` 应用，仍不参与文本排版。`applyAnnotationMarks()`、resize 与重渲染都会重新测量并清掉不再需要的偏移。定位靠 `message-text.ts`：选区落在哪条消息（`[data-chat-flow-key]`）、起止字符偏移多少——偏移在"跳过插件自身装饰节点"的纯净文本上计算，mark 本身透明（不计入偏移），所以装饰前后偏移稳定。比较时忽略空白（选区文本在段落间有换行、DOM 拼接没有）。定位随 `source` 写进 wire JSON，刷新页面后由 durable 消息重新解析、重新装饰；`annotate-text.ts` 用 MutationObserver 对抗 React 重渲染（节点被换掉就重新包）。
+划中的文本在**原消息正文**里留下 `.dsq_annMark`：高亮色**虚线**下划线（`--dsw-static-blue-500`）+ 淡蓝底 + 圆形序号徽章。徽章是上标角标，挂在划词**末尾**（多片段选区只挂在最后一个片段），不挡阅读。**徽章绝对定位、不占行内宽度**：加批注不会改变段落换行、也不会把后面的字挤走；跨行选区时用 `bottom` 而不是 `top` 定位——inline 包含块的底边才是最后一行，`top` 会按第一行算，徽章飞到段首。角标用 `z-index: 2` 压在原生选区高亮和后续 mark 的底色之上：选区贴到角标、或相邻批注的底色盖过来时，数字仍完整可见。**多个批注结尾重合或靠得很近**时，`dom/badge-layout.ts` 的 `placeBadges()` 做纯几何贪心避让：每个角标先试原位，再向右错开两格（每格 28px），还冲突就向上叠（每格 18px），同时受滚动容器右/上边界约束；结果写成 `--dsq-ann-badge-x/y`，由 `::after` 的 `transform` 应用，仍不参与文本排版；resize 与相关消息的重渲染会重新测量，并清掉不再需要的偏移。
+
+**只有角标是点击目标**：`::after` 单独声明 `pointer-events: auto` 与 `cursor: pointer`；标记本身不能设 `pointer-events: none`——那会把正文的鼠标划选一并掐掉。点击收尾时 `chipPreview.ts` 用 `badgeHitBox()`（角标绘制位置 + 避让偏移 + 3px 容差，宽度按位数估）做命中判定，落在正文上的 click 直接忽略；键盘/辅助技术的激活事件不带可用坐标，走最后一个片段的 Tab 焦点与 Enter。定位靠 `message-text.ts`：选区落在哪条消息（`[data-chat-flow-key]`）、起止字符偏移多少——偏移在"跳过插件自身装饰节点"的纯净文本上计算，mark 本身透明（不计入偏移），所以装饰前后偏移稳定。比较时忽略空白（选区文本在段落间有换行、DOM 拼接没有）。定位随 `source` 写进 wire JSON，刷新页面后由 durable 消息重新解析、重新装饰。
+
+**重渲染只扫受影响的消息**：`annotate-text.ts` 的 MutationObserver 按 mutation record 收集 flow item（target 所属的消息；新增节点可能是若干条新消息的包装层，取子树；删除的节点已断开，不必处理），合并到下一帧后调 `applyAnnotationMarks(root, only)`。该路径只对 `messageId` 命中的 job 重新定位/包裹；无定位的 job 也只在这些消息里搜索。嵌套在消息里的推理面板等 block 也有自己的 flow key，所以被改动的 block 会按**自身与所有祖先 key**归属，消息级 job 仍能命中。角标避让按消息 block 分组测量，向上叠不会爬进上一条消息，也不再每帧遍历整个对话。只有 job 注册表变化（upsert / 删除）与 resize 走全量扫描；`requestAnimationFrame` 在页面隐藏时会暂停，回到可见时再补这一帧。
 
 **6. 悬停摘要面板**
 

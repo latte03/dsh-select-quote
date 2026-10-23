@@ -33,12 +33,57 @@ export interface BadgeBounds {
 /** Conservative badge box; the rendered width is 21–24px depending on digits. */
 export const BADGE_WIDTH = 24
 export const BADGE_HEIGHT = 15
+/** Distance from the mark's bottom/right edges to the badge (mirrors styles.ts). */
+export const BADGE_BOTTOM = 8
+export const BADGE_MARGIN = 2
+
+const BADGE_MIN_WIDTH = 15
+/** 10px/600 digits plus the 3px side padding. */
+const BADGE_DIGIT_WIDTH = 6
+const BADGE_PADDING = 6
+const HIT_SLOP = 3
 
 const STEP_X = BADGE_WIDTH + 4
 const STEP_Y = BADGE_HEIGHT + 3
 /** Rest, then two steps right; after that the stack grows upward. */
 const MAX_COLUMNS = 3
 const MAX_ROWS = 24
+
+export interface BadgeBox {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}
+
+/** Rendered badge width, matching `min-width` + digit advance + padding. */
+export function badgeWidth(index: number): number {
+  return Math.max(BADGE_MIN_WIDTH, String(index).length * BADGE_DIGIT_WIDTH + BADGE_PADDING)
+}
+
+/**
+ * Hit box of a badge as painted: anchored to the final fragment's bottom-right
+ * corner, then shifted by the collision offset. Used to tell a badge click from
+ * a click on the marked prose.
+ */
+export function badgeHitBox(
+  anchor: { readonly right: number; readonly bottom: number },
+  index: number,
+  offset: BadgeOffset = { dx: 0, dy: 0 },
+): BadgeBox {
+  const left = anchor.right + BADGE_MARGIN + offset.dx
+  const top = anchor.bottom - BADGE_BOTTOM - BADGE_HEIGHT + offset.dy
+  return {
+    left: left - HIT_SLOP,
+    top: top - HIT_SLOP,
+    right: left + badgeWidth(index) + HIT_SLOP,
+    bottom: top + BADGE_HEIGHT + HIT_SLOP,
+  }
+}
+
+export function badgeContainsPoint(box: BadgeBox, x: number, y: number): boolean {
+  return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
+}
 
 function overlaps(a: BadgeAnchor, b: BadgeAnchor): boolean {
   return (

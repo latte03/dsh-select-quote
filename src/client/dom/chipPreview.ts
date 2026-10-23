@@ -10,6 +10,7 @@
  */
 
 import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.ts'
+import { badgeContainsPoint, badgeHitBox } from './badge-layout.ts'
 import { placePopover } from './popoverPlacement.ts'
 import { scrollToAnnotation } from './scrollToAnnotation.ts'
 import { t } from '../i18n.ts'
@@ -479,6 +480,18 @@ export function bindAnnotationMarkPreview(): () => void {
   const onClick = (event: MouseEvent): void => {
     const mark = markOf(event.target)
     if (!mark) return
+    const index = Number(mark.getAttribute('data-dsq-ann-index'))
+    if (!Number.isFinite(index) || index <= 0) return
+    // The badge is the only click target; the marked prose stays selectable.
+    // Keyboard/AT activation reports detail 0 and no usable coordinates.
+    if (event.detail !== 0) {
+      const offset = {
+        dx: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-x')) || 0,
+        dy: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-y')) || 0,
+      }
+      const box = badgeHitBox(mark.getBoundingClientRect(), index, offset)
+      if (!badgeContainsPoint(box, event.clientX, event.clientY)) return
+    }
     const selection = window.getSelection()
     if (selection && !selection.isCollapsed) return
     showMarkPreview(mark, false)

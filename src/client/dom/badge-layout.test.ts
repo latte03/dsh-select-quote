@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { BADGE_HEIGHT, BADGE_WIDTH, placeBadges } from './badge-layout.ts'
+import {
+  BADGE_HEIGHT,
+  BADGE_WIDTH,
+  badgeContainsPoint,
+  badgeHitBox,
+  badgeWidth,
+  placeBadges,
+} from './badge-layout.ts'
 
 const anchor = (x: number, y: number) => ({ x, y, width: BADGE_WIDTH, height: BADGE_HEIGHT })
 
@@ -59,5 +66,29 @@ describe('placeBadges', () => {
       { dx: 0, dy: 0 },
       { dx: 0, dy: 0 },
     ])
+  })
+})
+
+describe('badge hit box', () => {
+  const mark = { right: 200, bottom: 100 }
+
+  it('grows with the digit count', () => {
+    expect(badgeWidth(1)).toBe(15)
+    expect(badgeWidth(12)).toBe(18)
+    expect(badgeWidth(123)).toBe(24)
+  })
+
+  it('covers the painted badge and its collision offset', () => {
+    const rest = badgeHitBox(mark, 1)
+    expect(badgeContainsPoint(rest, 209, 84)).toBe(true)
+    expect(badgeContainsPoint(rest, 190, 84)).toBe(false)
+    const shifted = badgeHitBox(mark, 1, { dx: 28, dy: -18 })
+    expect(badgeContainsPoint(shifted, 237, 66)).toBe(true)
+  })
+
+  it('rejects clicks on the marked prose', () => {
+    const box = badgeHitBox(mark, 1)
+    expect(badgeContainsPoint(box, 180, 95)).toBe(false)
+    expect(badgeContainsPoint(box, 230, 95)).toBe(false)
   })
 })

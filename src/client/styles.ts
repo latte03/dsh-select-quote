@@ -1111,7 +1111,9 @@ ${atomRules}
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  pointer-events: none;
+  /* The only click target on a mark; the prose itself stays selectable. */
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .dsq_annMark:hover {
