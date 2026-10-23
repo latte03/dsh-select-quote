@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.11](https://github.com/latte03/dsh-select-quote/compare/v0.3.10...v0.3.11) (2026-10-23)
+
+### Features
+
+* 正文标记点击/键盘回看批注，并接入测试与 CI ([db845fd](https://github.com/latte03/dsh-select-quote/commit/db845fdb516e578173e328856881e76af57d8a64))
+
 ## [0.3.10](https://github.com/latte03/dsh-select-quote/compare/v0.3.9...v0.3.10) (2026-10-23)
 
 ### Features
