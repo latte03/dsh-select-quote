@@ -51,11 +51,16 @@
   "dsh": {
     "client": {
       "inject": [
+        "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-shortcuts",
         "@deepseek-ai/dsh-client-ui-chat",
         "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-session"
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-settings"
       ],
       "platform": "web"
     },
@@ -71,6 +76,7 @@
     "@deepseek-ai/cordis": "^4.0.2"
   },
   "devDependencies": {
+    "@deepseek-ai/schemastery": "3.18.5",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3",
     "commit-and-tag-version": "^13.2.2",

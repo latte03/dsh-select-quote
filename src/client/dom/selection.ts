@@ -99,6 +99,18 @@ function isFirstLineOnScreen(rect: DOMRect): boolean {
 }
 
 /**
+ * First-line box of the live selection in viewport coordinates.
+ *
+ * The keyboard entry has no pointer to anchor to, so it opens the same menu
+ * beside the selected words; the first line is what the reader is looking at.
+ */
+export function selectionFirstLineRect(): DOMRect | null {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null
+  return getRangeFirstLineRect(selection.getRangeAt(0)) ?? null
+}
+
+/**
  * Read the live selection when it is a non-empty range inside a conversation
  * message and outside the composer / our own chrome.
  */

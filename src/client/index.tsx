@@ -1,6 +1,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { QuoteCard } from './composer/AnnotationPanel.tsx'
-import { SelectionToolbar } from './SelectionToolbar.tsx'
+import { attachConfigForm } from './config.ts'
+import { SelectionToolbar } from './selection/SelectionToolbar.tsx'
+import { ConfigRow } from './settings/ConfigRow.tsx'
+import { installSelectionShortcut } from './shortcut-menu.ts'
+import { PACKAGE_NAME, ROW_ID } from '../shared/identity.ts'
 import {
   refreshDirectiveChips,
   watchAnnotationDirectives,
@@ -88,6 +92,47 @@ export function apply(ctx: Context): void {
     () => subscribeLocale(() => refreshDirectiveChips()),
     'dsh-select-quote: chip language',
   )
+
+  // Settings are owned by the Host. The service is optional on purpose: a
+  // shell without it must still activate on defaults instead of waiting
+  // forever (the top-level `inject` list is only for services this file
+  // genuinely cannot run without).
+  ctx.inject(['configForms'], (scope) => {
+    scope.effect(
+      () => attachConfigForm(scope.configForms.get(ROW_ID)),
+      'dsh-select-quote: config',
+    )
+    // Configuration is a bundle-level section, not a row page: the Plugins page
+    // renders it directly on the package's outer page (between the description
+    // and the rows), so there is no extra "configure" step to reach it. The
+    // bundle slot is keyed by the package name; `whileServed` still ties the
+    // section to the row's describe mirror, so an unserved row leaves no
+    // half-alive form behind.
+    const form = scope.configForms.get(ROW_ID)
+    scope.effect(
+      () =>
+        scope.configForms.whileServed([ROW_ID], () =>
+          scope.slots.inject('plugins.bundle.config', () =>
+            scope.slots.register(
+              {
+                name: 'plugins.bundle.config',
+                key: PACKAGE_NAME,
+                locale: LOCALE_NS,
+                inject: () => ({ form }),
+              },
+              ConfigRow,
+            ),
+          ),
+        ),
+      'dsh-select-quote: settings section',
+    )
+  })
+
+  // The keyboard entry is its own service, also optional: a shell without the
+  // shortcut registry still gets the toolbar and the right-click menu.
+  ctx.inject(['shortcuts'], (scope) => {
+    installSelectionShortcut(scope)
+  })
 
   // Assistant replies may echo :dsh-annotation{index="N"}; decorate them as chips.
   ctx.effect(() => watchAnnotationDirectives(), 'dsh-select-quote: annotation directives')

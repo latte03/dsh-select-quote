@@ -53,6 +53,12 @@ body {
   --dsq-font-delta: var(--dsh-content-font-delta, 0px);
   --dsq-bg-raised: var(--dsw-alias-bg-layer-1, #fff);
   --dsq-bg-toast: var(--dsw-alias-bg-layer-3, rgba(0, 0, 0, 0.78));
+  /* The settings switch mirrors the Host's own switch: neutral track when off,
+     brand fill when on, and a thumb that inverts with the theme. */
+  --dsq-switch-off: var(--dsw-alias-border-l3, rgba(0, 0, 0, 0.12));
+  --dsq-switch-on: var(--dsw-alias-brand-primary, #0f1115);
+  --dsq-switch-thumb-off: var(--dsw-alias-switch-thumb, #fff);
+  --dsq-switch-thumb-on: var(--dsw-alias-label-primary-foreground, #fff);
   --dsq-line: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.1));
   --dsq-line-divider: var(--dsw-alias-border-l4, rgba(0, 0, 0, 0.12));
   --dsq-focus-ring: var(--dsw-alias-button-primary-fill, #1677ff);
@@ -121,6 +127,26 @@ ${atomRules}
   }
 }
 
+/* Right-click / shortcut menu: transform only, for the same reason as the
+   toolbar — an animated opacity would cut the material layer's backdrop. */
+@keyframes dsq-menu-in {
+  from {
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dsq-menu-in-up {
+  from {
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* 内容层的 rise：悬停面板的列表在用；工具条改用容器 scale 后这条在这里待命。 */
 @keyframes dsq-rise-in {
   from {
@@ -145,14 +171,15 @@ ${atomRules}
 /* 宿主菜单材质（官方 material 图层同款）：填充走 --dsw-menu-surface-fill，模糊走
    --dsw-menu-backdrop-filter（恒为 blur(40px) saturate(150%)），亮暗自动翻。
    画在 z-index:-1 的独立图层上，内容在它之上：模糊只取身后的页面，不会把
-   面板里的文字一起糊掉。工具条、评论气泡、悬停面板三个浮层共用这一条。
+   面板里的文字一起糊掉。所有浮层共用这一条。
    注意：macOS 上宿主另有一个 --dsw-specific-menu（覆写成 94% 不透明）给它的
    菜单用；这里按需求用 surface-fill，所以我们的浮层会比宿主自己的菜单更透。 */
 .dsq_toolbar::before,
 .dsq_commentPop::before,
 .dsq_summaryHoverInner::before,
 .dsq_touchBar::before,
-.dsq_chipPreview::before {
+.dsq_chipPreview::before,
+.dsq_ctxMenu::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -167,7 +194,7 @@ ${atomRules}
 /* 覆层不描边：elevation-prominent 自带的那圈 0 0 0 .5px（--dsw-elevation-stroke-color，
    默认 border-l4）对磨砂覆层是多余的——边缘自带材质分界，再勾一道反而抢视觉，覆写成
    更淡的 border-l1。
-   两个坑，改之前先读：① 这两行必须写在三个浮层自己的选择器上。写在 body 上会随继承
+   两个坑，改之前先读：① 这两行必须写在浮层自己的选择器上。写在 body 上会随继承
    影响页面里其它依赖默认值的面板（宿主带 [data-menu-material] 的菜单有自己的覆写，
    不受影响）。② --dsq-shadow 也必须在这儿声明，不能留在 body：自定义属性是在**声明处**
    展开的，--dsq-shadow 留在 body 上时 var(--dsw-elevation-prominent) 会在 body 就被
@@ -178,11 +205,12 @@ ${atomRules}
 .dsq_summaryHoverInner,
 .dsq_touchBar,
 .dsq_touchSheet,
-.dsq_chipPreview {
+.dsq_chipPreview,
+.dsq_ctxMenu {
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
   /* Every surface above takes the same elevation; declaring it once here is
-     what keeps the six component blocks free of a copied box-shadow. */
+     what keeps the component blocks free of a copied box-shadow. */
   box-shadow: var(--dsq-shadow);
 }
 
@@ -310,6 +338,60 @@ ${atomRules}
   position: absolute;
   z-index: 3;
   transform: translate(-50%, 8px);
+}
+
+/* Right-click / shortcut menu. Body-level fixed: it must escape the
+   transcript's clipping. It closes on scroll instead of following the text,
+   so it never points at a line that has moved away. */
+.dsq_ctxMenu {
+  position: fixed;
+  z-index: 64;
+  width: max-content;
+  min-width: 172px;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+  outline: none;
+  animation: dsq-menu-in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: top left;
+}
+
+.dsq_ctxMenu[data-side='top'] {
+  animation-name: dsq-menu-in-up;
+  transform-origin: bottom left;
+}
+
+.dsq_ctxItem {
+  width: 100%;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--dsq-label);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dsq_ctxItem svg {
+  flex: none;
+  color: var(--dsq-label-2);
+}
+
+.dsq_ctxItem:hover,
+.dsq_ctxItem:focus {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_ctxItem:focus {
+  outline: none;
+}
+
+.dsq_ctxItem:focus-visible {
+  outline: 2px solid var(--dsq-focus-ring);
+  outline-offset: -2px;
 }
 
 /* Annotation stack — inside the composer card (input.overlay), ~1/5 width. */
@@ -480,7 +562,8 @@ ${atomRules}
   .dsq_commentPop::before,
   .dsq_summaryHoverInner::before,
   .dsq_touchBar::before,
-  .dsq_chipPreview::before {
+  .dsq_chipPreview::before,
+  .dsq_ctxMenu::before {
     background: var(--dsq-bg-raised);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -1003,12 +1086,19 @@ ${atomRules}
    Absolute so the badge adds no inline advance width: annotating never reflows
    the paragraph or moves following words. Bottom (not top) anchors to the last
    fragment: for a mark spanning several lines the containing block is the union
-   of the first and last fragments, so its bottom edge is the last line. */
+   of the first and last fragments, so its bottom edge is the last line.
+   BADGE_BOTTOM / BADGE_HEIGHT / the 2px margin in annotate-text.ts mirror the
+   numbers below for collision measurement. */
 .dsq_annMark[data-dsq-ann-index]::after {
   content: attr(data-dsq-ann-index);
   position: absolute;
   bottom: 8px;
   left: 100%;
+  /* Above the native selection highlight and the background of a later mark:
+     both otherwise paint over the badge when their ranges meet. */
+  z-index: 2;
+  /* JS shifts colliding badges right/up; the resting position is unchanged. */
+  transform: translate(var(--dsq-ann-badge-x, 0px), var(--dsq-ann-badge-y, 0px));
   display: grid;
   place-items: center;
   min-width: 15px;
@@ -1091,6 +1181,202 @@ ${atomRules}
   .dsq_chipPreviewJump {
     min-height: 44px;
   }
+  .dsq_segOption {
+    min-height: 44px;
+  }
+}
+
+/* Settings row (plugin page): an inline segmented control. The page owns the
+   write, so there is no save button — each pick is committed immediately. */
+.dsq_settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.dsq_settingsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dsq_settingsCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dsq_settingsLabel {
+  color: var(--dsq-label);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dsq_settingsHint {
+  color: var(--dsq-label-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Shortcut reference under the switch: the two commands and the keycaps the
+   Host currently has in effect, so a rebind shows up here without a reload. */
+.dsq_settingsShortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dsq_settingsShortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+}
+
+.dsq_settingsShortcutName {
+  min-width: 0;
+  color: var(--dsq-label-2);
+  font-size: 12px;
+}
+
+.dsq_settingsShortcutKeys {
+  flex: none;
+  color: var(--dsq-label-3);
+  font-size: 12px;
+}
+
+.dsq_keycap {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 6px;
+  border: 1px solid var(--dsq-line);
+  border-radius: 5px;
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label-2);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.dsq_seg {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_segOption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  color: var(--dsq-label-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.dsq_segOption:hover {
+  color: var(--dsq-label);
+}
+
+.dsq_segOption[data-active="true"] {
+  background: var(--dsq-bg-raised);
+  box-shadow: 0 0 0 0.5px var(--dsq-line);
+  color: var(--dsq-label);
+}
+
+.dsq_segOption:has(:focus-visible) {
+  outline: 2px solid var(--dsq-focus-ring-soft);
+  outline-offset: 1px;
+}
+
+.dsq_settingsDivider {
+  height: 1px;
+  background: var(--dsq-line);
+}
+
+/* The whole row is the target: label text, hint, and the switch itself. */
+.dsq_settingsSwitchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.dsq_settingsSwitchRow .dsq_settingsCopy {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Exactly the Host switch metrics: 36×20 track, 16px thumb, 2px inset, and
+   the same on/off tokens. The thumb only animates its transform, like the
+   product control; the track changes color in one step. */
+.dsq_switch {
+  box-sizing: border-box;
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsq-switch-off);
+  cursor: pointer;
+}
+
+.dsq_switch[data-on='true'] {
+  background: var(--dsq-switch-on);
+}
+
+.dsq_switchTrack {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsq-switch-thumb-off);
+  transition: transform 0.12s ease;
+}
+
+.dsq_switch[data-on='true'] .dsq_switchTrack {
+  background: var(--dsq-switch-thumb-on);
+  transform: translateX(16px);
+}
+
+.dsq_switch:has(:focus-visible) {
+  outline: 2px solid var(--dsq-focus-ring-soft);
+  outline-offset: 2px;
+}
+
+/* Visually hidden but still focusable: the native radio/checkbox carries the
+   semantics and keyboard behavior, the label carries the paint. */
+.dsq_srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Layer 4 — host surface: keyframes, theme flips, and the two rules that reach
@@ -1141,6 +1427,8 @@ export const styles = {
   buttonAddComment: 'dsq_buttonAddComment',
   divider: 'dsq_divider',
   status: 'dsq_status',
+  ctxMenu: 'dsq_ctxMenu',
+  ctxItem: 'dsq_ctxItem',
   cardStack: 'dsq_cardStack',
   cardClose: 'dsq_cardClose',
   cardPad: 'dsq_cardPad',
@@ -1206,4 +1494,21 @@ export const styles = {
   userStack: 'dsq_userStack',
   userImages: 'dsq_userImages',
   userBubble: 'dsq_userBubble',
+  settings: 'dsq_settings',
+  settingsSection: 'dsq_settingsSection',
+  settingsCopy: 'dsq_settingsCopy',
+  settingsLabel: 'dsq_settingsLabel',
+  settingsHint: 'dsq_settingsHint',
+  settingsShortcuts: 'dsq_settingsShortcuts',
+  settingsShortcutRow: 'dsq_settingsShortcutRow',
+  settingsShortcutName: 'dsq_settingsShortcutName',
+  settingsShortcutKeys: 'dsq_settingsShortcutKeys',
+  keycap: 'dsq_keycap',
+  settingsDivider: 'dsq_settingsDivider',
+  settingsSwitchRow: 'dsq_settingsSwitchRow',
+  switch: 'dsq_switch',
+  switchTrack: 'dsq_switchTrack',
+  seg: 'dsq_seg',
+  segOption: 'dsq_segOption',
+  srOnly: 'dsq_srOnly',
 } as const

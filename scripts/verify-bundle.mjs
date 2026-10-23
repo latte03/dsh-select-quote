@@ -24,7 +24,7 @@ import { createRequire } from 'node:module'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, extname, relative, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import vm from 'node:vm'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -37,6 +37,7 @@ const EXPECTED = [
   { kind: 'slots.register', label: 'conversation.input.overlay / select-quote-session-bridge' },
   { kind: 'slots.register', label: 'conversation.chat.node / user' },
   { kind: 'slots.register', label: 'conversation.chat.node / steering' },
+  { kind: 'slots.register', label: 'plugins.bundle.config / dsh-select-quote' },
   { kind: 'locale.language', label: 'ru' },
   { kind: 'locale.register', label: 'select-quote (en, zh)' },
   { kind: 'locale.register', label: 'select-quote (ru)' },
@@ -650,6 +651,9 @@ function checkTranscriptSurfaces(code) {
   if (code.includes('dsq_tCardStack')) {
     problems.push('per-annotation transcript cards are back — one block with a hover list is the contract')
   }
+  if (!code.includes('--dsq-ann-badge-x') || !code.includes('--dsq-ann-badge-y')) {
+    problems.push('badge collision offsets are not wired into the annotation mark')
+  }
   return problems
 }
 
@@ -955,7 +959,7 @@ function loadFactory(code, storage) {
   return definition
 }
 
-function mockContext(record) {
+function mockContext(record, options = {}) {
   /** Registered copy: namespace -> locale -> key -> template. */
   const dicts = new Map()
   const snapshot = { active: 'en', locales: [{ id: 'en', label: 'English' }], revision: 0 }
@@ -967,7 +971,15 @@ function mockContext(record) {
     get() {
       return undefined
     },
+    /** Cordis runs the callback only once every listed service exists. */
+    inject(deps, callback) {
+      record.push({ kind: 'inject', label: deps.join(', ') })
+      if (!deps.every((dep) => ctx[dep] !== undefined)) return
+      callback(ctx)
+    },
   }
+  if (options.configForms !== undefined) ctx.configForms = options.configForms
+  if (options.shortcuts !== undefined) ctx.shortcuts = options.shortcuts
   ctx.slots = {
     inject(key, callback) {
       record.push({ kind: 'slots.inject', label: key })
@@ -975,7 +987,7 @@ function mockContext(record) {
     },
     register(options, component) {
       const cell = options.key ?? options.id
-      record.push({ kind: 'slots.register', label: `${options.name} / ${cell}`, component })
+      record.push({ kind: 'slots.register', label: `${options.name} / ${cell}`, component, options })
       return () => {}
     },
   }
@@ -1164,19 +1176,713 @@ function checkDirectiveObserver(code) {
   return problems
 }
 
+/** A Host config-form stand-in: one namespace, one form, live snapshots. */
+function fakeConfigForms(value) {
+  const listeners = new Set()
+  const snapshot = { status: 'ready', value, base: {}, user: {}, revision: 0, writable: true }
+  const notify = () => {
+    for (const fn of [...listeners]) fn()
+  }
+  const form = {
+    getSnapshot: () => snapshot,
+    subscribe(fn) {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
+    set(field, next) {
+      snapshot.value = { ...snapshot.value, [field]: next }
+      snapshot.revision += 1
+      notify()
+      return Promise.resolve(true)
+    },
+  }
+  const service = {
+    get(entryId) {
+      if (entryId !== 'select-quote') {
+        throw new Error(`client read config form "${entryId}", want the Loader row id`)
+      }
+      return form
+    },
+    describe() {
+      return { getSnapshot: () => ({ view: { namespaces: [{ ns: 'select-quote' }] } }) }
+    },
+    whileServed(namespaces, register) {
+      if (!namespaces.includes('select-quote')) {
+        throw new Error(`settings page follows [${namespaces.join(', ')}], want select-quote`)
+      }
+      return register(new Set(['select-quote']))
+    },
+  }
+  return {
+    service,
+    subscriberCount: () => listeners.size,
+    set(next) {
+      snapshot.value = next
+      snapshot.revision += 1
+      for (const fn of [...listeners]) fn()
+    },
+  }
+}
+
+/**
+ * Right-click ownership: the predicate must stand down for every other owner
+ * and only claim a point that sits on a transcript selection.
+ */
+async function checkMenuTrigger() {
+  const problems = []
+  const { pointInRects, shouldOpenSelectionMenu } = await import(
+    new URL('../src/client/dom/menu-trigger.ts', import.meta.url).href
+  )
+  const open = {
+    defaultPrevented: false,
+    contextMenuEnabled: true,
+    touch: false,
+    targetInTranscript: true,
+    pointInSelection: true,
+    hasSelection: true,
+  }
+  if (!shouldOpenSelectionMenu(open)) {
+    problems.push('a claimed right-click on a transcript selection was refused')
+  }
+  for (const [field, blocking, label] of [
+    ['defaultPrevented', true, 'another listener already prevented the menu'],
+    ['contextMenuEnabled', false, 'the right-click entry is off'],
+    ['touch', true, 'the pointer is coarse'],
+    ['targetInTranscript', false, 'the target is app chrome'],
+    ['pointInSelection', false, 'the point is off the selection'],
+    ['hasSelection', false, 'the selection is collapsed'],
+  ]) {
+    if (shouldOpenSelectionMenu({ ...open, [field]: blocking })) {
+      problems.push(`a right-click was claimed although ${label} (${field})`)
+    }
+  }
+
+  const rects = [
+    { left: 10, top: 10, right: 100, bottom: 20 },
+    { left: 10, top: 30, right: 60, bottom: 40 },
+  ]
+  for (const [x, y, want] of [
+    [50, 15, true],
+    [50, 25, false],
+    [102, 15, true],
+    [103, 15, false],
+    [5, 15, false],
+    [20, 39, true],
+  ]) {
+    const got = pointInRects(x, y, rects)
+    if (got !== want) problems.push(`pointInRects(${x}, ${y}) -> ${got}, want ${want}`)
+  }
+  if (pointInRects(50, 15, [])) problems.push('pointInRects matched an empty rect list')
+  return problems
+}
+
+/**
+ * Badge collision geometry: identical or nearby endpoints must not paint two
+ * ordinals on the same pixels, and edge bounds must move the stack upward
+ * instead of off-screen.
+ */
+async function checkBadgeLayout() {
+  const problems = []
+  const { placeBadges, BADGE_WIDTH, BADGE_HEIGHT } = await import(
+    new URL('../src/client/dom/badge-layout.ts', import.meta.url).href
+  )
+  if (BADGE_HEIGHT !== 15 || BADGE_WIDTH < 15) {
+    problems.push(`badge box is ${BADGE_WIDTH}x${BADGE_HEIGHT}, want at least 15x15`)
+  }
+  const anchor = (x, y) => ({ x, y, width: BADGE_WIDTH, height: BADGE_HEIGHT })
+  const expect = (label, got, want) => {
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      problems.push(`${label}: ${JSON.stringify(got)}, want ${JSON.stringify(want)}`)
+    }
+  }
+
+  expect('single badge', placeBadges([anchor(10, 10)]), [{ dx: 0, dy: 0 }])
+  expect('two badges, same end', placeBadges([anchor(10, 10), anchor(10, 10)]), [
+    { dx: 0, dy: 0 },
+    { dx: 28, dy: 0 },
+  ])
+  expect(
+    'three badges, same end',
+    placeBadges([anchor(10, 10), anchor(10, 10), anchor(10, 10)]),
+    [
+      { dx: 0, dy: 0 },
+      { dx: 28, dy: 0 },
+      { dx: 56, dy: 0 },
+    ],
+  )
+  expect(
+    'fourth badge stacks upward',
+    placeBadges([anchor(10, 10), anchor(10, 10), anchor(10, 10), anchor(10, 10)]),
+    [
+      { dx: 0, dy: 0 },
+      { dx: 28, dy: 0 },
+      { dx: 56, dy: 0 },
+      { dx: 0, dy: -18 },
+    ],
+  )
+  expect('nearby but separate badges', placeBadges([anchor(10, 10), anchor(200, 10)]), [
+    { dx: 0, dy: 0 },
+    { dx: 0, dy: 0 },
+  ])
+  expect('different lines do not collide', placeBadges([anchor(10, 10), anchor(10, 40)]), [
+    { dx: 0, dy: 0 },
+    { dx: 0, dy: 0 },
+  ])
+  expect(
+    'right edge sends the second badge up',
+    placeBadges([anchor(10, 10), anchor(10, 10)], { right: 50 }),
+    [
+      { dx: 0, dy: 0 },
+      { dx: 0, dy: -18 },
+    ],
+  )
+  expect(
+    'no room falls back to the resting spot',
+    placeBadges([anchor(10, 10), anchor(10, 10)], { right: 0, top: 1000 }),
+    [
+      { dx: 0, dy: 0 },
+      { dx: 0, dy: 0 },
+    ],
+  )
+  return problems
+}
+
+/** The Host shortcut commands: defaults, regions, and selection gating. */
+async function checkShortcutCommands() {
+  const problems = []
+  const mod = await import(new URL('../src/client/shortcut-menu.ts', import.meta.url).href)
+  const { runtime } = await import(new URL('../src/client/runtime.ts', import.meta.url).href)
+  const menu = mod.selectionMenuCommand()
+  const add = mod.addToTaskCommand()
+
+  if (menu.id !== 'select-quote.openMenu' || mod.SELECTION_MENU_COMMAND_ID !== menu.id) {
+    problems.push(`menu command id is "${menu.id}"`)
+  }
+  if (add.id !== 'select-quote.addToTask' || mod.ADD_TO_TASK_COMMAND_ID !== add.id) {
+    problems.push(`add command id is "${add.id}"`)
+  }
+
+  const expected = {
+    menu: {
+      'desktop:macos': ['KeyL', ['primary']],
+      'desktop:windows': ['KeyL', ['primary', 'shift']],
+      'desktop:linux': ['KeyL', ['primary', 'shift']],
+      'web:macos': ['KeyL', ['primary', 'shift']],
+      'web:windows': ['KeyL', ['primary', 'shift']],
+      'web:linux': ['Comma', ['primary', 'shift']],
+    },
+    add: {
+      'desktop:macos': ['KeyL', ['primary', 'shift']],
+      'desktop:windows': ['Period', ['primary', 'shift']],
+      'desktop:linux': ['Period', ['primary', 'shift']],
+      'web:macos': ['KeyL', ['primary', 'alt']],
+      'web:windows': ['Period', ['primary', 'shift']],
+      'web:linux': ['Period', ['primary', 'shift']],
+    },
+  }
+  for (const [kind, command] of [['menu', menu], ['add', add]]) {
+    const want = expected[kind]
+    const gotProfiles = Object.keys(command.defaults).sort()
+    const wantProfiles = Object.keys(want).sort()
+    if (JSON.stringify(gotProfiles) !== JSON.stringify(wantProfiles)) {
+      problems.push(`${kind} defaults are [${gotProfiles.join(', ')}], want [${wantProfiles.join(', ')}]`)
+    }
+    for (const [profile, [code, modifiers]] of Object.entries(want)) {
+      const binding = command.defaults[profile]
+      if (binding?.code !== code) {
+        problems.push(`${kind} ${profile} default is ${JSON.stringify(binding?.code)}, want ${code}`)
+        continue
+      }
+      if (JSON.stringify([...binding.modifiers]) !== JSON.stringify(modifiers)) {
+        problems.push(
+          `${kind} ${profile} modifiers are [${binding.modifiers.join(', ')}], want [${modifiers.join(', ')}]`,
+        )
+      }
+    }
+    if (JSON.stringify(command.regions) !== JSON.stringify(['page']) || command.modals.length !== 0) {
+      problems.push(`${kind} command is not scoped to page/no-modal input`)
+    }
+    if (typeof command.label() !== 'string' || command.label() === '') {
+      problems.push(`${kind} command has no label for the shortcut reference`)
+    }
+  }
+  // Web Linux admits only three combinations; KeyL there would throw on
+  // registration. The Host owns primary+Slash, so both commands use the other
+  // two (and must not collide with each other on any profile).
+  for (const [kind, command] of [['menu', menu], ['add', add]]) {
+    const linux = command.defaults['web:linux']
+    if (linux && !['Comma', 'Period'].includes(linux.code)) {
+      problems.push(`${kind} web:linux default ${linux.code} is not Web-admissible`)
+    }
+  }
+  for (const profile of Object.keys(expected.menu)) {
+    const left = menu.defaults[profile]
+    const right = add.defaults[profile]
+    if (
+      left &&
+      right &&
+      left.code === right.code &&
+      JSON.stringify([...left.modifiers].sort()) === JSON.stringify([...right.modifiers].sort())
+    ) {
+      problems.push(`menu and add share the ${profile} binding`)
+    }
+  }
+
+  const context = { region: 'page', modal: null }
+  const blocked = menu.resolve(context)
+  if (blocked.status !== 'blocked' || blocked.reason !== 'menu.noSelection') {
+    problems.push(`without a live toolbar the menu command resolved ${JSON.stringify(blocked)}`)
+  }
+  if (add.resolve(context).status !== 'blocked') {
+    problems.push('the add command ran without a live toolbar')
+  }
+
+  let opened = 0
+  let added = 0
+  runtime.selection = {
+    state: () => 'busy',
+    open: () => {
+      opened += 1
+    },
+    add: () => {
+      added += 1
+    },
+  }
+  const busyMenu = menu.resolve(context)
+  if (busyMenu.status !== 'blocked' || busyMenu.reason !== 'menu.busy') {
+    problems.push(`an open comment step resolved ${JSON.stringify(busyMenu)}`)
+  }
+  if (add.resolve(context).status !== 'blocked') {
+    problems.push('the add command ran while the comment step was open')
+  }
+
+  runtime.selection = {
+    state: () => 'ready',
+    open: () => {
+      opened += 1
+    },
+    add: () => {
+      added += 1
+    },
+  }
+  const handledMenu = menu.resolve(context)
+  if (handledMenu.status !== 'handled') {
+    problems.push(`with a live selection the menu command resolved ${handledMenu.status}`)
+  } else {
+    handledMenu.run()
+    if (opened !== 1) problems.push(`the menu command opened the menu ${opened} times, want 1`)
+  }
+  const handledAdd = add.resolve(context)
+  if (handledAdd.status !== 'handled') {
+    problems.push(`with a live selection the add command resolved ${handledAdd.status}`)
+  } else {
+    handledAdd.run()
+    if (added !== 1) problems.push(`the add command added ${added} times, want 1`)
+  }
+
+  runtime.selection = {
+    state: () => 'no-selection',
+    open: () => {
+      opened += 1
+    },
+    add: () => {
+      added += 1
+    },
+  }
+  if (menu.resolve(context).status !== 'blocked' || add.resolve(context).status !== 'blocked') {
+    problems.push('a bridge without a readable selection still ran a command')
+  }
+  delete runtime.selection
+  return problems
+}
+
+/** A Host shortcut-service stand-in: registration, disposal, one catalog. */
+function fakeShortcuts(record) {
+  const commands = new Map()
+  const listeners = new Set()
+  const state = { registered: [], disposed: 0 }
+  const snapshot = () =>
+    [...commands.values()].map((command) => ({
+      id: command.id,
+      label: command.label(),
+      keys: [],
+      issue: null,
+      conflicts: [],
+    }))
+  const notify = () => {
+    for (const listener of [...listeners]) listener()
+  }
+  return {
+    service: {
+      register(command) {
+        if (commands.has(command.id)) {
+          throw new Error(`Duplicate shortcut command: ${command.id}`)
+        }
+        commands.set(command.id, command)
+        state.registered.push(command)
+        record?.push({ kind: 'shortcuts.register', label: command.id })
+        notify()
+        return () => {
+          commands.delete(command.id)
+          state.disposed += 1
+          record?.push({ kind: 'shortcuts.dispose', label: command.id })
+          notify()
+        }
+      },
+      catalog: {
+        getSnapshot: snapshot,
+        subscribe(listener) {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+      },
+    },
+    state,
+    active: () => [...commands.keys()],
+  }
+}
+
+/**
+ * The settings page must ride the config store, not a copy of it.
+ *
+ * `attachConfigForm` is the join point: initial publish, live updates, and a
+ * reset to defaults when the service goes away. The toolbars read
+ * `resolveTriggers` at event time, so this store is the whole authority.
+ */
+async function checkConfigStore() {
+  const problems = []
+  const cfg = await import(new URL('../src/client/config.ts', import.meta.url).href)
+  const { DEFAULT_CONFIG, getConfig, normalizeConfig, publishConfig, resolveTriggers, subscribeConfig } = cfg
+
+  if (getConfig().triggerMode !== 'auto' || getConfig().shortcut !== false) {
+    problems.push('config store does not start on the defaults')
+  }
+  const invalid = normalizeConfig({ triggerMode: 'nope', shortcut: 'yes' })
+  if (invalid.triggerMode !== 'auto' || invalid.shortcut !== false) {
+    problems.push(`invalid config normalized to ${JSON.stringify(invalid)}, want defaults`)
+  }
+  for (const [input, want] of [
+    [{ triggerMode: 'auto' }, { auto: true, contextMenu: false, shortcut: false }],
+    [{ triggerMode: 'contextmenu' }, { auto: false, contextMenu: true, shortcut: false }],
+    [{ triggerMode: 'both' }, { auto: true, contextMenu: true, shortcut: false }],
+    [{ triggerMode: 'both', shortcut: true }, { auto: true, contextMenu: true, shortcut: true }],
+  ]) {
+    const plan = resolveTriggers(normalizeConfig(input))
+    if (JSON.stringify(plan) !== JSON.stringify(want)) {
+      problems.push(`resolveTriggers(${JSON.stringify(input)}) -> ${JSON.stringify(plan)}`)
+    }
+  }
+
+  let notifications = 0
+  const off = subscribeConfig(() => {
+    notifications += 1
+  })
+  publishConfig({ triggerMode: 'both', shortcut: true })
+  if (getConfig().triggerMode !== 'both' || getConfig().shortcut !== true) {
+    problems.push('publishConfig did not surface the new value')
+  }
+  const afterFirst = notifications
+  publishConfig({ triggerMode: 'both', shortcut: true })
+  if (notifications !== afterFirst) {
+    problems.push('an identical config republished notified listeners')
+  }
+
+  let value = { triggerMode: 'contextmenu', shortcut: false }
+  const listeners = new Set()
+  const form = {
+    getSnapshot: () => ({ status: 'ready', value }),
+    subscribe(fn) {
+      listeners.add(fn)
+      return () => listeners.delete(fn)
+    },
+  }
+  const detach = cfg.attachConfigForm(form)
+  if (getConfig().triggerMode !== 'contextmenu' || getConfig().shortcut !== false) {
+    problems.push('attachConfigForm did not publish the form snapshot')
+  }
+  value = { triggerMode: 'auto', shortcut: true }
+  for (const fn of [...listeners]) fn()
+  if (getConfig().triggerMode !== 'auto' || getConfig().shortcut !== true) {
+    problems.push('a config-form update did not reach the store')
+  }
+  detach()
+  if (getConfig().triggerMode !== DEFAULT_CONFIG.triggerMode || getConfig().shortcut !== DEFAULT_CONFIG.shortcut) {
+    problems.push('detaching the config form did not restore the defaults')
+  }
+  off()
+  publishConfig(undefined)
+  return problems
+}
+
+/** Host Config and the client defaults must describe the same fields. */
+async function checkHostConfig() {
+  const problems = []
+  const cfg = await import(new URL('../src/client/config.ts', import.meta.url).href)
+  const host = await import(pathToFileURL(resolve(root, 'lib/index.js')).href)
+  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+
+  if (host.name !== manifest.name) {
+    problems.push(`host entry exports name "${host.name}", package is "${manifest.name}"`)
+  }
+  if (typeof host.apply !== 'function') problems.push('host entry exports no apply()')
+  if (typeof host.Config !== 'function' || typeof host.Config.toJSON !== 'function') {
+    problems.push('host entry exports no schemastery Config — the settings schema would be empty')
+    return problems
+  }
+
+  const schema = host.Config.toJSON()
+  // `toJSON()` is a ref graph; the root (Config's uid) carries the field dict.
+  const rootNode = schema.refs?.[schema.uid]
+  const want = Object.keys(cfg.DEFAULT_CONFIG).sort()
+  const got = Object.keys(rootNode?.dict ?? {}).sort()
+  if (JSON.stringify(want) !== JSON.stringify(got)) {
+    problems.push(`host Config fields [${got.join(', ')}] drift from client defaults [${want.join(', ')}]`)
+  }
+  const parsed = host.Config({})
+  for (const field of want) {
+    const ref = parsed[field]
+    if (ref === undefined || typeof ref.get !== 'function') {
+      problems.push(`host Config field "${field}" is not a volatile ref`)
+      continue
+    }
+    if (ref.get() !== cfg.DEFAULT_CONFIG[field]) {
+      problems.push(`host default ${field}=${JSON.stringify(ref.get())} differs from client default ${JSON.stringify(cfg.DEFAULT_CONFIG[field])}`)
+    }
+    const node = schema.refs?.[rootNode?.dict?.[field]]
+    if (node?.meta?.volatile !== true) {
+      problems.push(`host Config field "${field}" is not .volatile() — it never reaches the settings mirror`)
+    }
+  }
+  let rejected = false
+  try {
+    host.Config({ triggerMode: 'nope' })
+  } catch {
+    rejected = true
+  }
+  if (!rejected) problems.push('host Config accepted an unknown triggerMode')
+
+  const inject = manifest.dsh?.client?.inject ?? []
+  for (const spec of [
+    '@deepseek-ai/dsh-client-locale',
+    '@deepseek-ai/dsh-client-shortcuts',
+    '@deepseek-ai/dsh-client-ui-settings',
+    '@deepseek-ai/dsh-client-ui-plugin-manager',
+    '@deepseek-ai/dsh-api-remotes',
+  ]) {
+    if (!inject.includes(spec)) {
+      problems.push(`dsh.client.inject lacks "${spec}" — the settings/shortcut surface may load without its services`)
+    }
+  }
+  return problems
+}
+
+/** The settings page and config binding must survive as built, not just in source. */
+function checkConfigWiring(code) {
+  const problems = []
+  if (!/configForms\.get\((?:["']select-quote["']|ROW_ID)\)/.test(code)) {
+    problems.push('built client does not read configForms.get(ROW_ID) — settings would never reach the toolbar')
+  }
+  if (!/configForms\.whileServed\(\[(?:["']select-quote["']|ROW_ID)\]/.test(code)) {
+    problems.push('built client registers the settings page without whileServed')
+  }
+  if (!/name:\s*["']plugins\.bundle\.config["']/.test(code)) {
+    problems.push(
+      'built client has no plugins.bundle.config registration — the bundle page has no settings section',
+    )
+  }
+  if (
+    !/name:\s*["']plugins\.bundle\.config["'][\s\S]{0,200}locale:\s*LOCALE_NS/.test(code)
+  ) {
+    problems.push('the settings section is registered without its locale seat')
+  }
+  for (const token of [
+    '--dsw-alias-brand-primary',
+    '--dsw-alias-border-l3',
+    '--dsw-alias-switch-thumb',
+    '--dsw-alias-label-primary-foreground',
+  ]) {
+    if (!code.includes(token)) {
+      problems.push(`the settings switch no longer uses the Host token ${token}`)
+    }
+  }
+  // The Host switch opts into a true pill explicitly; without corner-shape the
+  // product's superellipse default leaves visibly softer corners.
+  const switchRule = code.match(/\.dsq_switch \{[\s\S]*?\}/)?.[0] ?? ''
+  if (!switchRule.includes('border-radius: 999px') || !switchRule.includes('corner-shape: round')) {
+    problems.push('the settings switch is not the Host full-round pill (999px + corner-shape: round)')
+  }
+  return problems
+}
+
+/** The menu trigger, surface, and Host command must survive into the bundle. */
+function checkMenuWiring(code) {
+  const problems = []
+  if (!/addEventListener\(["']contextmenu["']/.test(code)) {
+    problems.push('built client never listens for contextmenu — right-click mode does nothing')
+  }
+  if (!code.includes('shouldOpenSelectionMenu') || !code.includes('defaultPrevented')) {
+    problems.push('built client does not gate right-click ownership — it could fight other menus')
+  }
+  if (!code.includes('data-dsq-menu') || !code.includes('dsq_ctxMenu')) {
+    problems.push('built client has no selection menu surface')
+  }
+  if (!/shortcuts\.register\(/.test(code)) {
+    problems.push('built client never registers a shortcut command')
+  }
+  for (const id of ['select-quote.openMenu', 'select-quote.addToTask']) {
+    if (!code.includes(id)) problems.push(`built client never registers ${id}`)
+  }
+  // The settings page shows the effective keycaps, not a static copy of the
+  // defaults; that surface must follow the Host catalog.
+  if (!code.includes('.catalog')) {
+    problems.push('built client never reads the Host shortcut catalog')
+  }
+  return problems
+}
+
+/** One row id in the identity module, both patches, and package.json. */
+async function checkPatchIdentity() {
+  const problems = []
+  const identity = await import(new URL('../src/shared/identity.ts', import.meta.url).href)
+  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  if (identity.PACKAGE_NAME !== manifest.name) {
+    problems.push(`identity PACKAGE_NAME "${identity.PACKAGE_NAME}" != package name "${manifest.name}"`)
+  }
+  for (const file of ['cordis.patch.yml', 'dev.patch.example.yml']) {
+    let text
+    try {
+      text = readFileSync(resolve(root, file), 'utf8')
+    } catch {
+      problems.push(`${file} is missing — the Loader row has no declared id`)
+      continue
+    }
+    const ids = [...text.matchAll(/^\s*-\s*id:\s*(\S+)\s*$/gm)].map((match) => match[1])
+    if (!ids.includes(identity.ROW_ID)) {
+      problems.push(`${file} row id [${ids.join(', ')}] does not include "${identity.ROW_ID}"`)
+    }
+  }
+  return problems
+}
+
 const code = readFileSync(resolve(root, 'lib/client.js'), 'utf8')
 const bundle = loadFactory(code, storage)
 console.log(`bundle id: ${bundle.id}`)
 
-const module = bundle.factory((name) => {
-  if (!SEEDS.has(name)) throw new Error(`require("${name}") is not a platform seed word`)
-  return require(name)
-})
+/** Fresh module state for one `apply()` run (the bundle's store is module-level). */
+const loadModule = () =>
+  bundle.factory((name) => {
+    if (!SEEDS.has(name)) throw new Error(`require("${name}") is not a platform seed word`)
+    return require(name)
+  })
 
+const module = loadModule()
+
+// The Host services `select-quote` and shows the config page only while it is
+// in the describe mirror. The fake form stands in for that service; the fake
+// shortcut registry records the command lifecycle.
 const record = []
-const { ctx, dicts } = mockContext(record)
+const configFixture = fakeConfigForms({ triggerMode: 'auto', shortcut: false })
+const shortcutsFixture = fakeShortcuts(record)
+const { ctx, dicts } = mockContext(record, {
+  configForms: configFixture.service,
+  shortcuts: shortcutsFixture.service,
+})
 const outcome = module.apply(ctx)
 if (outcome !== undefined) throw new Error('apply() must not return a value')
+
+const configFixtureProblems = []
+if (configFixture.subscriberCount() !== 1) {
+  configFixtureProblems.push(
+    `the client holds ${configFixture.subscriberCount()} config subscriptions, want 1`,
+  )
+}
+
+// The bundle config page gets no `form` prop from the Host; the entry must
+// inject the live row controller itself.
+const bundleFormProblems = []
+const bundleEntry = record.find(
+  (entry) =>
+    entry.kind === 'slots.register' &&
+    entry.label === 'plugins.bundle.config / dsh-select-quote',
+)
+if (bundleEntry === undefined) {
+  bundleFormProblems.push('the bundle settings section was never registered')
+} else if (typeof bundleEntry.options?.inject !== 'function') {
+  bundleFormProblems.push('the bundle settings section does not inject a form controller')
+} else {
+  const injected = bundleEntry.options.inject()
+  if (injected?.form !== configFixture.service.get('select-quote')) {
+    bundleFormProblems.push('the bundle settings section injected a form other than the row form')
+  }
+  for (const method of ['getSnapshot', 'subscribe', 'set']) {
+    if (typeof injected?.form?.[method] !== 'function') {
+      bundleFormProblems.push(`the injected form controller has no ${method}()`)
+    }
+  }
+}
+
+// The shortcut setting is a live switch on the Host registry, covering both
+// commands (menu and add-to-task) together.
+const shortcutProblems = []
+const WANT_COMMANDS = ['select-quote.openMenu', 'select-quote.addToTask']
+if (shortcutsFixture.active().length !== 0) {
+  shortcutProblems.push('a shortcut command was registered while the setting is off')
+}
+// A live write must not throw on its way through the subscribed store.
+configFixture.set({ triggerMode: 'contextmenu', shortcut: true })
+const activeShortcuts = shortcutsFixture.active()
+if (JSON.stringify(activeShortcuts) !== JSON.stringify(WANT_COMMANDS)) {
+  shortcutProblems.push(
+    `enabling the shortcut registered [${activeShortcuts.join(', ')}], want [${WANT_COMMANDS.join(', ')}]`,
+  )
+}
+configFixture.set({ triggerMode: 'both', shortcut: false })
+if (shortcutsFixture.active().length !== 0) {
+  shortcutProblems.push('turning the shortcut off left a command registered')
+}
+if (shortcutsFixture.state.disposed !== 2) {
+  shortcutProblems.push(
+    `turning the shortcut off disposed ${shortcutsFixture.state.disposed} commands, want 2`,
+  )
+}
+configFixture.set({ triggerMode: 'both', shortcut: true })
+if (
+  JSON.stringify(shortcutsFixture.active()) !== JSON.stringify(WANT_COMMANDS) ||
+  shortcutsFixture.state.registered.length !== 4
+) {
+  shortcutProblems.push(
+    `re-enabling the shortcut left registrations at ${shortcutsFixture.state.registered.length}, active [${shortcutsFixture.active().join(', ')}]`,
+  )
+}
+
+// Missing configForms must not block activation or leave a dead settings page.
+const degradeRecord = []
+const { ctx: degradeCtx } = mockContext(degradeRecord)
+const degradeModule = loadModule()
+const degradeOutcome = degradeModule.apply(degradeCtx)
+if (degradeOutcome !== undefined) throw new Error('apply() must not return a value')
+const degradeProblems = []
+if (
+  degradeRecord.some(
+    (entry) => entry.kind === 'slots.register' && entry.label.startsWith('plugins.bundle.config /'),
+  )
+) {
+  degradeProblems.push('a settings section was registered although no config form is served')
+}
+if (degradeRecord.filter((entry) => entry.kind === 'slots.register').length !== 5) {
+  degradeProblems.push(
+    `without configForms the client registered ${degradeRecord.filter((entry) => entry.kind === 'slots.register').length} slots, want the 5 core ones`,
+  )
+}
+if (!degradeRecord.some((entry) => entry.kind === 'inject' && entry.label === 'configForms')) {
+  degradeProblems.push('the config service is not an optional nested injection')
+}
+if (!degradeRecord.some((entry) => entry.kind === 'inject' && entry.label === 'shortcuts')) {
+  degradeProblems.push('the shortcut service is not an optional nested injection')
+}
+if (degradeRecord.some((entry) => entry.kind === 'shortcuts.register')) {
+  degradeProblems.push('a shortcut was registered although no shortcut service is served')
+}
 
 const missing = EXPECTED.filter(
   (expected) => !record.some((entry) => entry.kind === expected.kind && entry.label === expected.label),
@@ -1185,6 +1891,13 @@ const broken = record.filter((entry) => entry.kind === 'slots.register' && typeo
 const dictionaryProblems = checkDictionaries(dicts)
 const datasetProblems = checkDatasetKeys(code)
 const observerProblems = checkDirectiveObserver(code)
+const configWiringProblems = checkConfigWiring(code)
+const configStoreProblems = await checkConfigStore()
+const menuWiringProblems = checkMenuWiring(code)
+const menuTriggerProblems = await checkMenuTrigger()
+const shortcutCommandProblems = await checkShortcutCommands()
+const hostConfigProblems = await checkHostConfig()
+const patchIdentityProblems = await checkPatchIdentity()
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -1199,6 +1912,7 @@ const sendKeyProblems = await checkSendKey()
 const composedDraftProblems = await checkComposedDraft()
 const rewindProblems = checkRewindRestore(code)
 const surfaceProblems = [...checkTranscriptSurfaces(code), ...(await checkEchoStrip())]
+const badgeProblems = await checkBadgeLayout()
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
 
@@ -1215,7 +1929,19 @@ if (
   sendKeyProblems.length > 0 ||
   composedDraftProblems.length > 0 ||
   rewindProblems.length > 0 ||
-  surfaceProblems.length > 0
+  configFixtureProblems.length > 0 ||
+  bundleFormProblems.length > 0 ||
+  degradeProblems.length > 0 ||
+  configWiringProblems.length > 0 ||
+  configStoreProblems.length > 0 ||
+  menuWiringProblems.length > 0 ||
+  menuTriggerProblems.length > 0 ||
+  shortcutCommandProblems.length > 0 ||
+  shortcutProblems.length > 0 ||
+  hostConfigProblems.length > 0 ||
+  patchIdentityProblems.length > 0 ||
+  surfaceProblems.length > 0 ||
+  badgeProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
   for (const entry of broken) console.error(`NOT A COMPONENT: ${entry.label}`)
@@ -1229,13 +1955,27 @@ if (
   for (const problem of sendKeyProblems) console.error(`SEND KEY: ${problem}`)
   for (const problem of composedDraftProblems) console.error(`COMPOSED DRAFT: ${problem}`)
   for (const problem of rewindProblems) console.error(`REWIND RESTORE: ${problem}`)
+  for (const problem of configFixtureProblems) console.error(`CONFIG FIXTURE: ${problem}`)
+  for (const problem of bundleFormProblems) console.error(`BUNDLE FORM: ${problem}`)
+  for (const problem of degradeProblems) console.error(`CONFIG FALLBACK: ${problem}`)
+  for (const problem of configWiringProblems) console.error(`CONFIG WIRING: ${problem}`)
+  for (const problem of configStoreProblems) console.error(`CONFIG STORE: ${problem}`)
+  for (const problem of menuWiringProblems) console.error(`MENU WIRING: ${problem}`)
+  for (const problem of menuTriggerProblems) console.error(`MENU TRIGGER: ${problem}`)
+  for (const problem of shortcutCommandProblems) console.error(`SHORTCUT COMMAND: ${problem}`)
+  for (const problem of shortcutProblems) console.error(`SHORTCUT SWITCH: ${problem}`)
+  for (const problem of hostConfigProblems) console.error(`HOST CONFIG: ${problem}`)
+  for (const problem of patchIdentityProblems) console.error(`ROW IDENTITY: ${problem}`)
   for (const problem of surfaceProblems) console.error(`TRANSCRIPT SURFACE: ${problem}`)
+  for (const problem of badgeProblems) console.error(`BADGE LAYOUT: ${problem}`)
   process.exit(1)
 }
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
     `copy complete for ${[...languages].sort().join('/')}, annotation persistence + cross-tab sync replayed, link detection replayed, ` +
     `host view resolution replayed, send gestures replayed, composed annotation blocks read back, ` +
-    `echo strip replayed, transcript summary single-block, ` +
+    `echo strip replayed, transcript summary single-block, badge collision layout replayed, ` +
+    `host config + bundle settings section wired (defaults, live update, invalid-value fallback, no-service fallback), ` +
+    `right-click ownership + shortcut commands replayed (two actions, defaults, selection gating, live registration, catalog mirror), ` +
     `package metadata (locale + icon) resolved and packed`,
 )

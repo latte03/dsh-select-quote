@@ -43,6 +43,12 @@ const zh: LocaleDict = {
   'toolbar.skipComment': '暂不评论',
   'toolbar.addComment': '添加评论',
 
+  'menu.aria': '划词菜单',
+  'menu.shortcutLabel': '打开划词菜单',
+  'menu.addShortcutLabel': '将选中文字添加到任务',
+  'menu.noSelection': '先在对话里选中一段文字',
+  'menu.busy': '先完成当前批注',
+
   'summary.hint': '悬停查看批注',
   'summary.hintTouch': '点按查看批注',
   'summary.dialogAria': '{count} 条划词批注详情',
@@ -58,6 +64,18 @@ const zh: LocaleDict = {
   'chip.previewAria': '批注预览',
   'chip.jump': '原文',
   'chip.jumpAria': '跳转到原文',
+
+  'settings.trigger': '划词入口',
+  'settings.triggerHint': '选中文字后何时显示操作条。触屏始终使用底部操作条。',
+  'settings.trigger.auto': '自动浮出',
+  'settings.trigger.contextmenu': '右键菜单',
+  'settings.trigger.both': '两者都开',
+  'settings.shortcut': '快捷键',
+  'settings.shortcutHint': '开启后，选中文字即可使用下面的快捷键；可在宿主的「快捷键」设置里改键。',
+  'settings.shortcutListAria': '当前快捷键',
+  'settings.shortcutUnavailable': '快捷键暂不可用（可能被其它插件占用）',
+  'settings.shortcutUnbound': '未绑定',
+  'settings.shortcutConflict': '与其它快捷键冲突',
 }
 
 const en: LocaleDict = {
@@ -77,6 +95,12 @@ const en: LocaleDict = {
   'toolbar.skipComment': 'Skip comment',
   'toolbar.addComment': 'Add comment',
 
+  'menu.aria': 'Selection menu',
+  'menu.shortcutLabel': 'Open selection menu',
+  'menu.addShortcutLabel': 'Add selected text to task',
+  'menu.noSelection': 'Select text in the conversation first',
+  'menu.busy': 'Finish the current annotation first',
+
   'summary.hint': 'Hover to view annotations',
   'summary.hintTouch': 'Tap to view annotations',
   'summary.dialogAria': 'Annotation details: {count}',
@@ -94,6 +118,18 @@ const en: LocaleDict = {
   'chip.previewAria': 'Annotation preview',
   'chip.jump': 'Original',
   'chip.jumpAria': 'Jump to original',
+
+  'settings.trigger': 'Trigger',
+  'settings.triggerHint': 'When the action bar appears after you select text. Touch screens always use the bottom bar.',
+  'settings.trigger.auto': 'Automatic',
+  'settings.trigger.contextmenu': 'Right-click',
+  'settings.trigger.both': 'Both',
+  'settings.shortcut': 'Shortcut',
+  'settings.shortcutHint': 'When on, the shortcuts below work on the selected text. Rebind them in the Host\'s Keyboard shortcuts settings.',
+  'settings.shortcutListAria': 'Active shortcuts',
+  'settings.shortcutUnavailable': 'Shortcuts are unavailable (another plugin may already use the keys).',
+  'settings.shortcutUnbound': 'Unbound',
+  'settings.shortcutConflict': 'Conflicts with another shortcut',
 }
 
 /**
@@ -118,6 +154,12 @@ const ru: LocaleDict = {
   'toolbar.skipComment': 'Без комментария',
   'toolbar.addComment': 'Добавить комментарий',
 
+  'menu.aria': 'Меню выделения',
+  'menu.shortcutLabel': 'Открыть меню выделения',
+  'menu.addShortcutLabel': 'Добавить выделенный текст к задаче',
+  'menu.noSelection': 'Сначала выделите текст в диалоге',
+  'menu.busy': 'Сначала завершите текущую аннотацию',
+
   'summary.hint': 'Наведите, чтобы увидеть аннотации',
   'summary.hintTouch': 'Нажмите, чтобы увидеть аннотации',
   'summary.dialogAria': 'Детали аннотаций: {count}',
@@ -139,6 +181,18 @@ const ru: LocaleDict = {
   'chip.previewAria': 'Просмотр аннотации',
   'chip.jump': 'Оригинал',
   'chip.jumpAria': 'Перейти к оригиналу',
+
+  'settings.trigger': 'Триггер',
+  'settings.triggerHint': 'Когда показывать панель действий после выделения текста. На сенсорных экранах всегда используется нижняя панель.',
+  'settings.trigger.auto': 'Автоматически',
+  'settings.trigger.contextmenu': 'По правому клику',
+  'settings.trigger.both': 'Оба способа',
+  'settings.shortcut': 'Горячая клавиша',
+  'settings.shortcutHint': 'Когда включено, сочетания ниже работают с выделенным текстом. Изменить их можно в настройках горячих клавиш.',
+  'settings.shortcutListAria': 'Текущие сочетания',
+  'settings.shortcutUnavailable': 'Сочетания недоступны (возможно, клавиши заняты другим плагином).',
+  'settings.shortcutUnbound': 'Не назначено',
+  'settings.shortcutConflict': 'Конфликтует с другим сочетанием',
 }
 
 /** Both shipped host locales, required together by the typed `register()`. */

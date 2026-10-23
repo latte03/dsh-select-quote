@@ -10,11 +10,15 @@
 
 import { styles } from '../styles.ts'
 import type { SelectionAnnotation } from '../state/annotation-store.ts'
+import { BADGE_HEIGHT, BADGE_WIDTH, placeBadges } from './badge-layout.ts'
 import { cleanTextOf, cleanTextRange, overlappingEntries } from './message-text.ts'
 
 const MARK_ATTR = 'data-dsq-ann-mark'
 const INDEX_ATTR = 'data-dsq-ann-index'
 const FLASH_MS = 1500
+/** Distance from the mark's bottom edge to the badge's bottom edge (CSS). */
+const BADGE_BOTTOM = 8
+const BADGE_MARGIN = 2
 
 export interface AnnotationJob {
   /** Stable id of the mark; doubles as the summary item's scroll key. */
@@ -166,6 +170,51 @@ function refreshMarkIndex(item: HTMLElement, job: AnnotationJob): boolean {
   return true
 }
 
+/**
+ * Resolve overlapping ordinal badges. Two annotations can end at the same
+ * offset (nested ranges), which puts their pseudo-element badges on the same
+ * pixel; nearby ends can also touch. Measure every last fragment, then write
+ * the offset back as variables inherited by `::after`. The badge's transform
+ * never participates in text layout.
+ */
+function layoutBadges(scope: ParentNode): void {
+  const marks = Array.from(scope.querySelectorAll<HTMLElement>(`[${INDEX_ATTR}]`))
+  for (const mark of marks) {
+    mark.style.removeProperty('--dsq-ann-badge-x')
+    mark.style.removeProperty('--dsq-ann-badge-y')
+  }
+  if (marks.length < 2) return
+  const scroller = marks[0]?.closest('[data-conversation-scroll]')
+  const scrollerRect = scroller instanceof Element ? scroller.getBoundingClientRect() : null
+  const rightEdge =
+    scrollerRect && scrollerRect.width > 0
+      ? scrollerRect.right
+      : document.documentElement.clientWidth
+  const topEdge = scrollerRect && scrollerRect.height > 0 ? scrollerRect.top : 0
+  const anchors = marks
+    .map((mark) => {
+      const rect = mark.getBoundingClientRect()
+      return {
+        mark,
+        index: Number(mark.getAttribute(INDEX_ATTR) ?? 0),
+        x: rect.right + BADGE_MARGIN,
+        y: rect.bottom - BADGE_BOTTOM - BADGE_HEIGHT,
+        width: BADGE_WIDTH,
+        height: BADGE_HEIGHT,
+        visible: rect.width > 0 && rect.height > 0,
+      }
+    })
+    .filter((anchor) => anchor.visible)
+    .sort((a, b) => a.index - b.index)
+  if (anchors.length < 2) return
+  const offsets = placeBadges(anchors, { right: rightEdge - 4, top: topEdge + 4 })
+  anchors.forEach((anchor, i) => {
+    const { dx, dy } = offsets[i]
+    if (dx !== 0) anchor.mark.style.setProperty('--dsq-ann-badge-x', `${dx}px`)
+    if (dy !== 0) anchor.mark.style.setProperty('--dsq-ann-badge-y', `${dy}px`)
+  })
+}
+
 /** Apply every registered job whose message is currently rendered. */
 export function applyAnnotationMarks(root?: ParentNode): void {
   if (jobs.size === 0) return
@@ -189,6 +238,7 @@ export function applyAnnotationMarks(root?: ParentNode): void {
       if (decorateJob(item, job)) decorated = true
     }
   }
+  layoutBadges(scope)
 }
 
 /** Insert or refresh jobs; identical jobs are no-ops. */
@@ -270,8 +320,13 @@ export function watchAnnotationMarks(root?: ParentNode): () => void {
   }
   const observer = new MutationObserver(schedule)
   observer.observe(el, { childList: true, subtree: true })
+  // Line wrapping changes without a relevant mutation when the window or a
+  // side panel resizes; both can move the anchors under the badges.
+  const onResize = (): void => schedule()
+  window.addEventListener('resize', onResize)
   return () => {
     observer.disconnect()
+    window.removeEventListener('resize', onResize)
     if (frame !== 0) window.cancelAnimationFrame(frame)
   }
 }

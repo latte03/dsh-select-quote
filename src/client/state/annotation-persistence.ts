@@ -10,7 +10,7 @@
  * the whole cycle (save → drop memory → reload → reconcile) headlessly.
  */
 
-import type { SelectionAnnotation } from './annotation-store.ts'
+import type { SelectionAnnotation } from '../protocol/annotation-protocol.ts'
 
 /** localStorage prefix; a session id is appended as `.<sessionId>`. */
 export const ANNOTATION_KEY_PREFIX = 'dsh.select-quote.annotations'

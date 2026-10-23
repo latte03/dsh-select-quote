@@ -11,7 +11,7 @@ pnpm run watch       # 增量重建
 pnpm run sync:desktop        # 把 lib/ 推给桌面客户端已安装的副本（热更新）
 pnpm run sync:desktop -- --watch
 pnpm run dev:desktop         # 上面两个一起开：增量重建 + 推送（scripts/dev-desktop.mjs 拉起两个子进程）
-pnpm run verify      # 无头执行 lib/client.js：8 项贡献都注册上，三种语言词典键与占位符齐备，外加包展示元信息（locale + icon）按宿主规则解析、打包
+pnpm run verify      # 无头执行 lib/client.js：10 项贡献都注册上，三种语言词典键与占位符齐备，外加包展示元信息（locale + icon）按宿主规则解析、打包
 pnpm run check       # typecheck + build + verify（提交前跑这个）
 pnpm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
@@ -52,14 +52,16 @@ Each item contains text selected from an earlier message ...
 
 旧版把引用写成 Markdown 引用块。现在**不再写入**，只在 `quote-protocol.ts` 里保留读取与剥离能力（`parseQuoteMessage()` / `displayTextWithoutQuote()`），用于渲染历史消息。新消息一律走上面的 JSON 块。
 
-## 客户端贡献（共 8 项）
+## 客户端贡献（共 10 项）
 
 | 位置 | 类型 | 说明 |
 |---|---|---|
 | `shell.overlay` | list slot | `select-quote-toolbar`（order 100）：划词工具条 + 评论气泡。挂 root 级，切会话/看历史都不会失去观察 |
 | `conversation.input.overlay` | list slot | `select-quote-card`（order 20）：输入框内的批注摘要；`select-quote-session-bridge`（order 1）：只负责把 `sessionId` 发布给 root 工具条 |
 | `conversation.chat.node` | keyed slot | `user`（`priority: -10`）：替换内置用户气泡，剥掉协议块并渲染批注摘要块 |
-| `ctx.locale` | 语言服务 | `addLanguage(ru)` + `register('select-quote', {zh,en})` + `register('select-quote','ru',…)` + `bind('select-quote')`，见下面第 9 节 |
+| `plugins.bundle.config` | keyed slot | 按包名 `dsh-select-quote`：插件页**外层**（描述与行列表之间）直接渲染的分段控件、快捷键开关，以及开关下方从宿主 catalog 读取的当前键位；注册包在 `ctx.configForms.whileServed(['select-quote'], …)` 里，表单控制器经 slot `inject` 传入 |
+| `ctx.shortcuts` | 命令 | `select-quote.openMenu` / `select-quote.addToTask`：`shortcut` 开启时一起注册；无选区返回 `blocked`，评论步骤未完成时也返回 `blocked`，命中时经 `runtime.selection` 打开菜单 / 保存批注并开评论框；设置区订阅 `ctx.shortcuts.catalog` 显示当前键位；缺该服务时插件照常工作（见机制 15） |
+| `ctx.locale` | 语言服务 | `addLanguage(ru)` + `register('select-quote', {zh,en})` + `register('select-quote','ru',…)` + `bind('select-quote')`，见下面第 10 节 |
 
 不再注册 `select-quote` Chat 节点，也不再注册 Conversation Definition——摘要块内联在 `user` 节点里，原因见下面第 4 节。
 
@@ -100,7 +102,7 @@ Each item contains text selected from an earlier message ...
 
 **5. 正文 Mark：虚线下划线 + 末尾序号角标**
 
-划中的文本在**原消息正文**里留下 `.dsq_annMark`：高亮色**虚线**下划线（`--dsw-static-blue-500`）+ 淡蓝底 + 圆形序号徽章。徽章是上标角标，挂在划词**末尾**（多片段选区只挂在最后一个片段），不挡阅读。**徽章绝对定位、不占行内宽度**：加批注不会改变段落换行、也不会把后面的字挤走；跨行选区时用 `bottom` 而不是 `top` 定位——inline 包含块的底边才是最后一行，`top` 会按第一行算，徽章飞到段首。定位靠 `message-text.ts`：选区落在哪条消息（`[data-chat-flow-key]`）、起止字符偏移多少——偏移在"跳过插件自身装饰节点"的纯净文本上计算，mark 本身透明（不计入偏移），所以装饰前后偏移稳定。比较时忽略空白（选区文本在段落间有换行、DOM 拼接没有）。定位随 `source` 写进 wire JSON，刷新页面后由 durable 消息重新解析、重新装饰；`annotate-text.ts` 用 MutationObserver 对抗 React 重渲染（节点被换掉就重新包）。
+划中的文本在**原消息正文**里留下 `.dsq_annMark`：高亮色**虚线**下划线（`--dsw-static-blue-500`）+ 淡蓝底 + 圆形序号徽章。徽章是上标角标，挂在划词**末尾**（多片段选区只挂在最后一个片段），不挡阅读。**徽章绝对定位、不占行内宽度**：加批注不会改变段落换行、也不会把后面的字挤走；跨行选区时用 `bottom` 而不是 `top` 定位——inline 包含块的底边才是最后一行，`top` 会按第一行算，徽章飞到段首。角标用 `z-index: 2` 压在原生选区高亮和后续 mark 的底色之上：选区贴到角标、或相邻批注的底色盖过来时，数字仍完整可见。**多个批注结尾重合或靠得很近**时，`dom/badge-layout.ts` 的 `placeBadges()` 做纯几何贪心避让：每个角标先试原位，再向右错开两格（每格 28px），还冲突就向上叠（每格 18px），同时受滚动容器右/上边界约束；结果写成 `--dsq-ann-badge-x/y`，由 `::after` 的 `transform` 应用，仍不参与文本排版。`applyAnnotationMarks()`、resize 与重渲染都会重新测量并清掉不再需要的偏移。定位靠 `message-text.ts`：选区落在哪条消息（`[data-chat-flow-key]`）、起止字符偏移多少——偏移在"跳过插件自身装饰节点"的纯净文本上计算，mark 本身透明（不计入偏移），所以装饰前后偏移稳定。比较时忽略空白（选区文本在段落间有换行、DOM 拼接没有）。定位随 `source` 写进 wire JSON，刷新页面后由 durable 消息重新解析、重新装饰；`annotate-text.ts` 用 MutationObserver 对抗 React 重渲染（节点被换掉就重新包）。
 
 **6. 悬停摘要面板**
 
@@ -112,7 +114,7 @@ Each item contains text selected from an earlier message ...
 
 **7. 划词只在对话区生效**
 
-工具条的唯一入口是 `readSelectionSnapshot()`（`SelectionToolbar.tsx` 的 refresh 调它）：选区的 anchor 与 focus 都必须在 `[data-chat-flow-key]` 消息里（`isInsideTranscript()`），且不在输入框 / 工具条自身里。侧边栏、设置、模型选择等其它面板划词不会有任何反应——这几处没有 flow item。宿主侧确认：`ChatView` 给每条消息的 div 写 `data-chat-flow-key: routedNode.key`，分组座位也带同一个属性（属于对话区，允许划词）。
+工具条的唯一入口是 `readSelectionSnapshot()`（`SelectionToolbar.tsx` 的 refresh 调它）：选区的 anchor 与 focus 都必须在 `[data-chat-flow-key]` 消息里（`isInsideTranscript()`），且不在输入框 / 工具条自身里。侧边栏、设置、模型选择等其它面板划词不会有任何反应——这几处没有 flow item。宿主侧确认：`ChatView` 给每条消息的 div 写 `data-chat-flow-key: routedNode.key`，分组座位也带同一个属性（属于对话区，允许划词）。右键接管和快捷键桥复用同一个准入：工具条读不到的选区也打不开菜单（见机制 15）。
 
 **8. 样式与主题**
 
@@ -126,8 +128,8 @@ Each item contains text selected from an earlier message ...
   4. **宿主层**：`@keyframes`、深色覆写、以及伸进产品 DOM 的那两条规则（`.dsq_cardPad` 给 composer 让位）。
   JSX 里用 `cx(styles.summary, A.row)` 组合；`A.x` 和 `styles.x` 都是字面量类型，写错名字过不了 `pnpm run typecheck`；
 - 输入框与对话记录复用同一套摘要组件与样式（`.dsq_summary` / `.dsq_summaryHover`）；历史侧只多一层 `.dsq_tSummary` 负责右对齐与宽度上限，不再有“一条批注一张卡”的独立几何；
-- **三个浮层的磨砂材质用官方 material 图层同款 token**：工具条、评论气泡、悬停面板的底色与模糊都画在一个 `z-index:-1` 的 `::before` 图层上（`background: var(--dsq-menu)` + `backdrop-filter: var(--dsq-menu-backdrop)`，即宿主的 `--dsw-menu-surface-fill` / `--dsw-menu-backdrop-filter`，后者恒为 `blur(40px) saturate(150%)`，亮暗自动翻）。**必须画在独立图层上**：`backdrop-filter` 直接写在容器上会连容器自己的子树一起糊，而负 z 图层只取身后的页面。悬停面板为此把 `overflow-y: auto` 从面板挪到内层 `.dsq_summaryList`——绝对定位的图层留在会滚动的容器里会跟着内容跑掉，滚到底部时面板顶部就露空。老浏览器没有 `backdrop-filter` 时（`@supports not`）图层退成 `--dsq-bg-raised` 不透明底，避免半透明直接糊在文字上；
-- **阴影统一用 `--dsw-elevation-prominent` 一档**（别名 `--dsq-shadow`）：和宿主自己的菜单/弹层同档，且它自带 `0 0 0 .5px` 的描边环（`--dsw-elevation-stroke`）——浮层因此不画 border 也有轮廓。以前工具条用 soft、两个气泡用 prominent 两档，现在合成一个别名；兜底值按真 token 的组成补齐那一圈描边。三个浮层把描边覆写成更淡的 `--dsw-alias-border-l1`（磨砂边缘自带分界，不需要再勾一道）——**覆写和 `--dsq-shadow` 的声明都必须写在浮层选择器上**：自定义属性在声明处展开，`--dsq-shadow` 留在 body 上时浮层上的覆写够不着；
+- **浮层的磨砂材质用官方 material 图层同款 token**：工具条、评论气泡、悬停面板、右键菜单以及触屏/预览浮层的底色与模糊都画在一个 `z-index:-1` 的 `::before` 图层上（`background: var(--dsq-menu)` + `backdrop-filter: var(--dsq-menu-backdrop)`，即宿主的 `--dsw-menu-surface-fill` / `--dsw-menu-backdrop-filter`，后者恒为 `blur(40px) saturate(150%)`，亮暗自动翻）。**必须画在独立图层上**：`backdrop-filter` 直接写在容器上会连容器自己的子树一起糊，而负 z 图层只取身后的页面。悬停面板为此把 `overflow-y: auto` 从面板挪到内层 `.dsq_summaryList`——绝对定位的图层留在会滚动的容器里会跟着内容跑掉，滚到底部时面板顶部就露空。老浏览器没有 `backdrop-filter` 时（`@supports not`）图层退成 `--dsq-bg-raised` 不透明底，避免半透明直接糊在文字上；
+- **阴影统一用 `--dsw-elevation-prominent` 一档**（别名 `--dsq-shadow`）：和宿主自己的菜单/弹层同档，且它自带 `0 0 0 .5px` 的描边环（`--dsw-elevation-stroke`）——浮层因此不画 border 也有轮廓。以前工具条用 soft、两个气泡用 prominent 两档，现在合成一个别名；兜底值按真 token 的组成补齐那一圈描边。所有浮层都把描边覆写成更淡的 `--dsw-alias-border-l1`（磨砂边缘自带分界，不需要再勾一道）——**覆写和 `--dsq-shadow` 的声明都必须写在浮层选择器上**：自定义属性在声明处展开，`--dsq-shadow` 留在 body 上时浮层上的覆写够不着；
 - **磨砂的视觉验证只能在真实客户端里做**：本机 headless Chrome（CLI 与 MCP 两通道）不渲染 `backdrop-filter`，最小页面可复现——别把"没模糊"当代码缺陷，也别用那里的帧率数字下结论（2026-10-19 的教训，见 [`archive/investigations.md`](archive/investigations.md)）；
 - **入场动画绝不带 opacity**：规范实锤祖先 `opacity<1` 会成为 backdrop root，`::before` 采样不到身后的页面，磨砂在整段淡入里消失、结束才糊上。transform 不在禁止列（用户已在真实客户端验证 scale 无恙），现行入场是 `translate(-50%,-100%) translateY(4px) scale(0.96) → 归位`；内容顶部没地方放时工具条翻到首行下方（`data-anchor="below"`），换成 `dsq-toolbar-in-below` 关键帧；
 - 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）；桌面端可用 `pnpm run sync:desktop` 热更新（见「桌面客户端的热更新」）。
@@ -157,7 +159,7 @@ Each item contains text selected from an earlier message ...
 
 **为什么必须由宿主说了算**：桌面版是 Electron 外壳，渲染进程带着 `--lang=en-US` 启动，`navigator.language` 因此报 en，而用户在设置里选的是中文——插件若自查 `navigator`，界面会和产品反着来。宿主自己在 Client 挂载前通过 `__DSH_LOCALE__` 拿到 Host preference 与有序 OS 语言列表，这条通道只有 `ctx.locale` 能读；偏好本身持久化在 profile 的 `cordis.patch.yml` 里（`- id: locale / config.preference`）。
 
-**即时切换**：React 侧经 `useLocale()`（`useSyncExternalStore` 挂在 `subscribe` 与 `revision` 上）重渲染；chip 是直接写 DOM 的，所以在 `apply()` 里订阅一次 `refreshDirectiveChips()` 重写文案。写 DOM 的订阅不会触发第 8 节那个循环——新文本不含指令字面量，`decorateTextNode()` 在入口就返回。
+**即时切换**：React 侧经 `useLocale()`（`useSyncExternalStore` 挂在 `subscribe` 与 `revision` 上）重渲染；chip 是直接写 DOM 的，所以在 `apply()` 里订阅一次 `refreshDirectiveChips()` 重写文案。写 DOM 的订阅不会触发第 9 节那个循环——新文本不含指令字面量，`decorateTextNode()` 在入口就返回。
 
 **复数**：宿主的词典是「键 → 单个模板字符串」，没有复数概念。带 `{count}` 的文案因此拆成 `key.one` / `key.few` / `key.many` / `key.other`，由 `i18n.ts` 按语言挑形式，挑不到就退 `key.other`。`pnpm run verify` 按复数组比对三种语言：组必须都存在，且**每组必须有 `.other`**，占位符名也不允许漂移——漏一个键会渲染出键名本身，漏一个占位符会把 `{count}` 直接印在界面上。
 
@@ -208,6 +210,25 @@ Each item contains text selected from an earlier message ...
 - **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。**「下方」的可用边界是 composer seat 的顶边，不是滚动容器自己的盒子**（`floating-layer.ts` 的 `bounds().bottom` 取两者较小值）：桌面布局里 composer 是 sticky、z-7 覆盖在滚动容器下半段，用容器盒子会把评论泡放到输入框底下（[data-composer-seat]，缺失时退回 [data-composer-card]；seat 从当前滚动容器沿祖先链就近解析，不取文档里第一个，避免多窗格时钳到别的输入框）。评论阶段工具条本身（「添加批注…」提示）改放到评论泡**上方、左对齐**，底边距评论泡顶边 6px；顶部空间不够时翻到评论泡下方。它和评论泡的重排都由 `placeCommentPop` 负责。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要块同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
 - **触屏不走这套**：coarse pointer 下工具条/评论泡换成了 body 级 fixed 的底部操作条与评论抽屉（见机制 6 的触屏条目），因为系统选择菜单和软键盘占据了选区锚定所需的同一块空间；`placeCommentPop` 在触屏下直接返回，评论阶段也不再抬 host 的 z-index。
 
+**14. 配置：Host 持有，client 通过 configForms 跟随**
+
+- **Host 半**（`src/index.ts`）导出 schemastery `Config`，字段全部 `.volatile()`：`triggerMode`（`auto` / `contextmenu` / `both`，默认 `auto`）与 `shortcut`（默认 `false`）。只有 volatile 字段进入设置镜像，普通字段不可编辑。`lib/index.js` 现在由 `tsdown.host.config.ts` 编译，schemastery 打进产物——发布包不依赖 profile 如何解析宿主包。`apply(ctx, config)` 收到的是 volatile 引用，读取用 `.get()`。
+- **client 拿不到 `apply` 的配置**。`src/client/config.ts` 在嵌套的 `ctx.inject(['configForms'], …)` 里按**行 id**（`select-quote`，不是包名）取 `configForms.get(ROW_ID)`，把快照 `value` 归一化后发布到模块级 store；缺服务、`loading`、非法枚举都落在默认 `auto/false`。`ROW_ID` 与 `PACKAGE_NAME` 只在 `src/shared/identity.ts` 定义；两份 patch 的行 id 由 verify 对齐。
+- **配置区不是 `Config` 的副产物**：注册 `plugins.bundle.config`（key = 包名 `dsh-select-quote`），宿主把它渲染在插件页的**外层**——描述与行列表之间，不需要再进入某一行的「配置」页。Host 对这个槽位**不传 `form`**（只有 `plugins.row.config` 的 page 才传），所以注册项用 slot 的 `inject` 面把 `scope.configForms.get(ROW_ID)` 的控制器交给组件；组件用 `useSyncExternalStore` 订阅快照，写入走控制器的 `set(field, value)`。注册仍包在 `configForms.whileServed([ROW_ID], …)` 里：namespace 不在 describe 镜像中时不出现配置区，也不留半死的表单；`locale` 座位填 `select-quote`，文案走同一套词典。页面里有三块内容：`triggerMode` 分段控件、`shortcut` 开关、开关下方两条快捷键命令的**当前生效键位**。键位另有来源：`shortcut-menu.ts` 订阅 `ctx.shortcuts.catalog`，把本插件两条命令的 `label` / `keys` / `issue` / `conflicts` 发布到模块级 store，`ConfigRow` 用 `useSyncExternalStore` 读取；开关关闭、命令未注册时列表不显示，撞键或未绑定时分别显示提示，用户在宿主「快捷键」设置里改键后这里不问刷新就更新。
+- **控件点击即提交**：`form.set('triggerMode' | 'shortcut', value)`。控制器负责写入排队、revision 与失败后的恢复；Host 校验后持久化到 profile 的用户层 patch（`id: select-quote` 下的 `config.*`），刷新/重启由 Host 重新解析；其它标签页改值会经设置文档推过来，`subscribeConfig()` 触发 `refresh()` / 快捷键重注册，工具条与命令即时跟上。
+- **读取点在事件里**：`SelectionToolbar.refresh()` 每次都用 `resolveTriggers(getConfig()).auto` 判断，不是渲染时快照；触屏不受 `triggerMode` 影响，始终走底部操作条。`shortcut` 独立于 `triggerMode`，由 `shortcut-menu.ts` 在开启时向宿主注册命令（见机制 15）。
+- **改字段要同步**：`src/index.ts` 的 `Config`、`src/client/config.ts` 的 `DEFAULT_CONFIG` / `normalizeConfig`、`ConfigRow` 组件、三份词典与 verify 的 host/client 对齐断言。verify 会直接加载 `lib/index.js` 核对字段集合、默认值、`.volatile()` 与非法值拒绝，并跑一次没有 `configForms` 的降级 `apply()`。
+
+**15. 右键菜单与快捷键：只在选区上接管**
+
+- **判定是纯矩阵**（`dom/menu-trigger.ts`，verify 直接 import 跑用例）：`shouldOpenSelectionMenu()` 要求 `contextMenuEnabled`（`triggerMode` 为 `contextmenu` / `both`）、非触屏、`!event.defaultPrevented`、右键目标在对话区（`isInsideTranscript`）、指针点落在选区的某一段 client rect 内（`pointInRects` 逐行判断，2px 容差）、选区非空，全部为真才接管。工具条/菜单自身和评论阶段不参与。
+- **顺序**：新右键先关掉已打开的本插件菜单；`defaultPrevented` 最先检查，给别的插件让路；只有条件全过、且成功读到快照之后才同步 `preventDefault()` + `stopPropagation()`，再以**指针坐标**开菜单。任何一项不满足就完全不碰事件——选区外右键、编辑器/侧栏右键、别人处理过的右键都保留宿主原生菜单。
+- **菜单**（`SelectionMenu.tsx`）：portal 到 `document.body`，fixed、z 64；`placePopover` 以指针为锚点默认朝下，放不下时翻转/钳位。测量完成前 `visibility:hidden`，避免首帧闪在原点。**指针打开时焦点落在菜单容器本身**（`tabIndex=-1`，没有任何条目预先高亮），快捷键打开时才把焦点给第一项，Enter 可直接执行；两者都在 placement 提交后的 layout effect 里做（hidden 元素无法聚焦）。悬停条目会把焦点移到该条目，键盘与鼠标只保留一个高亮。入场只动 transform（`dsq-menu-in` / `dsq-menu-in-up`），不带 opacity；条目由 `linkTarget(snapshot.text, snapshot.anchorHref)` 决定是否多一个「打开链接」。外部 pointerdown / 外部 contextmenu / 页面滚动（捕获）/ resize / window blur / Escape / Tab 关闭；菜单内部的 contextmenu 只 preventDefault，不再弹第二层。键盘支持 ↑/↓ 循环（从容器起步时 ↓ 到第一项、↑ 到最后一项）、Home/End、Enter。
+- **关菜单必须同步失效 ref**：`dismissMenu()` 先把 `menuRef.current` 置空，再 `setMenu(null)`，然后调用方才能 `refresh()`。`refresh()` 在 `contextmenu` 模式里靠 `!menuRef.current` 判断该不该清掉 `active`；只调 `setMenu(null)` 的话 ref 要等下一次 render 才更新，紧跟其后的同步 refresh 会以为菜单还开着，把 `active` 留下，菜单关闭后自动工具条就冒出来（表现为空白点击后闪一下、按住 Esc 时一直悬着）。空白点击、右键改口、设置切换、选中文字变化都走同一个出口；`both` 模式下 refresh 会重新抬起工具条，这是预期。
+- **快捷键桥**：工具条在非触屏时发布 `runtime.selection = { state, open, add }`。`state()` 按当前相位返回 `ready` / `busy`（评论步骤已开）/ `no-selection`。`open` 从**选区首行下边缘**（`selectionFirstLineRect()`）锚定，不用鼠标位置；`add` 读同一份选区后走 `beginComment()`，保存批注并打开评论框，与菜单里的「添加到任务」是同一条路径。`shortcut-menu.ts` 在 `shortcut` 开启时向 `ctx.shortcuts` 注册两条命令：`select-quote.openMenu` 与 `select-quote.addToTask`，都是 `regions: ['page']`、`modals: []`、label 走 i18n。默认键位按 profile 写死：桌面 macOS `⌘L` / `⇧⌘L`；桌面 Windows/Linux 的菜单是 primary+shift+L、添加是 primary+shift+Period（不用 Alt：`Ctrl+Alt+L` 在多种布局上是 AltGr 字符，且桌面壳会先于输入区判定消费快捷键）；Web macOS 是 primary+shift+L / primary+alt+L，Web Windows 同桌面；**Web Linux 只能声明宿主允许的组合**，`primary+Slash` 已被宿主的快捷键面板占用，所以菜单是 primary+shift+Comma、添加是 primary+shift+Period（声明 `KeyL` 会让 `register()` 抛错）。`resolve()` 在桥缺失或无选区时返回 `blocked` +「先在对话里选中一段文字」，评论步骤未完成时返回 `blocked` +「先完成当前批注」，否则 `handled` + `run`。注册/注销严格跟随设置，两条命令各自 try/catch；与别的插件撞键时只 warn，工具条与菜单继续可用。设置区的键位列表订阅 `ctx.shortcuts.catalog`（见机制 14），改键或冲突即时反映。
+- **桌面原生菜单**：Harness 的 Electron 主进程在 `webContents.on('context-menu')` 里对任何非空 selection 弹原生 Copy 菜单。渲染进程在 `contextmenu` 里同步 `preventDefault()` 会抑制它（2026-10-23 在 Harness 0.2.1-rc.2 实测：命中选区时只有本插件的菜单；点选区外时本插件不接管，原生 Copy 照常弹出）。这条依赖 Chromium 的 contextmenu 默认行为；宿主若改成异步或独立通道弹菜单，必须重新验证。
+- **边界**：触屏没有右键，也不发布快捷键桥（底部操作条仍然是唯一入口）；`triggerMode` 只影响入口，「添加到任务」之后的所有流程与原来一致。
+
 ## 浮层名词与层带
 
 改样式/层级前先认名字（z-index 一栏是**各自层叠上下文内**的值，不能横向直接比大小）：
@@ -220,18 +241,29 @@ Each item contains text selected from an earlier message ...
 | 触屏操作条 | `.dsq_touchBar` | `document.body`（fixed） | 60 | coarse pointer 下替代工具条：复制 / 添加到任务 / 打开链接，贴 visual viewport 底部 |
 | 触屏评论抽屉 | `.dsq_touchSheet` | 同上 | 62（遮罩 61） | coarse pointer 下替代评论泡：选中原文预览 + 可选评论 + 跳过/添加 |
 | 悬浮摘要 | `.dsq_summaryHover` | `document.body`（fixed） | 14 | 摘要块的悬停列表（composer 与历史消息共用） |
+| 右键菜单 | `.dsq_ctxMenu` | `document.body`（fixed） | 64 | 选区上右键或快捷键打开的菜单：复制 / 打开链接 / 添加到任务；滚动、外部点击、resize 或失焦即关闭 |
 | 摘要块 | `.dsq_summary` | composer 内（`conversation.input.overlay`）/ 历史用户气泡上方 | 13（composer）/ 1（历史） | 「N 条批注」入口；历史侧外包 `.dsq_tSummary` 右对齐。历史卡必须留在内容层，否则会盖住 6/8 的评论泡 |
 | 摘要容器 | `.dsq_cardStack` | composer 卡片内 | 12 | 输入框上方的摘要容器 |
 
 - 工具条/状态/评论泡共用一个 host：平时 host 的 6 低于 composer seat 的 7，又被滚动容器裁剪，所以既不会穿过输入框，也会随正文滑进 header 下面（机制 13）。评论步骤打开时 host 抬到 8，让评论泡盖过伸进滚动区的摘要卡；关闭即还原。三者的内部次序是 status 3 > toolbar 2 > commentPop 1。
 - 摘要块/摘要容器在 composer seat（z 7，自成层叠上下文）内部，12/13 只在 composer 内比较；悬浮摘要是 body 级 fixed，14 属于页面根层叠上下文。
+- 右键菜单必须留在 body：它要逃出对话滚动容器的裁剪，且**不随内容滚动**（一滚就关，避免指向已经移走的行）；64 低于宿主菜单的 100，宿主自己的菜单/弹层仍能盖住它。
 
 ## 目录结构
 
 ```
-src/index.ts                       # Node 半：占位，让包被 Loader 挂载
-src/client/index.tsx               # Client 半入口：注册 Slot、语言词典与装饰观察者
-src/client/SelectionToolbar.tsx    # 划词浮动条（复制 / 添加到任务）+ 评论气泡
+src/index.ts                       # Node 半：导出 schemastery Config（triggerMode / shortcut，全部 volatile）与空 apply
+src/shared/identity.ts             # 包名、Loader 行 id、配置槽 key 的唯一来源
+src/client/index.tsx               # Client 半入口：注册 Slot、配置跟随、语言词典与装饰观察者
+src/client/config.ts               # 配置默认值/归一化/resolveTriggers + configForms 订阅发布
+src/client/settings/ConfigRow.tsx  # 插件页外层的配置区（划词入口 + 快捷键开关 + 当前键位列表，订阅 row 表单与宿主 catalog）
+src/client/selection/SelectionToolbar.tsx # 划词控制器：状态机、批注保存、动作与快捷键桥（state/open/add）
+src/client/selection/useSelectionWatcher.ts # 指针/选区/右键/滚动的监听编排（只管何时 refresh）
+src/client/selection/useCommentPlacement.ts # 评论泡与提示条的测量/落位生命周期
+src/client/selection/ToolbarView.tsx # 纯视图：桌面工具条/评论泡、触屏底栏/抽屉、状态提示
+src/client/selection/SelectionMenu.tsx # 右键/快捷键菜单（body portal、键盘导航、外部关闭）
+src/client/shortcut-menu.ts        # 宿主快捷键命令 openMenu / addToTask（按设置注册/注销；镜像 catalog 供设置页）
+src/client/dom/menu-trigger.ts     # 右键接管纯判定：触发矩阵 + 点落选区矩形
 src/client/composer/AnnotationPanel.tsx      # 输入框内批注摘要 + 发送动作拦截 + 撤回协议块还原
 src/client/composer/useSendIntercept.ts      # 发送手势时把待发批注折进草稿
 src/client/composer/useDraftMarker.ts        # U+200B 让"只有批注"时发送按钮可用
@@ -240,11 +272,13 @@ src/client/dom/floating-layer.ts   # 找到对话滚动容器，挂内容坐标�
 src/client/ui/touch.ts             # coarse pointer / visualViewport 探测（触屏底部操作条与抽屉）
 src/client/dom/message-text.ts     # 消息纯净文本遍历、选区→字符偏移定位
 src/client/dom/annotate-text.ts    # 正文 mark（下划线+序号徽章）的注册表与装饰
+src/client/dom/badge-layout.ts     # 角标碰撞避让的纯几何（右移两格→向上叠，带边界）
 src/client/dom/scrollToAnnotation.ts # 点击批注滚动到正文 mark 并闪烁
 src/client/dom/stripSubmissionEcho.ts # 发送回显气泡里剥掉协议块（只改展示）
 src/client/dom/decorateAnnotationDirectives.ts # 模型回的 :dsh-annotation{index="N"} 渲染成可点 chip
 src/client/dom/chipPreview.ts      # chip 的 hover/focus/click 预览与「跳转到原文」
 src/client/dom/popoverPlacement.ts # 浮层定位（翻转 + 视口夹取）
+src/client/dom/comment-placement.ts # 评论泡/提示条的纯几何（上下翻转 + 夹取，可单测）
 src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 等）
 src/client/state/annotation-store.ts # 每会话待发批注状态（内存 Map + 持久化钩子）
 src/client/state/annotation-persistence.ts # 持久化纯逻辑：载荷、保留策略
@@ -260,12 +294,13 @@ src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / 
 src/client/i18n.ts                   # 三份词典（zh / en / ru）、复数形式挑选、把 t() 转给宿主 bind 结果
 src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
 src/client/styles.ts               # 全部 CSS，四层：token / 原子 / 组件 / 宿主（模板字符串注入）
-src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId）
+src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId、selection 快捷键桥）
 src/client/context.d.ts            # 客户端 Context 服务的类型补充
-scripts/build.mjs                  # tsdown 构建 + ModuleLoader 包装（--watch 时每次重建都重新包装）
+scripts/build.mjs                  # host 编译到 lib/index.js（schemastery 打进产物）+ client tsdown 构建与 ModuleLoader 包装
+tsdown.host.config.ts              # Host 半构建配置（ESM / Node，bundle schemastery）
 scripts/sync-desktop.mjs           # 把 lib/ 写进桌面 profile 已安装副本，借宿主热更新（--watch 常驻）
 scripts/dev-desktop.mjs            # 拉起 build --watch + sync --watch 两个子进程，任一退出就收摊
-scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 9 项，另查三种语言词典齐备、包展示元信息与发货清单）
+scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 10 项，另查配置链路、三种语言词典、包展示元信息与发货清单）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
 dev.patch.example.yml              # 本地 --patch 开发层模板（复制为 gitignored 的 dev.patch.yml）
 docs/internals.md                  # 本文档（现存机制；历史记录在 docs/archive/）
@@ -285,6 +320,9 @@ lib/                               # 构建产物（已提交，运行时直接�
 - 槽位名 `shell.overlay` / `conversation.input.overlay` / `conversation.chat.node` 及其 props（`useInput`、`inputActions.setDraft`）；
 - `ctx.slots.entries('conversation.chat.node')` 可枚举全部条目（包括被遮蔽的宿主条目）；宿主把同一个 `UserMessageNodeView` 同时注册在 `user` 与 `steering` 两个 key 下，`component.type.name` 是 `UserMessageNodeView`、`options` 只有 `key`（没有 `priority`）——插件自己的注册项要用组件身份排除，不能靠 `priority` 值（解析时还要按 key 过滤，两个 key 的宿主项不能互相借用）；宿主改名时只有唯一的非自己候选才可退用，多候选必须走纯文本回退。委托渲染时要把 kit 里的 `renderFactorySlot`、`loadImage` 与 hooks 原样透传，并给注册项声明 `locale: 'chat'`——否则宿主的复制/已复制文案拿不到词典。`conversation.chat.user.content` 工厂（子槽 `conversation.chat.user.images` 渲染图片）由宿主视图自己调用，插件不再直接碰；**`renderMessageImages` 不是 0.2.1-rc.2 的宿主 prop**；
 - `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
+- `ctx.configForms`（`dsh-client-ui-settings`）提供 `get(<Loader 行 id>)`、`whileServed(namespaces, register)` 与表单的 `getSnapshot` / `subscribe` / `set` / `unset` / `mutate`。插件页有两个配置槽：`plugins.row.config`（key 为 `<包名>#<行 id>`，页面以 `view: 'page'` 收到 `{ form: { state, mutate } }`）和 `plugins.bundle.config`（key 为包名，渲染在**包页外层**的描述与行列表之间，只传 `view: 'page'`，**不传 form**——组件要自己 `configForms.get(<行 id>)`，并可用 slot 注册项的 `inject` 面把控制器注入 props）。带设置区的 `dsh.client.inject` 需要列出 `@deepseek-ai/dsh-client-locale`、`@deepseek-ai/dsh-client-ui-settings`、`@deepseek-ai/dsh-client-ui-plugin-manager`、`@deepseek-ai/dsh-api-remotes`；
+- `ctx.shortcuts`（`@deepseek-ai/dsh-client-shortcuts`，可选注入）：`register({id,label,aliases,defaults,regions,modals,resolve})` 会为全部 runtime/platform 预检默认值并在撞键、非法 Web 组合、保留键时抛错（必须 try/catch）；默认值按 `desktop:macos|windows|linux` / `web:macos|windows|linux` 给，Web Linux 只接受 `primary+Slash`、`primary+shift+Comma`、`primary+shift+Period`，其中 `primary+Slash` 被宿主的 `shortcuts.open` 占用；`resolve` 返回 `handled`（带 `run`）/ `blocked`（带 `reason`）/ `pass`。`ctx.shortcuts.catalog` 是当前窗口所有命令的生效行（`id` / `label` / `keys` / `issue` / `conflicts`，`keys` 已是平台化 keycap 文案），订阅它可在宿主改键或冲突后同步 UI。`dsh.client.inject` 里也要列出它，缺服务时本插件只少快捷键入口；
+- 桌面 Electron 主进程在 `webContents.on('context-menu')` 里对非空 `selectionText` 弹原生 Copy 菜单（`app/lib/main.js`）；渲染进程在 `contextmenu` 里同步 `preventDefault()` 可以抑制它（2026-10-23 在 0.2.1-rc.2 实测）。升级 dsh 后右键验证要覆盖「选区上只有我们的菜单」与「选区外只有原生菜单」两条；
 - dsh-rewind 的撤回读持久 `user` / `steering` 节点的文本块（`block.type === 'text'`）并原样写回 composer——消息里的任何文本协议都会回到编辑器，所以本插件必须能把它反向还原（见关键机制 1）；
 - 开发期依赖：`client-hmr` 挂在 web 组合包里，按 500ms 轮询 client 产物并经 `/plugins/events` 推 `rebuilt`（`sync:desktop` 的热更新路径）；
 - 插件页展示元信息的读取约定：`<包名>/locale/en.json` 为发现入口、同目录其余 `*.json` 为各语言词典、`<包名>/icon` 为图标，全部经 Node ESM 解析且**不激活插件**（见关键机制 12）；这些路径必须在 `exports` 与 `files` 里都出现；
@@ -311,4 +349,8 @@ lib/                               # 构建产物（已提交，运行时直接�
 | 改了 CSS 不生效 | `<style>` 只注入一次，刷新页面 |
 | `sync:desktop` 推了但客户端没变 | 报 `already matches` 说明 `lib/` 还没重建（先跑 `pnpm run watch`）；报 `no installed bundle` 说明 profile 名不对（`--profile <name>`）；都正常仍不重载，看宿主 boot 日志里有没有 `client-hmr` |
 | 界面语言不跟着 dsh 变 | `pnpm run verify` 是否列出 4 项 `locale.*` 贡献；宿主是否提供 `ctx.locale`（没有则文案退到 English）；用户在设置里选的语言是否已注册 |
+| 插件页外层没有配置区（或仍要点进「配置」才看到） | 先看 `lib/index.js` 是否真的导出了 `Config`（不是旧的两行空壳），再确认注册的是 `plugins.bundle.config` 且 key 是包名 `dsh-select-quote`（不是 `plugins.row.config`）。行 id 仍要对齐：patch 里 `id: select-quote`、`src/shared/identity.ts` 的 `ROW_ID`、`configForms.whileServed(['select-quote'])` 三处必须一致。`pnpm run verify` 的 `HOST CONFIG` / `ROW IDENTITY` / `CONFIG WIRING` / `BUNDLE FORM` 覆盖这些点 |
+| 改了「划词入口」但工具条行为不变 | 行必须能写：`--patch` / home patch 注入的行会被 Host 以 `settings/rejected` 拒绝，要在正常安装的 profile 里改。再查 `configForms.get` 的 key 是否仍是行 id、`refresh()` 是否读 `resolveTriggers(getConfig())`；服务缺失时按设计停在默认 `auto` |
+| 右键没出菜单，或原生菜单和划词菜单一起出现 | 先确认「划词入口」选了右键菜单/两者都开；再确认指针真的落在**选区矩形**内（空白/行首缩进都不算，`pointInRects` 有 2px 容差）、右键目标在 `[data-chat-flow-key]` 里、且没有别的监听器先 `preventDefault`。一起出现只可能发生在没接管的那次右键（设计如此：我们不动宿主菜单）；命中时 Electron 原生菜单会被 `preventDefault` 抑制 |
+| 快捷键列表里没有「打开划词菜单」/「添加到任务」，或按了没反应 | 设置里的快捷键开关是否打开（关闭时两条命令都不注册）；快捷键设置里是否被别的插件占了键（register 抛错只会在控制台 warn，不会停掉插件）；没有选中文字、或当前批注还没完成时命令按设计返回 `blocked`；设置区会直接显示两条命令当前生效的键位、冲突或未绑定。Web Linux 只能用默认的 `Ctrl+Shift+,` / `Ctrl+Shift+.`，宿主不允许字母键 |
 | 按 Backspace 删不掉 / 中文输入被打断 | 检查是否有代码在响应草稿变化时调用 `setDraft()`（见关键机制 2） |

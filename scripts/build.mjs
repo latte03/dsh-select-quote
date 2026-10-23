@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn, spawnSync } from 'node:child_process'
@@ -9,13 +9,8 @@ const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 
 mkdirSync(libDir, { recursive: true })
 
-// Minimal Node entry (no bundling needed).
-writeFileSync(
-  resolve(libDir, 'index.js'),
-  `export const name = ${JSON.stringify(pkg.name)}\nexport function apply() {}\n`,
-)
-
 const buildDir = resolve(libDir, '.client-build')
+const hostBuildDir = resolve(libDir, '.host-build')
 
 // Resolve tsdown's JS entry and run it with the current Node binary.
 //
@@ -59,6 +54,41 @@ const tsdownArgs = [
   buildDir,
 ]
 
+/**
+ * Host half. The Loader resolves `lib/index.js` by package name, so this is the
+ * entry that must export `Config`; the old hand-written stub shipped none.
+ */
+function buildHost() {
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolveTsdownEntry(),
+      resolve(root, 'src/index.ts'),
+      '--config',
+      resolve(root, 'tsdown.host.config.ts'),
+      '--out-dir',
+      hostBuildDir,
+    ],
+    { cwd: root, stdio: 'inherit', env: process.env },
+  )
+  if (result.error) {
+    console.error('[dsh-select-quote] failed to build the host half:', result.error)
+    process.exit(1)
+  }
+  if (result.status !== 0) process.exit(result.status ?? 1)
+
+  const output = ['index.js', 'index.mjs']
+    .map((name) => resolve(hostBuildDir, name))
+    .find((candidate) => existsSync(candidate))
+  if (output === undefined) {
+    console.error('[dsh-select-quote] host build produced no entry in', hostBuildDir)
+    process.exit(1)
+  }
+  copyFileSync(output, resolve(libDir, 'index.js'))
+  rmSync(hostBuildDir, { recursive: true, force: true })
+  console.log(`[dsh-select-quote] wrote ${resolve(libDir, 'index.js')}`)
+}
+
 function findRawOutput() {
   // `exports` of tsdown's config emit either a .js or .cjs depending on format
   // resolution, so probe both instead of assuming one.
@@ -95,6 +125,7 @@ ${raw}
 }
 
 if (process.argv.includes('--watch')) {
+  buildHost()
   rmSync(buildDir, { recursive: true, force: true })
   const child = spawn(process.execPath, [...tsdownArgs, '--watch'], {
     cwd: root,
@@ -128,6 +159,7 @@ if (process.argv.includes('--watch')) {
   process.on('SIGTERM', stop)
   console.log(`[dsh-select-quote] watching ${resolve(root, 'src')} (Ctrl-C to stop)`)
 } else {
+  buildHost()
   const result = spawnSync(process.execPath, tsdownArgs, {
     cwd: root,
     stdio: 'inherit',

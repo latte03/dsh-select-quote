@@ -1,12 +1,27 @@
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
+import { PACKAGE_NAME } from './shared/identity.ts'
 
 /**
  * Node half of dsh-select-quote. The product surface is the browser client
- * module (`./client`); this entry only keeps the package mounted in the
- * Loader so Host can discover `dsh.client` and serve the bundle.
+ * module (`./client`); this entry keeps the package mounted in the Loader so
+ * Host can discover `dsh.client`, and carries the config schema the settings
+ * page edits.
+ *
+ * Every field is volatile: only volatile fields are mirrored into the settings
+ * schema and applied live. The browser half never receives this object — it
+ * reads the same values through `ctx.configForms` (see `client/config.ts`).
  */
-export const name = 'dsh-select-quote'
-
-export function apply(_ctx: Context): void {
-  console.log('[dsh-select-quote] plugin loaded (6 client contributions)')
+export interface Config {
+  triggerMode: Volatile<'auto' | 'contextmenu' | 'both'>
+  shortcut: Volatile<boolean>
 }
+
+export const Config = z.object({
+  triggerMode: z.union(['auto', 'contextmenu', 'both']).default('auto').volatile(),
+  shortcut: z.boolean().default(false).volatile(),
+})
+
+export const name = PACKAGE_NAME
+
+export function apply(_ctx: Context, _config: Config): void {}
