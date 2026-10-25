@@ -168,11 +168,20 @@ export function clearAnnotations(sessionId?: string): void {
  * Called from render-phase bridges, so adoption is deferred to a microtask:
  * the resulting notify() must not land inside another component's render.
  * Re-binding the same session is a no-op.
+ *
+ * A rebind is itself a publication even when adoption changes nothing: the
+ * host mints a brand-new session id on a fork (annotations are not
+ * inherited), and subscribers like the pending-mark job sync must re-read
+ * the new partition so the previous session's marks are dropped instead of
+ * bleeding into the forked transcript while the composer card is already
+ * gone.
  */
 export function bindAnnotationSession(sessionId: string | undefined): void {
   if (!sessionId || sessionId === runtime.sessionId) return
   setRuntimeSession(sessionId)
-  queueMicrotask(() => adoptPersistedAnnotations(sessionId))
+  queueMicrotask(() => {
+    if (!adoptPersistedAnnotations(sessionId)) notify()
+  })
 }
 
 /**
@@ -181,9 +190,13 @@ export function bindAnnotationSession(sessionId: string | undefined): void {
  * In-memory entries win on conflict — they can only be newer, because anything
  * added after the bind is persisted immediately. Annotations parked in the
  * memory-only bucket (added before the bind) move over as well.
+ *
+ * Returns whether the partition changed (and published): `false` means the
+ * stored state already matched memory, so callers that also represent "the
+ * active partition moved" (see `bindAnnotationSession`) still need to publish.
  */
-export function adoptPersistedAnnotations(sessionId: string): void {
-  if (!persistence) return
+export function adoptPersistedAnnotations(sessionId: string): boolean {
+  if (!persistence) return false
   const stored = persistence.load(sessionId)
   const current = bySession.get(sessionId) ?? EMPTY
   const orphaned = bySession.get(MEMORY_KEY) ?? EMPTY
@@ -195,11 +208,12 @@ export function adoptPersistedAnnotations(sessionId: string): void {
   const next = [...merged.values()]
   const sameAsCurrent =
     next.length === current.length && next.every((item, i) => item.id === current[i]?.id)
-  if (sameAsCurrent && orphaned.length === 0) return
+  if (sameAsCurrent && orphaned.length === 0) return false
 
   bySession.set(sessionId, next)
   if (orphaned.length > 0) bySession.delete(MEMORY_KEY)
   notify()
+  return true
 }
 
 /** Same ids in the same order, with the only mutable field (comment) equal. */

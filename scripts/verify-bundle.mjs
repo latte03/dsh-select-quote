@@ -179,6 +179,25 @@ async function checkBinding(problems) {
   if (items.length !== 1 || items[0].id !== 'ann_bound') {
     problems.push('binding did not surface the adopted annotation')
   }
+
+  // A fork mints a brand-new session id with nothing stored under it: adoption
+  // is a no-op, yet the rebind must still publish, so the pending-mark sync
+  // re-reads the new partition and the previous session's marks drop instead
+  // of bleeding into the forked transcript while the composer card is gone.
+  const seen = []
+  const unsubscribe = store.subscribeAnnotations(() => seen.push(store.getAnnotations().length))
+  store.bindAnnotationSession('session-fork')
+  await flush()
+  if (seen.length !== 1 || seen[0] !== 0) {
+    problems.push(`rebind to an empty session did not republish once (${seen.join(', ')})`)
+  }
+  if (store.getAnnotations().length !== 0) {
+    problems.push('rebind to an empty session kept annotations from the previous one')
+  }
+  if (store.getAnnotations('session-bound').length !== 1) {
+    problems.push('rebind dropped the parked partition of the previous session')
+  }
+  unsubscribe()
 }
 
 /**
