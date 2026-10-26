@@ -198,6 +198,19 @@ async function checkBinding(problems) {
     problems.push('rebind dropped the parked partition of the previous session')
   }
   unsubscribe()
+
+  // Two binds in the same tick: only the last one is active, so only it may
+  // be adopted — the superseded bind must not publish a stale partition.
+  loaded.length = 0
+  store.bindAnnotationSession('session-rapid-a')
+  store.bindAnnotationSession('session-rapid-b')
+  await flush()
+  if (loaded.includes('session-rapid-a')) {
+    problems.push('superseded bind still adopted its session')
+  }
+  if (!loaded.includes('session-rapid-b')) {
+    problems.push('active bind did not adopt its session')
+  }
 }
 
 /**

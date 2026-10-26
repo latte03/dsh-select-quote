@@ -29,7 +29,7 @@ function memoryStorage(): KeyValueStorage {
 }
 
 describe('bindAnnotationSession', () => {
-  it('publishes the session synchronously and adopts stored items on the microtask', async () => {
+  it('switches the partition synchronously and adopts stored items on the microtask', async () => {
     const storage = memoryStorage()
     const seeder = await freshStore(storage)
     seeder.bindAnnotationSession('session-original')
@@ -102,6 +102,34 @@ describe('bindAnnotationSession', () => {
     expect(seen).toEqual([1])
     expect(store.getAnnotations().length).toBe(1)
     expect(store.getAnnotations()[0]?.text).toBe('待发的划词')
+    unsubscribe()
+  })
+
+  it('adopts only the last session when two binds land in the same tick', async () => {
+    const storage = memoryStorage()
+    const seeder = await freshStore(storage)
+    seeder.bindAnnotationSession('session-a')
+    await flush()
+    seeder.saveAnnotation(undefined, { text: 'A 的批注', sources: [{ text: 'A 的批注' }] })
+    seeder.bindAnnotationSession('session-b')
+    await flush()
+    seeder.saveAnnotation(undefined, { text: 'B 的批注', sources: [{ text: 'B 的批注' }] })
+
+    const store = await freshStore(storage)
+    const seen: number[] = []
+    const unsubscribe = store.subscribeAnnotations(() => seen.push(store.getAnnotations().length))
+    store.bindAnnotationSession('session-a')
+    store.bindAnnotationSession('session-b')
+    await flush()
+    // The superseded bind must not adopt/publish its partition; only the
+    // active session's adoption is surfaced, exactly once.
+    expect(seen).toEqual([1])
+    expect(store.getAnnotations().map((item) => item.text)).toEqual(['B 的批注'])
+
+    // Skipping the superseded bind is not data loss: its storage is untouched.
+    store.bindAnnotationSession('session-a')
+    await flush()
+    expect(store.getAnnotations().map((item) => item.text)).toEqual(['A 的批注'])
     unsubscribe()
   })
 })
