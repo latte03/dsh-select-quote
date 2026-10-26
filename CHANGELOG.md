@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.13](https://github.com/latte03/dsh-select-quote/compare/v0.3.12...v0.3.13) (2026-10-26)
+
+### Bug Fixes
+
+* 分叉会话不再残留旧会话的待发划词标记 ([c93b9b7](https://github.com/latte03/dsh-select-quote/commit/c93b9b71e0111255ab277141e0a9bf0f17d85e25))
+* 划词入口设置行改为左文案右控件 ([d0e6e74](https://github.com/latte03/dsh-select-quote/commit/d0e6e7401c3ad3a1c2c33a3a0001590efc421389))
+* 同 tick 被覆盖的会话绑定不再 adopt ([18bde87](https://github.com/latte03/dsh-select-quote/commit/18bde872d18bcfc6632554de256dbcf023ec91f8))
+
 ## [0.3.12](https://github.com/latte03/dsh-select-quote/compare/v0.3.11...v0.3.12) (2026-10-23)
 
 ## [0.3.11](https://github.com/latte03/dsh-select-quote/compare/v0.3.10...v0.3.11) (2026-10-23)
