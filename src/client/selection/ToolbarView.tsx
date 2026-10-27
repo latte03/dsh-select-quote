@@ -35,6 +35,12 @@ export interface ToolbarViewProps {
   readonly viewport: VisualViewportMetrics
   readonly actions: readonly ToolbarAction[]
   readonly comment: string
+  /** Question typed into the side-task composer. */
+  readonly sideText: string
+  readonly sending: boolean
+  readonly sideRef: MutableRefObject<HTMLTextAreaElement | null>
+  /** Model seat for the side-task child; absent when the shell has no catalog. */
+  readonly sideModelPicker?: ReactNode
   /** The right-click menu owns the surface; only status may remain. */
   readonly menuOpen: boolean
   readonly toolbarStyle: CSSProperties
@@ -46,6 +52,10 @@ export interface ToolbarViewProps {
   readonly onCommentKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
   readonly onFinishComment: (keepComment: boolean) => void
   readonly onCloseSheet: () => void
+  readonly onSideChange: (value: string) => void
+  readonly onSideKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
+  readonly onSendSide: () => void
+  readonly onCancelSide: () => void
 }
 
 function ActionRow({
@@ -129,6 +139,81 @@ function CommentActions({
   )
 }
 
+/** The referenced passage painted as the plugin's own annotation block. */
+function SideQuote({ text }: { text: string }): ReactNode {
+  return (
+    <div
+      className={cx(A.row, styles.summary, styles.sideQuote)}
+      title={text}
+      data-dsq-side-quote="true"
+    >
+      <div className={cx(A.keep, A.gridMid, styles.summaryIcon)} aria-hidden="true">
+        1
+      </div>
+      <div className={cx(A.grow, styles.summaryBody)}>
+        <div className={styles.summaryTitle}>{t('common.selectedText')}</div>
+        <div className={styles.sideQuoteText}>{text}</div>
+      </div>
+    </div>
+  )
+}
+
+function SideComposer({
+  quote,
+  value,
+  sending,
+  sideRef,
+  modelPicker,
+  onChange,
+  onKeyDown,
+  onSend,
+  onCancel,
+}: {
+  quote?: string
+  value: string
+  sending: boolean
+  sideRef: MutableRefObject<HTMLTextAreaElement | null>
+  modelPicker?: ReactNode
+  onChange: (value: string) => void
+  onKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
+  onSend: () => void
+  onCancel: () => void
+}): ReactNode {
+  return (
+    <>
+      {quote ? <SideQuote text={quote} /> : null}
+      <textarea
+        ref={sideRef}
+        className={cx(A.box, styles.commentInput)}
+        placeholder={t('sideTask.placeholder')}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
+      />
+      <div className={cx(A.row, styles.sideFooter)}>
+        <div className={A.grow}>{modelPicker}</div>
+        <div className={cx(A.row, styles.commentActions)}>
+          <button
+            type="button"
+            className={cx(A.plain, A.inlineRow, styles.button)}
+            onClick={onCancel}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className={cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment)}
+            disabled={!value.trim() || sending}
+            onClick={onSend}
+          >
+            {sending ? t('sideTask.sending') : t('sideTask.send')}
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function ToolbarView({
   touch,
   phase,
@@ -137,6 +222,10 @@ export function ToolbarView({
   viewport,
   actions,
   comment,
+  sideText,
+  sending,
+  sideRef,
+  sideModelPicker,
   menuOpen,
   toolbarStyle,
   toolbarRef,
@@ -147,6 +236,10 @@ export function ToolbarView({
   onCommentKeyDown,
   onFinishComment,
   onCloseSheet,
+  onSideChange,
+  onSideKeyDown,
+  onSendSide,
+  onCancelSide,
 }: ToolbarViewProps): ReactNode {
   const commentField = (
     <CommentField
@@ -183,7 +276,7 @@ export function ToolbarView({
             <ActionRow actions={actions} stacked />
           </div>
         ) : null}
-        {phase === 'comment' ? (
+        {phase !== 'idle' ? (
           <>
             <div className={styles.touchScrim} aria-hidden="true" />
             <div
@@ -197,7 +290,9 @@ export function ToolbarView({
               aria-label={t('toolbar.commentDialogAria')}
             >
               <div className={cx(A.row, styles.touchSheetHead)}>
-                <span className={styles.touchSheetTitle}>{t('toolbar.commentHint')}</span>
+                <span className={styles.touchSheetTitle}>
+                  {phase === 'comment' ? t('toolbar.commentHint') : t('sideTask.title')}
+                </span>
                 <button
                   type="button"
                   className={cx(A.plain, A.gridMid, styles.touchSheetClose)}
@@ -207,9 +302,28 @@ export function ToolbarView({
                   <LucideIcon name="x" size={18} />
                 </button>
               </div>
-              <div className={styles.touchQuote}>{active.text}</div>
-              {commentField}
-              {commentActions}
+              {phase === 'comment' ? (
+                <div className={styles.touchQuote}>{active.text}</div>
+              ) : (
+                <SideQuote text={active.text} />
+              )}
+              {phase === 'comment' ? (
+                <>
+                  {commentField}
+                  {commentActions}
+                </>
+              ) : (
+                <SideComposer
+                  value={sideText}
+                  sending={sending}
+                  sideRef={sideRef}
+                  modelPicker={sideModelPicker}
+                  onChange={onSideChange}
+                  onKeyDown={onSideKeyDown}
+                  onSend={onSendSide}
+                  onCancel={onCancelSide}
+                />
+              )}
             </div>
           </>
         ) : null}
@@ -258,21 +372,39 @@ export function ToolbarView({
             <span
               style={{ padding: '0 8px', fontSize: 13, opacity: 0.8, whiteSpace: 'nowrap' }}
             >
-              {t('toolbar.commentHint')}
+              {phase === 'comment' ? t('toolbar.commentHint') : t('sideTask.title')}
             </span>
           </div>
         </div>
       )}
-      {!menuOpen && phase === 'comment' ? (
+      {!menuOpen && phase !== 'idle' ? (
         <div
           ref={commentWrapRef}
-          className={cx(A.col, styles.commentPop)}
+          className={cx(A.col, styles.commentPop, phase === 'side' && styles.commentPopSide)}
           role="dialog"
-          aria-label={t('toolbar.commentDialogAria')}
+          aria-label={
+            phase === 'comment' ? t('toolbar.commentDialogAria') : t('sideTask.title')
+          }
           onPointerDown={onToolbarPointerDown}
         >
-          {commentField}
-          {commentActions}
+          {phase === 'comment' ? (
+            <>
+              {commentField}
+              {commentActions}
+            </>
+          ) : (
+            <SideComposer
+              quote={active.text}
+              value={sideText}
+              sending={sending}
+              sideRef={sideRef}
+              modelPicker={sideModelPicker}
+              onChange={onSideChange}
+              onKeyDown={onSideKeyDown}
+              onSend={onSendSide}
+              onCancel={onCancelSide}
+            />
+          )}
         </div>
       ) : null}
       {status ? (

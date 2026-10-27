@@ -180,12 +180,25 @@ export function clearAnnotations(sessionId?: string): void {
  * would publish a partition that is no longer active. Its stored data is
  * untouched and is picked up when that session is bound again.
  */
+function usableSessionId(value: string | undefined): string | undefined {
+  return value === undefined || value === '' || value === 'undefined' || value === 'null'
+    ? undefined
+    : value
+}
+
 export function bindAnnotationSession(sessionId: string | undefined): void {
-  if (!sessionId || sessionId === runtime.sessionId) return
-  setRuntimeSession(sessionId)
+  // Root-scoped slot props can stringify an absent id ("undefined"/"null");
+  // taking that as a partition key would put every annotation under a fake
+  // session and silently overwrite the composer-provided real id.
+  const id = usableSessionId(sessionId)
+  if (!id || id === runtime.sessionId) return
+  // Embedded subagent conversations have their own session partition; they may
+  // read and write it explicitly, but must not take over the main binding.
+  if (runtime.isSubagentSession?.(id) === true) return
+  setRuntimeSession(id)
   queueMicrotask(() => {
-    if (runtime.sessionId !== sessionId) return
-    if (!adoptPersistedAnnotations(sessionId)) notify()
+    if (runtime.sessionId !== id) return
+    if (!adoptPersistedAnnotations(id)) notify()
   })
 }
 

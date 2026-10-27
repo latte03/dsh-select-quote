@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { QuoteCard } from './composer/AnnotationPanel.tsx'
-import { attachConfigForm } from './config.ts'
+import { attachConfigForm, getConfig } from './config.ts'
 import { SelectionToolbar } from './selection/SelectionToolbar.tsx'
 import { ConfigRow } from './settings/ConfigRow.tsx'
 import { installSelectionShortcut } from './shortcut-menu.ts'
@@ -16,6 +16,7 @@ import {
 } from './dom/annotate-text.ts'
 import { bindAnnotationMarkPreview } from './dom/chipPreview.ts'
 import { watchSubmissionEcho } from './dom/stripSubmissionEcho.ts'
+import { composeQuotedMessage, previewTitle } from './protocol/annotation-protocol.ts'
 import {
   bindLocale,
   DICTIONARIES,
@@ -23,8 +24,13 @@ import {
   LOCALE_NS,
   SHIPPED_DICTS,
   subscribeLocale,
+  t,
 } from './i18n.ts'
+import sideTaskRemote from './remote.ts'
 import { ensureToolbarStyles } from './styles.ts'
+import type { SelectionSnapshot } from './dom/selection.ts'
+import type { ModelChoice } from './model/types.ts'
+import { runtime } from './runtime.ts'
 import {
   UserMessageDisplay,
   type HostNodeComponent,
@@ -68,6 +74,17 @@ import { sessionIdOfKey } from './state/annotation-persistence.ts'
  * session id arrives as a slot prop, so the service is not needed.
  */
 export const inject = ['slots', 'locale']
+
+/** Shape of the dynamic `remote.selectQuoteSideTask` namespace service. */
+interface SideTaskRemoteApi {
+  create(
+    agentId: string,
+    request: { prompt: string; label?: string; model?: ModelChoice },
+  ): Promise<
+    | { ok: true; value: { childId: string } }
+    | { ok: false; error: { message: string } }
+  >
+}
 
 export function apply(ctx: Context): void {
   ensureToolbarStyles()
@@ -138,6 +155,141 @@ export function apply(ctx: Context): void {
   // shortcut registry still gets the toolbar and the right-click menu.
   ctx.inject(['shortcuts'], (scope) => {
     installSelectionShortcut(scope)
+  })
+
+  // Tell the session bridge which sessions are subagent conversations. A
+  // sidebar chat mounts this plugin's composer overlay for the child session;
+  // binding that child would point the root toolbar (and the side-task parent)
+  // at a session the host refuses to fork ("owned by subagent routing").
+  ctx.inject(['sessions'], (scope) => {
+    runtime.isSubagentSession = (sessionId) =>
+      scope.sessions.list.getSnapshot().byId[sessionId]?.origin === 'subagent'
+    scope.effect(
+      () => () => {
+        delete runtime.isSubagentSession
+      },
+      'dsh-select-quote: subagent session guard',
+    )
+  })
+
+  // Read face of the model catalog for the side-task picker. The directory is
+  // cached per session and unknown sessions throw, so a stale id just means no
+  // picker this time; selection itself stays local (the child gets the choice
+  // through agentOptions instead of switching this session's route).
+  ctx.inject(['modelDirectories'], (scope) => {
+    runtime.modelDirectoryFor = (sessionId) => {
+      try {
+        const directory = scope.modelDirectories.directoryFor(sessionId)
+        return { store: directory.store, load: () => directory.load() }
+      } catch {
+        return undefined
+      }
+    }
+    scope.effect(
+      () => () => {
+        delete runtime.modelDirectoryFor
+      },
+      'dsh-select-quote: model catalog',
+    )
+  })
+
+  /**
+   * Side task: the browser mounts the Host's Remote descriptor group, then a
+   * toolbar click asks the Host to start a fork-backed subagent for the live
+   * session. Only the Host can create one, and only a subagent session carries
+   * `origin: "subagent"` — which is what keeps it out of the ordinary list.
+   *
+   * `$mount` installs the namespace as its own dynamic service
+   * (`remote.<namespace>`); the mount callback reads it back by that key, so
+   * the entry point only exists once the namespace is actually callable.
+   */
+  ctx.inject(['remote', 'sidebarRight'], (scope) => {
+    scope.effect(() => {
+      let dispose: (() => Promise<void>) | undefined
+      let stopped = false
+      let published:
+        | ((
+            snapshot: SelectionSnapshot,
+            question: string,
+            model: ModelChoice | null,
+          ) => Promise<void>)
+        | undefined
+
+      const publish = (): void => {
+        const api = scope.get('remote.selectQuoteSideTask') as SideTaskRemoteApi | undefined
+        if (api === undefined) return
+
+        const openSideTask = async (
+          snapshot: SelectionSnapshot,
+          question: string,
+          model: ModelChoice | null,
+        ): Promise<void> => {
+          const sessionId = runtime.sessionId
+          if (!sessionId) throw new Error('no active session')
+          // Same wire format as the main conversation: the Host copies the
+          // prompt into the child's transcript, so the quote must be a parsed
+          // annotation block there, not prose the user never typed.
+          const source = snapshot.source
+          const prompt = composeQuotedMessage(question, {
+            text: snapshot.text,
+            ...(source === undefined
+              ? {}
+              : {
+                  source: {
+                    text: snapshot.text,
+                    messageId: source.messageId,
+                    messageKind: source.messageKind,
+                    startOffset: source.startOffset,
+                    endOffset: source.endOffset,
+                  },
+                }),
+          })
+          // The Host uses this label for both the sidebar tab title and the
+          // parent's subagent catalog row, so repeated side questions stay
+          // distinguishable without opening each child.
+          const excerpt = previewTitle(question, 24)
+          const label = excerpt ? `${t('toolbar.askInSide')} · ${excerpt}` : t('toolbar.askInSide')
+          // The mounted namespace returns the gateway envelope; the child id
+          // only exists inside `value`.
+          // Reuse mode keeps one side child per main session, so it has no
+          // per-question route choice: the child keeps the model it was born
+          // with (the parent's, unless the first question overrode it).
+          const reuse = getConfig().sideTaskMode === 'reuse'
+          const outcome = await api.create(sessionId, {
+            label,
+            prompt,
+            ...(reuse ? { reuse: true } : model === null ? {} : { model }),
+          })
+          if (!outcome.ok) throw new Error(outcome.error.message)
+          const { childId } = outcome.value
+          const address = `dsh-resource://subagentchat/session/${encodeURIComponent(childId)}?parent=${encodeURIComponent(sessionId)}&mode=continuable`
+          scope.sidebarRight.openResource(address, { kind: 'subagentchat' })
+        }
+
+        published = openSideTask
+        runtime.sideTask = openSideTask
+      }
+
+      void scope.remote.$mount(sideTaskRemote).then(
+        (value) => {
+          if (stopped) {
+            void value()
+            return
+          }
+          dispose = value
+          publish()
+        },
+        (error) => {
+          console.error('dsh-select-quote: side task remote mount failed', error)
+        },
+      )
+
+      return () => {
+        stopped = true
+        if (published !== undefined && runtime.sideTask === published) delete runtime.sideTask
+        if (dispose) void dispose()
+      }
+    }, 'dsh-select-quote: side task remote')
   })
 
   // Assistant replies may echo :dsh-annotation{index="N"}; decorate them as chips.

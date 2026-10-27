@@ -57,7 +57,7 @@ export function useCommentPlacement({
   // so it never flashes at the host's origin. Scroll itself does not need a
   // re-place — content coordinates already follow the selection.
   useLayoutEffect(() => {
-    if (phase === 'comment') place()
+    if (phase === 'comment' || phase === 'side') place()
   }, [phase, place])
 
   // The popover is anchored to the toolbar, so a window resize moves both.

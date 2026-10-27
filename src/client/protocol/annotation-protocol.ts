@@ -75,10 +75,27 @@ export function composeAnnotatedMessage(
   draft: string,
   annotations: readonly SelectionAnnotation[],
 ): string {
-  const rest = stripDraftMarker(draft).replace(/^\s+/, '')
-  if (annotations.length === 0) return rest
+  if (annotations.length === 0) return stripDraftMarker(draft).replace(/^\s+/, '')
+  return composeBlock(draft, annotations.map(toWireItem))
+}
 
-  const payload = annotations.map(toWireItem)
+/**
+ * Fold one selected passage into the outgoing message without any label prose.
+ * The side task uses this instead of writing "原文 / 问题" into the prompt: the
+ * model reads the same annotation protocol as the main conversation, while the
+ * transcript renders its card and keeps the user's own words as the bubble.
+ */
+export function composeQuotedMessage(
+  draft: string,
+  quote: { readonly text: string; readonly source?: AnnotationSource },
+): string {
+  return composeBlock(draft, [
+    { text: quote.text, annotation: '', source: quote.source ?? { text: quote.text } },
+  ])
+}
+
+function composeBlock(draft: string, payload: readonly AnnotationWireItem[]): string {
+  const rest = stripDraftMarker(draft).replace(/^\s+/, '')
   // `<` must not appear literally inside the payload: selected text or a
   // comment containing `</response-annotations>` would close the block early
   // for every marker-based reader. JSON.parse restores the original text.

@@ -28,11 +28,13 @@
     "./client": "./lib/client.js",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
+    "./icon": "./icon.svg",
+    "./typert": "./lib/typert.js"
   },
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/typert.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
@@ -61,7 +63,9 @@
         "@deepseek-ai/dsh-client-ui-plugin-manager",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-session",
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
       ],
       "platform": "web"
     },
@@ -78,6 +82,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/schemastery": "3.18.5",
+    "@types/node": "^26.6.5",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3",
     "commit-and-tag-version": "^13.2.2",
@@ -86,5 +91,8 @@
     "tsdown": "0.23.0",
     "typescript": "^5.8.0",
     "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
   }
 }

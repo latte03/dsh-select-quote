@@ -12,4 +12,10 @@ export default {
     'react-dom',
     'react-dom/client',
   ],
+  // Bundled, not required at runtime: the browser module table only carries
+  // platform seeds and package factories, so `require('zod')` would miss.
+  deps: {
+    alwaysBundle: [/^zod$/],
+    onlyBundle: [/^zod$/],
+  },
 }

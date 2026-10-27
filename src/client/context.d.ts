@@ -8,6 +8,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { ModelDirectoryFace } from './model/types.ts'
 
 /** One live slot entry as exposed by the registry inspection surface. */
 export interface SlotEntryInspection {
@@ -166,6 +167,36 @@ declare module '@deepseek-ai/cordis' {
         getSnapshot(): readonly ShortcutCatalogRow[]
         subscribe(listener: () => void): () => void
       }
+    }
+    /** Typed Remote mount (`@deepseek-ai/dsh-api-gateway`, client face). */
+    remote: {
+      $mount(contribution: unknown): Promise<() => Promise<void>>
+      selectQuoteSideTask: {
+        create(input: {
+          agentId: string
+          prompt: string
+          label?: string
+        }): Promise<{ childId: string }>
+      }
+    }
+    /** Right sidebar controller (`@deepseek-ai/dsh-client-ui-sidebar-right`). */
+    sidebarRight: {
+      openResource(address: string, options?: { kind?: string }): void
+    }
+    /** Client session controller (`@deepseek-ai/dsh-client-ui-session`). */
+    sessions: {
+      list: {
+        getSnapshot(): {
+          byId: Record<string, { origin?: string } | undefined>
+        }
+      }
+    }
+    /**
+     * Model catalog controller (`@deepseek-ai/dsh-client-ui-model-selection`).
+     * Only the read face is used: the picker never switches the session route.
+     */
+    modelDirectories: {
+      directoryFor(sessionId: string): ModelDirectoryFace
     }
   }
 }

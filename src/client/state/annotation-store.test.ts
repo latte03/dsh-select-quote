@@ -132,4 +132,27 @@ describe('bindAnnotationSession', () => {
     expect(store.getAnnotations().map((item) => item.text)).toEqual(['A 的批注'])
     unsubscribe()
   })
+
+  it('never lets an embedded subagent conversation take over the main binding', async () => {
+    const storage = memoryStorage()
+    const store = await freshStore(storage)
+    const { runtime } = await import('../runtime.ts')
+    store.bindAnnotationSession('session-main')
+    await flush()
+    store.saveAnnotation(undefined, { text: '主会话的划词', sources: [{ text: '主会话的划词' }] })
+
+    runtime.isSubagentSession = (id) => id === 'session-child'
+    store.bindAnnotationSession('session-child')
+    await flush()
+
+    // The main conversation keeps the binding: the root toolbar and the side
+    // task must still act on it while a sidebar chat is open.
+    expect(runtime.sessionId).toBe('session-main')
+    expect(store.getAnnotations().map((item) => item.text)).toEqual(['主会话的划词'])
+
+    // The child still reads and writes its own explicit partition.
+    store.saveAnnotation('session-child', { text: '子会话的划词', sources: [{ text: '子会话的划词' }] })
+    expect(store.getAnnotations('session-child').map((item) => item.text)).toEqual(['子会话的划词'])
+    delete runtime.isSubagentSession
+  })
 })

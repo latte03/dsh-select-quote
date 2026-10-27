@@ -12,7 +12,7 @@ import { isInsideTranscript } from '../dom/message-text.ts'
 import { pointInRects, shouldOpenSelectionMenu } from '../dom/menu-trigger.ts'
 import { readSelectionSnapshot, type SelectionSnapshot } from '../dom/selection.ts'
 
-export type SelectionPhase = 'idle' | 'comment'
+export type SelectionPhase = 'idle' | 'comment' | 'side'
 
 /** The menu's own chrome; a press inside it must not dismiss the selection. */
 const MENU_SELECTOR = '[data-dsq-menu]'
@@ -81,6 +81,12 @@ export function useSelectionWatcher({
         hide()
         return
       }
+      // The side composer holds no saved annotation: an outside press is a
+      // plain dismissal of the question that has not been sent yet.
+      if (phaseRef.current === 'side') {
+        hide()
+        return
+      }
 
       const selection = window.getSelection()
       if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
@@ -116,7 +122,7 @@ export function useSelectionWatcher({
       if (toolbarRef.current?.contains(target)) return
       if (target instanceof Element && target.closest(MENU_SELECTOR)) return
       // Touch has no right-click; an open comment step owns its own gestures.
-      if (touch || phaseRef.current === 'comment') return
+      if (touch || phaseRef.current !== 'idle') return
 
       const contextMenuEnabled = resolveTriggers(getConfig()).contextMenu
       if (!contextMenuEnabled) return

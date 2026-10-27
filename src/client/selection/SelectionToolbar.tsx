@@ -2,8 +2,10 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -20,6 +22,8 @@ import {
 import { focusComposer } from '../dom/composer-host.ts'
 import { linkTarget } from '../dom/selection-url.ts'
 import { t } from '../i18n.ts'
+import { ModelSelect } from '../model/ModelSelect.tsx'
+import type { ModelChoice } from '../model/types.ts'
 import { SelectionMenu, type SelectionMenuAction } from './SelectionMenu.tsx'
 import { ToolbarView, type ToolbarAction } from './ToolbarView.tsx'
 import { useCommentPlacement } from './useCommentPlacement.ts'
@@ -55,9 +59,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const commentWrapRef = useRef<HTMLDivElement | null>(null)
   const commentRef = useRef<HTMLTextAreaElement | null>(null)
+  const sideRef = useRef<HTMLTextAreaElement | null>(null)
   const [active, setActive] = useState<SelectionSnapshot | null>(null)
   const [phase, setPhase] = useState<SelectionPhase>('idle')
   const [comment, setComment] = useState('')
+  const [sideText, setSideText] = useState('')
+  /** `null` follows the main conversation's route. */
+  const [sideModel, setSideModel] = useState<ModelChoice | null>(null)
+  const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const activeRef = useRef<SelectionSnapshot | null>(null)
@@ -70,6 +79,18 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const pendingIdRef = useRef<string | null>(null)
   const touch = useCoarsePointer()
   const viewport = useVisualViewport(touch)
+  const config = useSyncExternalStore(subscribeConfig, getConfig, getConfig)
+
+  // Only the side composer offers a model override, so the session directory
+  // is resolved when that phase opens instead of for every selection. Reuse
+  // mode has no per-question route: the child keeps its creation model.
+  const sideDirectory = useMemo(
+    () =>
+      phase === 'side' && config.sideTaskMode === 'separate' && runtime.sessionId
+        ? runtime.modelDirectoryFor?.(runtime.sessionId)
+        : undefined,
+    [phase, config.sideTaskMode],
+  )
 
   useEffect(() => {
     ensureToolbarStyles()
@@ -94,6 +115,9 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     setActive(null)
     setPhase('idle')
     setComment('')
+    setSideText('')
+    setSideModel(null)
+    setSending(false)
     setStatus(null)
   }, [dismissMenu])
 
@@ -270,7 +294,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const layer = active?.layer
   useLayoutEffect(() => {
     if (!layer || touch) return
-    layer.setAboveComposer(phase === 'comment')
+    layer.setAboveComposer(phase === 'comment' || phase === 'side')
     return () => layer.setAboveComposer(false)
   }, [layer, phase, touch])
 
@@ -278,7 +302,9 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   // comment is optional, so the sheet waits for a tap instead of raising the
   // soft keyboard the moment it appears.
   useEffect(() => {
-    if (phase === 'comment' && !touch) commentRef.current?.focus()
+    if (touch) return
+    if (phase === 'comment') commentRef.current?.focus()
+    else if (phase === 'side') sideRef.current?.focus()
   }, [phase, touch])
 
   // Grow the comment box with its content (up to a cap) instead of letting it
@@ -286,15 +312,26 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   // lines, which reads as a character limit. Re-place the popover afterwards so
   // a taller box still flips and clamps correctly.
   useLayoutEffect(() => {
-    if (phase !== 'comment') return
-    const area = commentRef.current
+    if (phase === 'idle') return
+    const area = phase === 'comment' ? commentRef.current : sideRef.current
     if (!area) return
     area.style.height = 'auto'
     area.style.height = `${Math.min(area.scrollHeight, COMMENT_MAX_HEIGHT)}px`
     if (!touch) placeCommentPop()
-  }, [phase, comment, placeCommentPop, touch])
+  }, [phase, comment, sideText, placeCommentPop, touch])
 
   const handleToolbarPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    // Text fields must keep their native press: focus and caret placement are
+    // the default action. Cancelling it everywhere left the composer unable to
+    // regain focus once the model chip had taken it.
+    const target = event.target
+    if (
+      target instanceof Element &&
+      target.closest('textarea, input, [contenteditable="true"]') !== null
+    ) {
+      event.stopPropagation()
+      return
+    }
     event.preventDefault()
     event.stopPropagation()
   }, [])
@@ -347,6 +384,69 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     const snapshot = activeRef.current
     if (snapshot) openLinkSnapshot(snapshot)
   }, [openLinkSnapshot])
+
+  /** Open the side-task composer for the latched quote. */
+  const openSide = useCallback(() => {
+    const snapshot = activeRef.current
+    if (!snapshot) return
+    if (!runtime.sideTask) {
+      setStatus(t('toolbar.sideTaskUnavailable'))
+      return
+    }
+    setStatus(null)
+    setSideText('')
+    dismissMenu()
+    setPhase('side')
+  }, [dismissMenu])
+
+  const handleSideChange = useCallback((value: string) => {
+    setSideText(value)
+  }, [])
+
+  /**
+   * Send the typed question to the client root, which asks the Host for a
+   * fork-backed subagent and opens its conversation in the right sidebar.
+   * The composer stays open (with the text) if the call fails.
+   */
+  const sendSide = useCallback(() => {
+    const snapshot = activeRef.current
+    const question = sideText.trim()
+    if (!snapshot || !question || sending) return
+    const run = runtime.sideTask
+    if (!run) {
+      setStatus(t('toolbar.sideTaskUnavailable'))
+      return
+    }
+    setSending(true)
+    setStatus(null)
+    void run(snapshot, question, sideModel).then(
+      () => {
+        setSending(false)
+        clearNativeSelection()
+        hide()
+      },
+      (error) => {
+        setSending(false)
+        setStatus(t('toolbar.sideTaskFailed'))
+        console.error('dsh-select-quote: side task failed', error)
+      },
+    )
+  }, [hide, sending, sideModel, sideText])
+
+  const handleSideKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        hide()
+        return
+      }
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault()
+        sendSide()
+      }
+    },
+    [hide, sendSide],
+  )
 
   /** Dismissal without an action hands control back to the normal toolbar rules. */
   const closeMenu = useCallback(() => {
@@ -420,6 +520,12 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       : []),
     { key: 'copy', icon: 'copy', label: t('toolbar.copy'), onClick: handleCopy },
     { key: 'add', icon: 'plus', label: t('toolbar.addToTask'), onClick: openComment },
+    {
+      key: 'side',
+      icon: 'panel-right',
+      label: t('toolbar.askInSide'),
+      onClick: openSide,
+    },
   ]
 
   return (
@@ -432,6 +538,18 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         viewport={viewport}
         actions={actions}
         comment={comment}
+        sideText={sideText}
+        sending={sending}
+        sideRef={sideRef}
+        sideModelPicker={
+          sideDirectory ? (
+            <ModelSelect
+              directory={sideDirectory}
+              value={sideModel}
+              onChange={setSideModel}
+            />
+          ) : undefined
+        }
         toolbarStyle={toolbarStyle}
         toolbarRef={toolbarRef}
         commentWrapRef={commentWrapRef}
@@ -442,6 +560,10 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         onCommentKeyDown={handleCommentKeyDown}
         onFinishComment={finishComment}
         onCloseSheet={closeCommentSheet}
+        onSideChange={handleSideChange}
+        onSideKeyDown={handleSideKeyDown}
+        onSendSide={sendSide}
+        onCancelSide={hide}
       />
       {menu ? (
         <SelectionMenu

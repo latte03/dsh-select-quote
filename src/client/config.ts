@@ -14,14 +14,19 @@
 
 export type TriggerMode = 'auto' | 'contextmenu' | 'both'
 
+/** One side-task child per parent session, or a fresh fork for every question. */
+export type SideTaskMode = 'separate' | 'reuse'
+
 export interface SelectQuoteConfig {
   triggerMode: TriggerMode
   shortcut: boolean
+  sideTaskMode: SideTaskMode
 }
 
 export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   triggerMode: 'auto',
   shortcut: false,
+  sideTaskMode: 'separate',
 })
 
 const TRIGGER_MODES: ReadonlySet<string> = new Set<TriggerMode>([
@@ -29,6 +34,8 @@ const TRIGGER_MODES: ReadonlySet<string> = new Set<TriggerMode>([
   'contextmenu',
   'both',
 ])
+
+const SIDE_TASK_MODES: ReadonlySet<string> = new Set<SideTaskMode>(['separate', 'reuse'])
 
 /** Which entry points the current mode turns on. */
 export interface TriggerPlan {
@@ -47,10 +54,15 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
       : DEFAULT_CONFIG.triggerMode,
     shortcut:
       typeof record.shortcut === 'boolean' ? record.shortcut : DEFAULT_CONFIG.shortcut,
+    sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
+      ? (record.sideTaskMode as SideTaskMode)
+      : DEFAULT_CONFIG.sideTaskMode,
   }
 }
 
-export function resolveTriggers(config: SelectQuoteConfig): TriggerPlan {
+export function resolveTriggers(
+  config: Pick<SelectQuoteConfig, 'triggerMode' | 'shortcut'>,
+): TriggerPlan {
   return {
     auto: config.triggerMode === 'auto' || config.triggerMode === 'both',
     contextMenu: config.triggerMode === 'contextmenu' || config.triggerMode === 'both',
@@ -75,7 +87,11 @@ export function subscribeConfig(listener: () => void): () => void {
 /** Publish a snapshot value; returns the normalized config actually stored. */
 export function publishConfig(value: unknown): SelectQuoteConfig {
   const next = normalizeConfig(value)
-  if (next.triggerMode === current.triggerMode && next.shortcut === current.shortcut) {
+  if (
+    next.triggerMode === current.triggerMode &&
+    next.shortcut === current.shortcut &&
+    next.sideTaskMode === current.sideTaskMode
+  ) {
     return current
   }
   current = next

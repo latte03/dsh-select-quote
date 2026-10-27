@@ -89,8 +89,43 @@ function buildHost() {
   console.log(`[dsh-select-quote] wrote ${resolve(libDir, 'index.js')}`)
 }
 
-function findRawOutput() {
-  // `exports` of tsdown's config emit either a .js or .cjs depending on format
+/**
+ * Host-face Typert manifest. `typert-loader` imports it by package export, so
+ * it must exist as its own module next to `lib/index.js`.
+ */
+function buildTypert() {
+  const outDir = resolve(libDir, '.typert-build')
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolveTsdownEntry(),
+      resolve(root, 'src/typert.ts'),
+      '--config',
+      resolve(root, 'tsdown.typert.config.ts'),
+      '--out-dir',
+      outDir,
+    ],
+    { cwd: root, stdio: 'inherit', env: process.env },
+  )
+  if (result.error) {
+    console.error('[dsh-select-quote] failed to build the typert manifest:', result.error)
+    process.exit(1)
+  }
+  if (result.status !== 0) process.exit(result.status ?? 1)
+
+  const output = ['typert.js', 'typert.mjs']
+    .map((name) => resolve(outDir, name))
+    .find((candidate) => existsSync(candidate))
+  if (output === undefined) {
+    console.error('[dsh-select-quote] typert build produced no entry in', outDir)
+    process.exit(1)
+  }
+  copyFileSync(output, resolve(libDir, 'typert.js'))
+  rmSync(outDir, { recursive: true, force: true })
+  console.log(`[dsh-select-quote] wrote ${resolve(libDir, 'typert.js')}`)
+}
+
+function findRawOutput() {  // `exports` of tsdown's config emit either a .js or .cjs depending on format
   // resolution, so probe both instead of assuming one.
   for (const name of ['index.js', 'index.cjs']) {
     const candidate = resolve(buildDir, name)
@@ -126,6 +161,7 @@ ${raw}
 
 if (process.argv.includes('--watch')) {
   buildHost()
+  buildTypert()
   rmSync(buildDir, { recursive: true, force: true })
   const child = spawn(process.execPath, [...tsdownArgs, '--watch'], {
     cwd: root,
@@ -160,6 +196,7 @@ if (process.argv.includes('--watch')) {
   console.log(`[dsh-select-quote] watching ${resolve(root, 'src')} (Ctrl-C to stop)`)
 } else {
   buildHost()
+  buildTypert()
   const result = spawnSync(process.execPath, tsdownArgs, {
     cwd: root,
     stdio: 'inherit',

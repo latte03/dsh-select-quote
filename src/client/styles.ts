@@ -84,6 +84,16 @@ body {
   --dsq-neutral-100: var(--dsw-static-neutral-100, #f5f5f5);
   --dsq-neutral-800: var(--dsw-static-neutral-800, #292929);
   --dsq-neutral-850: var(--dsw-static-neutral-850, #212123);
+  --dsq-radius-sm: var(--dsw-radius-sm, 6px);
+  --dsq-radius-md: var(--dsw-radius-md, 8px);
+  --dsq-menu-icon: var(--dsw-alias-menu-icon, rgba(0, 0, 0, 0.45));
+  --dsq-danger-bg: var(--dsw-alias-interactive-bg-hover-danger, rgba(217, 48, 37, 0.1));
+  --dsq-danger: var(--dsw-alias-state-error-primary, #d93025);
+  --dsq-warn-bg: var(--dsw-alias-bg-module-platform, rgba(0, 0, 0, 0.05));
+  --dsq-warn: var(--dsw-alias-state-warn-label, #b26a00);
+  /* Tone of the Host's info tag, used by the model release badge. */
+  --dsq-business: var(--dsw-alias-state-business-primary, #4176e6);
+  --dsq-business-bg: color-mix(in srgb, var(--dsq-business) 10%, transparent);
 }
 
 /* Layer 2 — atoms (generated from ATOMS above; the class names and the rules
@@ -179,7 +189,8 @@ ${atomRules}
 .dsq_summaryHoverInner::before,
 .dsq_touchBar::before,
 .dsq_chipPreview::before,
-.dsq_ctxMenu::before {
+.dsq_ctxMenu::before,
+.dsq_modelMenu::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -206,7 +217,8 @@ ${atomRules}
 .dsq_touchBar,
 .dsq_touchSheet,
 .dsq_chipPreview,
-.dsq_ctxMenu {
+.dsq_ctxMenu,
+.dsq_modelMenu {
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
   /* Every surface above takes the same elevation; declaring it once here is
@@ -394,6 +406,347 @@ ${atomRules}
   outline-offset: -2px;
 }
 
+/* Model picker — ported from the Host composer's model seat. The trigger is a
+   text button (the icon only appears when the Host's own composer vars say the
+   row is tight); the menu is the same two-pane Model / Effort dropdown, with
+   search once the catalog exceeds four entries. */
+.dsq_modelSeat {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dsq_modelTrigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: min(360px, 45cqw);
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: none;
+  border-radius: var(--dsq-radius-sm);
+  outline: none;
+  background: transparent;
+  color: var(--dsq-label-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.dsq_modelTrigger:hover:not(:disabled) {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_modelTrigger:focus-visible:not([data-selection-focus]) {
+  box-shadow: 0 0 0 2px var(--dsq-focus-ring-soft);
+}
+
+.dsq_modelTrigger:disabled {
+  color: var(--dsq-label-3);
+  cursor: default;
+}
+
+.dsq_modelTriggerIcon {
+  display: var(--dsh-composer-model-icon-display, none);
+  flex: none;
+}
+
+.dsq_modelTriggerLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsq_modelTriggerEffort {
+  flex-shrink: 1000;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsq-label-3);
+}
+
+.dsq_modelChevron {
+  flex: none;
+  color: var(--dsq-label-3);
+  transition: transform 0.12s;
+}
+
+.dsq_modelChevronOpen {
+  transform: rotate(180deg);
+}
+
+.dsq_modelMenu {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: min(240px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 32px));
+  max-height: min(360px, calc(100vh - 96px));
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+  outline: none;
+  pointer-events: auto;
+  animation: dsq-menu-in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: bottom right;
+}
+
+.dsq_modelCell {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--dsq-radius-md);
+  outline: none;
+  background: transparent;
+  color: var(--dsq-label);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.dsq_modelCell:hover,
+.dsq_modelCell:focus-visible {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_modelCellLabel {
+  flex: none;
+  white-space: nowrap;
+}
+
+.dsq_modelCellValue {
+  flex: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--dsq-label-3);
+}
+
+.dsq_modelCell svg {
+  flex: none;
+  color: var(--dsq-menu-icon);
+}
+
+.dsq_modelSearchRow {
+  position: relative;
+  flex-shrink: 0;
+  margin: 2px 0 3px;
+}
+
+.dsq_modelSearch {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--dsq-radius-md);
+  outline: none;
+  background: transparent;
+  color: var(--dsq-label);
+  font: inherit;
+  font-size: 12px;
+  line-height: normal;
+}
+
+.dsq_modelSearch::placeholder {
+  color: var(--dsq-label-3);
+}
+
+.dsq_modelSearchWithQuery {
+  padding-right: 34px;
+}
+
+.dsq_modelSearchClear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  outline: none;
+  background: transparent;
+  color: var(--dsq-label-2);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.dsq_modelSearchClear:hover,
+.dsq_modelSearchClear:focus-visible {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_modelStatus,
+.dsq_modelEmpty {
+  padding: 8px;
+  color: var(--dsq-label-3);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dsq_modelError,
+.dsq_modelWarning {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 3px;
+  padding: 6px 7px;
+  border-radius: var(--dsq-radius-md);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.dsq_modelError {
+  background: var(--dsq-danger-bg);
+  color: var(--dsq-danger);
+}
+
+.dsq_modelWarning {
+  background: var(--dsq-warn-bg);
+  color: var(--dsq-warn);
+}
+
+.dsq_modelRetry {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.dsq_modelGroups {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dsq_modelGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.dsq_modelGroupLabel {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 5px 7px;
+  color: var(--dsq-label-3);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* The heading only paints while the list scrolls under it, like the Host's
+   MenuGroup; clipping it to the menu's own material keeps rows readable. */
+.dsq_modelGroupLabel[data-pinned] {
+  background: var(--dsq-menu);
+  backdrop-filter: var(--dsq-menu-backdrop);
+  -webkit-backdrop-filter: var(--dsq-menu-backdrop);
+}
+
+.dsq_modelOption {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-width: 100%;
+  min-height: 34px;
+  padding: 5px 7px;
+  border: none;
+  border-radius: var(--dsq-radius-md);
+  outline: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+/* Model rows track hover through the highlighted index (mouse move moves focus
+   or the highlight), so their background comes from the active class instead. */
+.dsq_modelOption:not(.dsq_modelModelOption):hover:not(:disabled),
+.dsq_modelOption:focus-visible,
+.dsq_modelOptionActive:not(:disabled) {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_modelSelected {
+  background: transparent;
+}
+
+.dsq_modelOptionCopy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dsq_modelModelName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+/* Host label shape: the official Flash entry is followed by a fixed release
+   tag (dsh-client-ui-deepseek-model-label-1017). */
+.dsq_modelLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.dsq_modelTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsq-business-bg);
+  color: var(--dsq-business);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.dsq_modelCheck {
+  display: grid;
+  flex: 0 0 14px;
+  place-items: center;
+  color: var(--dsq-label);
+}
+
 /* Annotation stack — inside the composer card (input.overlay), ~1/5 width. */
 .dsq_cardStack {
   position: absolute;
@@ -441,6 +794,7 @@ ${atomRules}
 .dsq_summary {
   position: relative;
   z-index: 13;
+  box-sizing: border-box;
   gap: 10px;
   width: 100%;
   max-width: 100%;
@@ -766,6 +1120,7 @@ ${atomRules}
 .dsq_commentPop {
   position: absolute;
   z-index: 1;
+  box-sizing: border-box;
   /* Vertical offset comes from placeCommentPop (below the selection); only
      the horizontal centering belongs to the transform. */
   transform: translateX(-50%);
@@ -778,6 +1133,12 @@ ${atomRules}
   pointer-events: auto;
 }
 
+/* The side-task step carries a quoted annotation plus the model seat; the extra
+   width keeps both readable without changing the comment step's footprint. */
+.dsq_commentPopSide {
+  width: min(384px, calc(100vw - 24px));
+}
+
 .dsq_commentInput {
   min-height: 64px;
   resize: none;
@@ -786,6 +1147,30 @@ ${atomRules}
 
 .dsq_commentActions {
   gap: 6px;
+}
+
+/* Side-task composer: the referenced passage reuses the annotation summary's
+   shell, and the footer is the Host composer's model-left / send-right row. */
+.dsq_sideQuote {
+  align-items: flex-start;
+  width: 100%;
+}
+
+.dsq_sideQuoteText {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsq-label-2);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.dsq_sideFooter {
+  justify-content: space-between;
+  gap: 8px;
 }
 
 /* Preview for a model-written annotation chip. Body-level fixed (the chat
@@ -1442,6 +1827,38 @@ export const styles = {
   status: 'dsq_status',
   ctxMenu: 'dsq_ctxMenu',
   ctxItem: 'dsq_ctxItem',
+  modelSeat: 'dsq_modelSeat',
+  modelTrigger: 'dsq_modelTrigger',
+  modelTriggerIcon: 'dsq_modelTriggerIcon',
+  modelTriggerLabel: 'dsq_modelTriggerLabel',
+  modelTriggerEffort: 'dsq_modelTriggerEffort',
+  modelChevron: 'dsq_modelChevron',
+  modelChevronOpen: 'dsq_modelChevronOpen',
+  modelMenu: 'dsq_modelMenu',
+  modelCell: 'dsq_modelCell',
+  modelCellLabel: 'dsq_modelCellLabel',
+  modelCellValue: 'dsq_modelCellValue',
+  modelSearchRow: 'dsq_modelSearchRow',
+  modelSearch: 'dsq_modelSearch',
+  modelSearchWithQuery: 'dsq_modelSearchWithQuery',
+  modelSearchClear: 'dsq_modelSearchClear',
+  modelStatus: 'dsq_modelStatus',
+  modelEmpty: 'dsq_modelEmpty',
+  modelError: 'dsq_modelError',
+  modelWarning: 'dsq_modelWarning',
+  modelRetry: 'dsq_modelRetry',
+  modelGroups: 'dsq_modelGroups',
+  modelGroup: 'dsq_modelGroup',
+  modelGroupLabel: 'dsq_modelGroupLabel',
+  modelOption: 'dsq_modelOption',
+  modelModelOption: 'dsq_modelModelOption',
+  modelOptionActive: 'dsq_modelOptionActive',
+  modelSelected: 'dsq_modelSelected',
+  modelOptionCopy: 'dsq_modelOptionCopy',
+  modelModelName: 'dsq_modelModelName',
+  modelLabel: 'dsq_modelLabel',
+  modelTag: 'dsq_modelTag',
+  modelCheck: 'dsq_modelCheck',
   cardStack: 'dsq_cardStack',
   cardClose: 'dsq_cardClose',
   cardPad: 'dsq_cardPad',
@@ -1478,8 +1895,12 @@ export const styles = {
   annMarkFlash: 'dsq_annMarkFlash',
   annMessageFlash: 'dsq_annMessageFlash',
   commentPop: 'dsq_commentPop',
+  commentPopSide: 'dsq_commentPopSide',
   commentInput: 'dsq_commentInput',
   commentActions: 'dsq_commentActions',
+  sideQuote: 'dsq_sideQuote',
+  sideQuoteText: 'dsq_sideQuoteText',
+  sideFooter: 'dsq_sideFooter',
   chipPreview: 'dsq_chipPreview',
   chipPreviewBody: 'dsq_chipPreviewBody',
   chipPreviewLeaving: 'dsq_chipPreviewLeaving',

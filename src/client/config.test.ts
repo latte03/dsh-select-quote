@@ -12,11 +12,18 @@ describe('normalizeConfig', () => {
     expect(normalizeConfig({ triggerMode: 'both' })).toEqual({
       triggerMode: 'both',
       shortcut: false,
+      sideTaskMode: 'separate',
     })
     expect(normalizeConfig({ shortcut: true })).toEqual({
       triggerMode: 'auto',
       shortcut: true,
+      sideTaskMode: 'separate',
     })
+  })
+
+  it('accepts both side-task modes and rejects unknown ones', () => {
+    expect(normalizeConfig({ sideTaskMode: 'reuse' }).sideTaskMode).toBe('reuse')
+    expect(normalizeConfig({ sideTaskMode: 'shared' }).sideTaskMode).toBe('separate')
   })
 })
 

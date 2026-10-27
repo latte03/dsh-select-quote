@@ -53,7 +53,7 @@ Each item contains text selected from an earlier message ...
 
 旧版把引用写成 Markdown 引用块。现在**不再写入**，只在 `quote-protocol.ts` 里保留读取与剥离能力（`parseQuoteMessage()` / `displayTextWithoutQuote()`），用于渲染历史消息。新消息一律走上面的 JSON 块。
 
-## 客户端贡献（共 10 项）
+## 客户端贡献
 
 | 位置 | 类型 | 说明 |
 |---|---|---|
@@ -62,6 +62,9 @@ Each item contains text selected from an earlier message ...
 | `conversation.chat.node` | keyed slot | `user`（`priority: -10`）：替换内置用户气泡，剥掉协议块并渲染批注摘要块 |
 | `plugins.bundle.config` | keyed slot | 按包名 `dsh-select-quote`：插件页**外层**（描述与行列表之间）直接渲染的分段控件、快捷键开关，以及开关下方从宿主 catalog 读取的当前键位；注册包在 `ctx.configForms.whileServed(['select-quote'], …)` 里，表单控制器经 slot `inject` 传入 |
 | `ctx.shortcuts` | 命令 | `select-quote.openMenu` / `select-quote.addToTask`：`shortcut` 开启时一起注册；无选区返回 `blocked`，评论步骤未完成时也返回 `blocked`，命中时经 `runtime.selection` 打开菜单 / 保存批注并开评论框；设置区订阅 `ctx.shortcuts.catalog` 显示当前键位；缺该服务时插件照常工作（见机制 15） |
+| `ctx.sessions` | 客户端服务 | 读会话摘要的 `origin`，让侧边子代理会话不接管主会话绑定（见机制 16） |
+| `ctx.modelDirectories` | 客户端服务（可选） | 读主会话的模型目录快照，给侧边提问的模型 chip 提供分组、搜索与推理等级；只读，不调用 `select()`（见机制 16） |
+| `remote.selectQuoteSideTask` | Typert Remote | Host 服务 `SelectQuoteSideTask` 经 `exports["./typert"]` 清单自动注册；客户端 `ctx.remote.$mount` 后按命名空间调用 `create(agentId, { prompt, label })`，返回 `childId`（见机制 16） |
 | `ctx.locale` | 语言服务 | `addLanguage(ru)` + `register('select-quote', {zh,en})` + `register('select-quote','ru',…)` + `bind('select-quote')`，见下面第 10 节 |
 
 不再注册 `select-quote` Chat 节点，也不再注册 Conversation Definition——摘要块内联在 `user` 节点里，原因见下面第 4 节。
@@ -235,6 +238,16 @@ Each item contains text selected from an earlier message ...
 - **桌面原生菜单**：Harness 的 Electron 主进程在 `webContents.on('context-menu')` 里对任何非空 selection 弹原生 Copy 菜单。渲染进程在 `contextmenu` 里同步 `preventDefault()` 会抑制它（2026-10-23 在 Harness 0.2.1-rc.2 实测：命中选区时只有本插件的菜单；点选区外时本插件不接管，原生 Copy 照常弹出）。这条依赖 Chromium 的 contextmenu 默认行为；宿主若改成异步或独立通道弹菜单，必须重新验证。
 - **边界**：触屏没有右键，也不发布快捷键桥（底部操作条仍然是唯一入口）；`triggerMode` 只影响入口，「添加到任务」之后的所有流程与原来一致。
 
+**16. 侧边提问：先输入，发送时才创建 fork 子代理**
+
+- **交互**：工具条「在侧边提问」只把相位切换到 `side`，复用评论泡的定位与层带放一个悬浮输入框。点击的瞬间**不调用宿主**——没有消息的会话不能创建子代理。输入框里用插件自己的批注块展示选中的原文（复用 `.dsq_summary` 的徽章/标题/底色，正文 3 行截断，宽屏与触屏共用 `SideQuote`），底部是宿主 composer 同款的控制行：左边模型 chip、右边取消/发送。批注块是 `width: 100%` 的边框盒，`box-sizing` 必须显式写 `border-box`，否则内边距和描边会把它顶出输入框；侧边相位的输入框额外挂 `.dsq_commentPopSide`（384px），评论相位保持 320px。点「发送」后 `runtime.sideTask(snapshot, question, model)` 用 `composeQuotedMessage()` 把问题与选中原文组成主会话同款的 `<response-annotations>` 协议块（原文带 `messageId` / 偏移，侧栏卡片因此能定位回源消息），创建成功才打开侧边对话；失败留在输入框里并显示「侧边提问创建失败」。创建时的 `label` 用「在侧边提问 · 问题前 24 字」，宿主的侧栏标签页标题和父会话子智能体目录都读这个字段，所以同一会话里多次侧边提问仍能区分。宿主的 `startActivation.request` 只有 `prompt: ContentBlock[]`（文本/图片），没有独立的隐藏上下文字段，所以协议块仍在消息内容里；显示层会把它剥掉——侧栏用户气泡只剩问题，顶部渲染同款批注摘要卡，fork 继承的历史消息里原文带划词标记，回答中的 `:dsh-annotation` 也照常变成 chip。⌘/Ctrl+Enter 发送，Esc 取消。
+- **模型覆盖**：输入框左下角的模型 chip 由 `src/client/model/ModelSelect.tsx` 提供——宿主 composer 模型位的移植：触发按钮显示模型 + 推理等级，菜单是「模型 / 推理等级」两级单元格，目录超过 4 条时出现搜索（宿主同款有序子序列排序），键盘 ↑/↓、Tab、Enter、Esc 与宿主一致。数据来自 `ctx.modelDirectories.directoryFor(主会话 id)` 的只读面（`store` + `load()`），选择只写回侧边提问的本地状态（`null` = 跟随主会话，也是每次打开时的默认值），发送时以 `request.model` 过网关；Host 把它转成 `agentOptions: {provider, model, reasoningEffort?}`，由 fork provider 合并到父会话路由。**不调用 `directory.select()`**，主会话模型不变；换模型但没给 effort 时，宿主会清掉继承的 effort，让新模型取自己的默认值。宿主的 `conversation.input.model.label` 子槽位会给官方 Flash 挂固定 `1017` 标签（`@deepseek-ai/dsh-client-ui-deepseek-model-label-1017`：仅 `deepseek-account` / `deepseek-official` 下 `deepseek-flash` 且名称恰为 `DeepSeek-V4.1-Flash`），插件渲染不了宿主子槽位，所以在 `model/label.ts` 复刻判定，触发按钮、模型单元格和选项行都走同一个 `ModelLabel`。子代理会话自己的输入框里没有模型入口——宿主在 `subagentAddress` 非空时把模型位整个隐藏（`available=false`），所以换模型只能在新一次侧边提问里选。
+- **宿主半**：`SelectQuoteSideTask.create(agent, request)` 用 `ctx.subagents.startActivation({provider: 'fork', delivery: 'caller', request: {parent: agent, prompt, agentOptions?}, signal})` 建子代理，返回 `{childId}`。fork 让子代理继承父会话**已完成**的轮次作为上下文；`delivery: 'caller'` 抑制父会话收到的结算通知，`origin: 'subagent'` 让子会话不进入普通会话列表。
+- **复用模式**：设置项 `sideTaskMode`（`separate` 默认 / `reuse`，volatile 字段，客户端经 `configForms` 读同一份值）决定每次提问是否新建子代理。`reuse` 时客户端在请求里带 `reuse: true`，宿主用 `reusableChildId(父会话 id)`（sha256 折成 UUID 形状）得到**确定性**子会话 id：第一次用 `startActivation({childId})` 预留这个 id，之后走 `subagents.prompt({requestId, parentSessionId, childSessionId, mode: 'continuable', delivery: 'queue', content}, signal)` 续投——它带冷恢复，所以宿主重启后仍是同一个子代理；只有 `not-resumable`（还没有这个子会话）才回退到同 id 新建，其余拒绝（容量、授权、运行中）原样抛出，避免悄悄分叉出第二个。复用模式下输入框不显示模型 chip（`SelectionToolbar` 按配置跳过 directory），子代理沿用创建时的路由，继承的上下文也停在第一次 fork；目录因此只保留一条。切回 `separate` 后恢复每次新建与模型选择。
+- **客户端半**：拿 `childId` 后 `scope.sidebarRight.openResource('dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=continuable', {kind: 'subagentchat'})`，侧栏用宿主内置的 subagent chat 面板渲染子会话，追问经它自己的 composer 走 `subagents/prompt`。
+- **两半怎么连上**：`src/shared/side-task-remote.ts` 是唯一的方法描述（服务名、方法名、`wire: 'agentId'`、入参/出参编解码），`src/typert.ts` 把它导出成清单，`src/client/remote.ts` 用同一份描述 `$mount`。宿主端 `src/side-task-service.ts` 必须同时满足三条：暴露**可见的** `typertRemote` 绑定、类原型上挂 `@deepseek-ai/dsh-typert-protocol/remote-methods` 标记（`{version: 1, methods: [{method: 'create', invocation: {kind: 'direct'}}]}`）、清单经 `exports["./typert"]` 被 `typert-loader` 自动注册。`direct` 调用要传完整参数 `(agentId, request)`；网关回包是 `{ok: true, value}` / `{ok: false, error}`，客户端必须解包再取 `childId`。
+- **会话归属**：侧边聊天也会挂 `conversation.input.overlay`，子会话的 `SessionBridge` 会把它的 id 绑过来。子代理会话的绑定被 `runtime.isSubagentSession`（读 `ctx.sessions.list` 摘要的 `origin`）挡掉，主会话绑定保持不变；否则下一次侧边提问会拿子会话当 parent，宿主直接拒绝（`session "…" is owned by subagent routing`）。子会话自己的批注仍按显式 `sessionId` 分区读写，不受这条守卫影响。
+
 ## 浮层名词与层带
 
 改样式/层级前先认名字（z-index 一栏是**各自层叠上下文内**的值，不能横向直接比大小）：
@@ -243,11 +256,12 @@ Each item contains text selected from an earlier message ...
 |---|---|---|---|---|
 | 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6 / 评论阶段 8） | 复制 / 添加到任务 / 打开链接；评论阶段缩成提示 |
 | 状态提示 | `.dsq_status` | 同上 | 3 | 复制失败等瞬时提示 |
-| 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方；评论阶段「添加批注…」提示条在它上方左对齐、间距 6px |
+| 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方；评论阶段「添加批注…」提示条在它上方左对齐、间距 6px。侧边提问复用同一浮层（原文引用 + 问题输入 + 取消/发送） |
 | 触屏操作条 | `.dsq_touchBar` | `document.body`（fixed） | 60 | coarse pointer 下替代工具条：复制 / 添加到任务 / 打开链接，贴 visual viewport 底部 |
 | 触屏评论抽屉 | `.dsq_touchSheet` | 同上 | 62（遮罩 61） | coarse pointer 下替代评论泡：选中原文预览 + 可选评论 + 跳过/添加 |
 | 悬浮摘要 | `.dsq_summaryHover` | `document.body`（fixed） | 14 | 摘要块的悬停列表（composer 与历史消息共用） |
 | 右键菜单 | `.dsq_ctxMenu` | `document.body`（fixed） | 64 | 选区上右键或快捷键打开的菜单：复制 / 打开链接 / 添加到任务；滚动、外部点击、resize 或失焦即关闭 |
+| 模型菜单 | `.dsq_modelMenu` | `document.body`（fixed） | 1100 | 侧边提问的模型选择：模型 / 推理等级两级菜单、搜索、分组标题吸顶；样式与键盘对齐宿主 composer 的模型位 |
 | 摘要块 | `.dsq_summary` | composer 内（`conversation.input.overlay`）/ 历史用户气泡上方 | 13（composer）/ 1（历史） | 「N 条批注」入口；历史侧外包 `.dsq_tSummary` 右对齐。历史卡必须留在内容层，否则会盖住 6/8 的评论泡 |
 | 摘要容器 | `.dsq_cardStack` | composer 卡片内 | 12 | 输入框上方的摘要容器 |
 
@@ -259,15 +273,21 @@ Each item contains text selected from an earlier message ...
 
 ```
 .github/workflows/check.yml        # CI：push/PR 上跑 pnpm run check
-src/index.ts                       # Node 半：导出 schemastery Config（triggerMode / shortcut，全部 volatile）与空 apply
+src/index.ts                       # Node 半：导出 schemastery Config（triggerMode / shortcut，全部 volatile）并注册 SelectQuoteSideTask
 src/shared/identity.ts             # 包名、Loader 行 id、配置槽 key 的唯一来源
+src/shared/side-task-remote.ts     # 侧边提问的方法描述（Host 清单与客户端贡献共用）
+src/shared/side-task-reuse.ts      # 复用模式：确定性子会话 id 与 not-resumable 判定
+src/shared/remote-info.ts          # RemoteInfo / NamedInput / ResultValue 的最小实现（不 require 宿主协议包）
+src/typert.ts                      # Host Typert 清单（exports["./typert"] 自动注册）
+src/side-task-service.ts           # Host 服务：fork 子代理并返回 childId
+src/client/remote.ts               # 客户端 Typert 贡献：$mount 同一份方法描述
 src/client/index.tsx               # Client 半入口：注册 Slot、配置跟随、语言词典与装饰观察者
 src/client/config.ts               # 配置默认值/归一化/resolveTriggers + configForms 订阅发布
 src/client/settings/ConfigRow.tsx  # 插件页外层的配置区（划词入口 + 快捷键开关 + 当前键位列表，订阅 row 表单与宿主 catalog）
-src/client/selection/SelectionToolbar.tsx # 划词控制器：状态机、批注保存、动作与快捷键桥（state/open/add）
+src/client/selection/SelectionToolbar.tsx # 划词控制器：状态机、批注保存、评论/侧边提问、动作与快捷键桥（state/open/add）
 src/client/selection/useSelectionWatcher.ts # 指针/选区/右键/滚动的监听编排（只管何时 refresh）
-src/client/selection/useCommentPlacement.ts # 评论泡与提示条的测量/落位生命周期
-src/client/selection/ToolbarView.tsx # 纯视图：桌面工具条/评论泡、触屏底栏/抽屉、状态提示
+src/client/selection/useCommentPlacement.ts # 评论泡与提示条的测量/落位生命周期（`side` 相位复用）
+src/client/selection/ToolbarView.tsx # 纯视图：桌面工具条/评论泡、触屏底栏/抽屉、状态提示、侧边提问输入框
 src/client/selection/SelectionMenu.tsx # 右键/快捷键菜单（body portal、键盘导航、外部关闭）
 src/client/shortcut-menu.ts        # 宿主快捷键命令 openMenu / addToTask（按设置注册/注销；镜像 catalog 供设置页）
 src/client/dom/menu-trigger.ts     # 右键接管纯判定：触发矩阵 + 点落选区矩形
@@ -277,6 +297,10 @@ src/client/composer/useDraftMarker.ts        # U+200B 让"只有批注"时发送
 src/client/dom/selection.ts        # 选区快照、工具条定位、复制、聚焦输入框
 src/client/dom/floating-layer.ts   # 找到对话滚动容器，挂内容坐标的浮层 host（裁剪 + 层带）
 src/client/ui/touch.ts             # coarse pointer / visualViewport 探测（触屏底部操作条与抽屉）
+src/client/model/types.ts          # 模型目录的只读面与选择类型
+src/client/model/rank.ts           # 宿主同款有序子序列搜索排序（纯逻辑，可单测）
+src/client/model/ModelSelect.tsx   # 宿主 composer 模型位的移植：两级菜单、搜索、键盘、跟随主会话
+src/client/model/label.ts          # 官方 Flash 的 1017 发布标签判定（宿主 label 子槽位的本地复刻）
 src/client/dom/message-text.ts     # 消息纯净文本遍历、选区→字符偏移定位
 src/client/dom/annotate-text.ts    # 正文 mark（下划线+序号徽章）的注册表与装饰
 src/client/dom/badge-layout.ts     # 角标碰撞避让的纯几何（右移两格→向上叠，带边界）
@@ -301,10 +325,11 @@ src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / 
 src/client/i18n.ts                   # 三份词典（zh / en / ru）、复数形式挑选、把 t() 转给宿主 bind 结果
 src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
 src/client/styles.ts               # 全部 CSS，四层：token / 原子 / 组件 / 宿主（模板字符串注入）
-src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId、selection 快捷键桥）
+src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId、selection 快捷键桥、sideTask、子代理会话判定）
 src/client/context.d.ts            # 客户端 Context 服务的类型补充
-scripts/build.mjs                  # host 编译到 lib/index.js（schemastery 打进产物）+ client tsdown 构建与 ModuleLoader 包装
+scripts/build.mjs                  # host 编译到 lib/index.js、typert 清单到 lib/typert.js，再跑 client tsdown 构建与 ModuleLoader 包装
 tsdown.host.config.ts              # Host 半构建配置（ESM / Node，bundle schemastery）
+tsdown.typert.config.ts            # Typert 清单构建配置（bundle zod，避免宿主解析依赖）
 scripts/sync-desktop.mjs           # 把 lib/ 写进桌面 profile 已安装副本，借宿主热更新（--watch 常驻）
 scripts/dev-desktop.mjs            # 拉起 build --watch + sync --watch 两个子进程，任一退出就收摊
 scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 10 项，另查配置链路、三种语言词典、包展示元信息与发货清单）
@@ -329,6 +354,9 @@ lib/                               # 构建产物（已提交，运行时直接�
 - `ctx.locale` 服务存在，且内置语言是 `zh` / `en`（`register` 两参形式要求两者齐全）；`addLanguage` 的回退链必须终止于 `en`；
 - `ctx.configForms`（`dsh-client-ui-settings`）提供 `get(<Loader 行 id>)`、`whileServed(namespaces, register)` 与表单的 `getSnapshot` / `subscribe` / `set` / `unset` / `mutate`。插件页有两个配置槽：`plugins.row.config`（key 为 `<包名>#<行 id>`，页面以 `view: 'page'` 收到 `{ form: { state, mutate } }`）和 `plugins.bundle.config`（key 为包名，渲染在**包页外层**的描述与行列表之间，只传 `view: 'page'`，**不传 form**——组件要自己 `configForms.get(<行 id>)`，并可用 slot 注册项的 `inject` 面把控制器注入 props）。带设置区的 `dsh.client.inject` 需要列出 `@deepseek-ai/dsh-client-locale`、`@deepseek-ai/dsh-client-ui-settings`、`@deepseek-ai/dsh-client-ui-plugin-manager`、`@deepseek-ai/dsh-api-remotes`；
 - `ctx.shortcuts`（`@deepseek-ai/dsh-client-shortcuts`，可选注入）：`register({id,label,aliases,defaults,regions,modals,resolve})` 会为全部 runtime/platform 预检默认值并在撞键、非法 Web 组合、保留键时抛错（必须 try/catch）；默认值按 `desktop:macos|windows|linux` / `web:macos|windows|linux` 给，Web Linux 只接受 `primary+Slash`、`primary+shift+Comma`、`primary+shift+Period`，其中 `primary+Slash` 被宿主的 `shortcuts.open` 占用；`resolve` 返回 `handled`（带 `run`）/ `blocked`（带 `reason`）/ `pass`。`ctx.shortcuts.catalog` 是当前窗口所有命令的生效行（`id` / `label` / `keys` / `issue` / `conflicts`，`keys` 已是平台化 keycap 文案），订阅它可在宿主改键或冲突后同步 UI。`dsh.client.inject` 里也要列出它，缺服务时本插件只少快捷键入口；
+- **Typert 远程（0.2.1-rc.3 复核）**：`package.json` 的 `exports["./typert"]` 清单会被 `dsh-typert-loader` 自动注册；`wire: 'agentId'` 的 lookup 经 session controller 解析，子代理拥有的会话会被拒绝（`owned by subagent routing`）。服务实例必须有**可见的** `typertRemote`（`{service, serviceKey, namespace}`），类原型上挂 `@deepseek-ai/dsh-typert-protocol/remote-methods` 标记（`{version: 1, methods: [{method, invocation: {kind: 'direct'}}]}`），否则网关报 `gateway/binding-invalid`；客户端 `ctx.remote.$mount(contribution)` 后以动态服务 `remote.<namespace>` 调用，回包是 `{ok: true, value}` / `{ok: false, error}`；`direct` 调用传完整参数（`agentId` + request）；
+- `ctx.subagents.startActivation({provider: 'fork', delivery: 'caller', request: {parent, prompt, agentOptions}, signal})` 返回 `{childId}`；fork 继承父会话已完成的轮次，`delivery: 'caller'` 抑制父会话的结算通知，子会话摘要带 `origin: 'subagent'`（因此不在普通会话列表）。侧边对话资源是 `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=continuable`，由 `ctx.sidebarRight.openResource(address, {kind: 'subagentchat'})` 打开；`ctx.sessions.list` 快照里的 `byId[id].origin` 是判定「是否子代理会话」的唯一依据；`dsh.client.inject` 要列出 `@deepseek-ai/dsh-api-gateway` 与 `@deepseek-ai/dsh-client-ui-sidebar-right`；
+- **模型目录（0.2.1-rc.3 复核）**：`ctx.modelDirectories`（`@deepseek-ai/dsh-client-ui-model-selection`）的公开面是 `directoryFor(sessionId)`，返回 `{store: {getSnapshot, subscribe}, load(), select()}`；快照含 `groups`（provider → models，模型可带 `reasoning.defaultEffort` / `reasoning.efforts`）、`current`、`status`、`failures`、`error`。`directoryFor` 要求会话已有 binding，未知会话抛错；对子代理会话 `load()` / `select()` 抛 `model selection is unavailable for addressed subagent sessions`，读目录要用**主会话**的 directory。宿主自己的 `ModelSelect` 组件不导出（模块只导出 `ModelDirectory` / `ModelDirectoryResolver` / `apply` / `inject`），且插件不能 require 客户端包，所以 UI 是移植实现；`agentOptions` 由 fork provider 声明支持并合并到父路由；
 - 桌面 Electron 主进程在 `webContents.on('context-menu')` 里对非空 `selectionText` 弹原生 Copy 菜单（`app/lib/main.js`）；渲染进程在 `contextmenu` 里同步 `preventDefault()` 可以抑制它（2026-10-23 在 0.2.1-rc.2 实测）。升级 dsh 后右键验证要覆盖「选区上只有我们的菜单」与「选区外只有原生菜单」两条；
 - dsh-rewind 的撤回读持久 `user` / `steering` 节点的文本块（`block.type === 'text'`）并原样写回 composer——消息里的任何文本协议都会回到编辑器，所以本插件必须能把它反向还原（见关键机制 1）；
 - 开发期依赖：`client-hmr` 挂在 web 组合包里，按 500ms 轮询 client 产物并经 `/plugins/events` 推 `rebuilt`（`sync:desktop` 的热更新路径）；
@@ -360,4 +388,11 @@ lib/                               # 构建产物（已提交，运行时直接�
 | 改了「划词入口」但工具条行为不变 | 行必须能写：`--patch` / home patch 注入的行会被 Host 以 `settings/rejected` 拒绝，要在正常安装的 profile 里改。再查 `configForms.get` 的 key 是否仍是行 id、`refresh()` 是否读 `resolveTriggers(getConfig())`；服务缺失时按设计停在默认 `auto` |
 | 右键没出菜单，或原生菜单和划词菜单一起出现 | 先确认「划词入口」选了右键菜单/两者都开；再确认指针真的落在**选区矩形**内（空白/行首缩进都不算，`pointInRects` 有 2px 容差）、右键目标在 `[data-chat-flow-key]` 里、且没有别的监听器先 `preventDefault`。一起出现只可能发生在没接管的那次右键（设计如此：我们不动宿主菜单）；命中时 Electron 原生菜单会被 `preventDefault` 抑制 |
 | 快捷键列表里没有「打开划词菜单」/「添加到任务」，或按了没反应 | 设置里的快捷键开关是否打开（关闭时两条命令都不注册）；快捷键设置里是否被别的插件占了键（register 抛错只会在控制台 warn，不会停掉插件）；没有选中文字、或当前批注还没完成时命令按设计返回 `blocked`；设置区会直接显示两条命令当前生效的键位、冲突或未绑定。Web Linux 只能用默认的 `Ctrl+Shift+,` / `Ctrl+Shift+.`，宿主不允许字母键 |
+| 侧边提问点「发送」报 `owned by subagent routing` | 主会话绑定被侧边子会话顶掉了：查 `runtime.isSubagentSession` 是否注册、`ctx.sessions.list` 摘要里该会话的 `origin` 是否为 `subagent`（见机制 16） |
+| 侧边提问选了模型但子会话仍用旧模型 | Host 半在启动时加载：改完 `lib/typert.js` / `lib/index.js` 必须重启 dsh（HMR 只热更 `lib/client.js`）。再看子会话日志里 `session/end-seed` **之后**那条 `request/header` 的 `provider` / `model`；没有 `agentOptions` 就是 Host 还是旧代码 |
+| 设置成「复用同一个」后每次仍新建子代理 | 先确认设置页的分段控件真的写进了 configForms（`sideTaskMode` 是 volatile 字段）；复用依赖 `reusableChildId(父会话)` 的确定性 id 和 `subagents.prompt` 冷恢复，只有 `not-resumable` 才回退新建——若日志里是 `delivery-unavailable` / `unauthorized`，说明子会话还在但不能续投，原样抛错是设计行为。复用模式没有模型 chip 也是预期：模型固定在创建时 |
+| 模型菜单点开就被关掉 / 点菜单时输入框消失 | 菜单根必须带 `data-dsq-menu`（划词观察者据此放行 outside pointerdown）并 portal 到 `document.body`；缺属性会被当成「点击空白」连带关掉侧边输入框 |
+| 选完模型后点输入框不进焦点、打不了字 | 评论泡外层 `pointerdown` 会 `preventDefault()` 保住正文选区，但文本入口必须放行（`closest('textarea, input, [contenteditable="true"]')`），否则浏览器原生的聚焦与光标定位被一并取消；按钮仍保持阻止，焦点由组件自己管理 |
+| 侧边提问点「发送」一直「创建中…」或报 `gateway/binding-invalid` | Host 半三条缺一不可：`exports["./typert"]` 清单、可见的 `typertRemote`、类原型的 `remote-methods` 标记；再确认客户端 `$mount` 成功（console 里不应有 mount failed）并能取到 `remote.selectQuoteSideTask`（见机制 16） |
+| 侧边提问创建成功但侧栏没开 / 打开的是空白页 | 检查资源地址 `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=continuable` 与 `{kind: 'subagentchat'}`；子代理会话必须由 `origin: 'subagent'` 建立，父会话 id 必须是主会话（不是子会话） |
 | 按 Backspace 删不掉 / 中文输入被打断 | 检查是否有代码在响应草稿变化时调用 `setDraft()`（见关键机制 2） |

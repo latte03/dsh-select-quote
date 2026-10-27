@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
-import { normalizeConfig, type TriggerMode } from '../config.ts'
+import { normalizeConfig, type SideTaskMode, type TriggerMode } from '../config.ts'
 import { t as translate } from '../i18n.ts'
 import { getShortcutRows, subscribeShortcutRows } from '../shortcut-menu.ts'
 import { styles } from '../styles.ts'
@@ -21,6 +21,7 @@ export interface ConfigRowProps {
 }
 
 const CHOICES: readonly TriggerMode[] = ['auto', 'contextmenu', 'both']
+const SIDE_TASK_CHOICES: readonly SideTaskMode[] = ['separate', 'reuse']
 
 export function ConfigRow({ view, form, t: slotTranslate }: ConfigRowProps): ReactNode {
   useLocale()
@@ -127,6 +128,38 @@ function ConfigSection({
           )}
         </ul>
       ) : null}
+      <div className={styles.settingsDivider} aria-hidden="true" />
+      <div className={styles.settingsSection}>
+        <div className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.sideTaskMode')}</span>
+          <span className={styles.settingsHint}>{t('settings.sideTaskModeHint')}</span>
+        </div>
+        <div
+          className={styles.seg}
+          role="radiogroup"
+          aria-label={t('settings.sideTaskMode')}
+        >
+          {SIDE_TASK_CHOICES.map((mode) => {
+            const active = mode === current.sideTaskMode
+            return (
+              <label key={mode} className={styles.segOption} data-active={active}>
+                <input
+                  type="radio"
+                  className={styles.srOnly}
+                  name="dsq-side-task-mode"
+                  value={mode}
+                  checked={active}
+                  onChange={() => {
+                    if (active) return
+                    void form.set('sideTaskMode', mode)
+                  }}
+                />
+                <span>{t(`settings.sideTaskMode.${mode}`)}</span>
+              </label>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

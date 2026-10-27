@@ -16,7 +16,18 @@ const SVG_ATTRS = {
   focusable: false,
 } as const
 
-export type IconName = 'copy' | 'pencil' | 'trash-2' | 'x' | 'plus' | 'external-link'
+export type IconName =
+  | 'copy'
+  | 'pencil'
+  | 'trash-2'
+  | 'x'
+  | 'plus'
+  | 'external-link'
+  | 'panel-right'
+  | 'database'
+  | 'chevron-down'
+  | 'chevron-right'
+  | 'check'
 
 const SHAPES: Record<IconName, ReactNode> = {
   copy: (
@@ -59,11 +70,47 @@ const SHAPES: Record<IconName, ReactNode> = {
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
     </g>
   ),
+  'panel-right': (
+    <g>
+      <rect width={18} height={18} x={3} y={3} rx={2} />
+      <path d="M15 3v18" />
+    </g>
+  ),
+  database: (
+    <g>
+      <ellipse cx={12} cy={5} rx={9} ry={3} />
+      <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+      <path d="M3 12a9 3 0 0 0 18 0" />
+    </g>
+  ),
+  'chevron-down': (
+    <g>
+      <path d="m6 9 6 6 6-6" />
+    </g>
+  ),
+  'chevron-right': (
+    <g>
+      <path d="m9 18 6-6-6-6" />
+    </g>
+  ),
+  check: (
+    <g>
+      <path d="M20 6 9 17l-5-5" />
+    </g>
+  ),
 }
 
-export function LucideIcon({ name, size = 15 }: { name: IconName; size?: number }): ReactNode {
+export function LucideIcon({
+  name,
+  size = 15,
+  className,
+}: {
+  name: IconName
+  size?: number
+  className?: string
+}): ReactNode {
   return (
-    <svg {...SVG_ATTRS} width={size} height={size}>
+    <svg {...SVG_ATTRS} className={className} width={size} height={size}>
       {SHAPES[name]}
     </svg>
   )
