@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.14](https://github.com/latte03/dsh-select-quote/compare/v0.3.13...v0.3.14) (2026-10-27)
+
+### Features
+
+* 划词工具条支持「在侧边提问」子代理 ([e55a567](https://github.com/latte03/dsh-select-quote/commit/e55a5675ee2d7f3a92171fd7543953ec1a54391e))
+* 工具条与右键菜单动作单源，输入框手势对齐宿主，设置分段控件滑动过渡 ([aad807d](https://github.com/latte03/dsh-select-quote/commit/aad807df2a90472fccbdee549013a2d8667fd95e))
+
 ## [0.3.13](https://github.com/latte03/dsh-select-quote/compare/v0.3.12...v0.3.13) (2026-10-26)
 
 ### Bug Fixes
