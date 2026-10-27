@@ -325,6 +325,25 @@ ${atomRules}
   flex: none;
 }
 
+/* The submit gesture repeated on the accent button, so the shortcut is
+   discoverable without hovering the field. Translucent currentColor keeps it
+   readable on the accent fill and on a hovered fill alike. */
+.dsq_buttonKey {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+  opacity: 0.8;
+}
+
 .dsq_divider {
   width: 1px;
   height: 14px;
@@ -1663,6 +1682,7 @@ ${atomRules}
 }
 
 .dsq_seg {
+  position: relative;
   display: inline-flex;
   flex: none;
   gap: 2px;
@@ -1670,6 +1690,23 @@ ${atomRules}
   padding: 2px;
   border-radius: 8px;
   background: var(--dsq-fill-hover);
+}
+
+/* One selected cell painted as a sliding thumb: the previous position lives in
+   the same element, so switching only moves it. Width is measured from the
+   live label, which keeps it aligned after a locale or layout change. */
+.dsq_segThumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 6px;
+  background: var(--dsq-bg-raised);
+  box-shadow: 0 0 0 0.5px var(--dsq-line);
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
 }
 
 .dsq_segOption {
@@ -1683,7 +1720,7 @@ ${atomRules}
   color: var(--dsq-label-2);
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: color 0.12s ease;
 }
 
 .dsq_segOption:hover {
@@ -1691,14 +1728,18 @@ ${atomRules}
 }
 
 .dsq_segOption[data-active="true"] {
-  background: var(--dsq-bg-raised);
-  box-shadow: 0 0 0 0.5px var(--dsq-line);
   color: var(--dsq-label);
 }
 
 .dsq_segOption:has(:focus-visible) {
   outline: 2px solid var(--dsq-focus-ring-soft);
   outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsq_segThumb {
+    transition: none;
+  }
 }
 
 .dsq_settingsDivider {
@@ -1823,6 +1864,7 @@ export const styles = {
   toolbarInner: 'dsq_toolbarInner',
   button: 'dsq_button',
   buttonAddComment: 'dsq_buttonAddComment',
+  buttonKey: 'dsq_buttonKey',
   divider: 'dsq_divider',
   status: 'dsq_status',
   ctxMenu: 'dsq_ctxMenu',
@@ -1943,6 +1985,7 @@ export const styles = {
   switch: 'dsq_switch',
   switchTrack: 'dsq_switchTrack',
   seg: 'dsq_seg',
+  segThumb: 'dsq_segThumb',
   segOption: 'dsq_segOption',
   srOnly: 'dsq_srOnly',
 } as const

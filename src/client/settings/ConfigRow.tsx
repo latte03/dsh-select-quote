@@ -1,4 +1,11 @@
-import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { normalizeConfig, type SideTaskMode, type TriggerMode } from '../config.ts'
 import { t as translate } from '../i18n.ts'
 import { getShortcutRows, subscribeShortcutRows } from '../shortcut-menu.ts'
@@ -22,6 +29,86 @@ export interface ConfigRowProps {
 
 const CHOICES: readonly TriggerMode[] = ['auto', 'contextmenu', 'both']
 const SIDE_TASK_CHOICES: readonly SideTaskMode[] = ['separate', 'reuse']
+
+/**
+ * Segmented radio group whose selected cell is one sliding thumb. The thumb is
+ * measured from the live label (not built from fixed widths), so it stays
+ * aligned when the locale, font, or row width changes the label size.
+ */
+function Segmented<T extends string>({
+  name,
+  ariaLabel,
+  choices,
+  value,
+  label,
+  onChange,
+}: {
+  name: string
+  ariaLabel: string
+  choices: readonly T[]
+  value: T
+  label: (choice: T) => string
+  onChange: (choice: T) => void
+}): ReactNode {
+  const groupRef = useRef<HTMLDivElement | null>(null)
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    const measure = (): void => {
+      const selected = group.querySelector<HTMLElement>('[data-active="true"]')
+      if (!selected) return
+      const groupRect = group.getBoundingClientRect()
+      const rect = selected.getBoundingClientRect()
+      const left = rect.left - groupRect.left
+      const { width } = rect
+      setThumb((prev) =>
+        prev !== null && prev.left === left && prev.width === width
+          ? prev
+          : { left, width },
+      )
+    }
+    measure()
+    // Fonts and locale swaps resize the group without a value change.
+    const observer = new ResizeObserver(measure)
+    observer.observe(group)
+    return () => observer.disconnect()
+  }, [value, choices])
+
+  return (
+    <div ref={groupRef} className={styles.seg} role="radiogroup" aria-label={ariaLabel}>
+      {thumb ? (
+        <span
+          className={styles.segThumb}
+          aria-hidden="true"
+          style={{ width: thumb.width, transform: `translateX(${thumb.left}px)` }}
+        />
+      ) : null}
+      {choices.map((choice) => {
+        const active = choice === value
+        return (
+          <label key={choice} className={styles.segOption} data-active={active}>
+            <input
+              type="radio"
+              className={styles.srOnly}
+              name={name}
+              value={choice}
+              checked={active}
+              onChange={() => {
+                if (active) return
+                // Each pick is the commit: the shared form persists it and
+                // every open client (including this one) sees it live.
+                onChange(choice)
+              }}
+            />
+            <span>{label(choice)}</span>
+          </label>
+        )
+      })}
+    </div>
+  )
+}
 
 export function ConfigRow({ view, form, t: slotTranslate }: ConfigRowProps): ReactNode {
   useLocale()
@@ -59,29 +146,14 @@ function ConfigSection({
           <span className={styles.settingsLabel}>{t('settings.trigger')}</span>
           <span className={styles.settingsHint}>{t('settings.triggerHint')}</span>
         </div>
-        <div className={styles.seg} role="radiogroup" aria-label={t('settings.trigger')}>
-          {CHOICES.map((mode) => {
-            const active = mode === current.triggerMode
-            return (
-              <label key={mode} className={styles.segOption} data-active={active}>
-                <input
-                  type="radio"
-                  className={styles.srOnly}
-                  name="dsq-trigger-mode"
-                  value={mode}
-                  checked={active}
-                  onChange={() => {
-                    if (active) return
-                    // Each pick is the commit: the shared form persists it and
-                    // every open client (including this one) sees it live.
-                    void form.set('triggerMode', mode)
-                  }}
-                />
-                <span>{t(`settings.trigger.${mode}`)}</span>
-              </label>
-            )
-          })}
-        </div>
+        <Segmented
+          name="dsq-trigger-mode"
+          ariaLabel={t('settings.trigger')}
+          choices={CHOICES}
+          value={current.triggerMode}
+          label={(mode) => t(`settings.trigger.${mode}`)}
+          onChange={(mode) => void form.set('triggerMode', mode)}
+        />
       </div>
       <div className={styles.settingsDivider} aria-hidden="true" />
       <label className={styles.settingsSwitchRow}>
@@ -134,31 +206,14 @@ function ConfigSection({
           <span className={styles.settingsLabel}>{t('settings.sideTaskMode')}</span>
           <span className={styles.settingsHint}>{t('settings.sideTaskModeHint')}</span>
         </div>
-        <div
-          className={styles.seg}
-          role="radiogroup"
-          aria-label={t('settings.sideTaskMode')}
-        >
-          {SIDE_TASK_CHOICES.map((mode) => {
-            const active = mode === current.sideTaskMode
-            return (
-              <label key={mode} className={styles.segOption} data-active={active}>
-                <input
-                  type="radio"
-                  className={styles.srOnly}
-                  name="dsq-side-task-mode"
-                  value={mode}
-                  checked={active}
-                  onChange={() => {
-                    if (active) return
-                    void form.set('sideTaskMode', mode)
-                  }}
-                />
-                <span>{t(`settings.sideTaskMode.${mode}`)}</span>
-              </label>
-            )
-          })}
-        </div>
+        <Segmented
+          name="dsq-side-task-mode"
+          ariaLabel={t('settings.sideTaskMode')}
+          choices={SIDE_TASK_CHOICES}
+          value={current.sideTaskMode}
+          label={(mode) => t(`settings.sideTaskMode.${mode}`)}
+          onChange={(mode) => void form.set('sideTaskMode', mode)}
+        />
       </div>
     </div>
   )

@@ -10,56 +10,36 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { placePopover, type PopoverPlacement } from '../dom/popoverPlacement.ts'
-import type { SelectionSnapshot } from '../dom/selection.ts'
-import { linkTarget } from '../dom/selection-url.ts'
 import { t } from '../i18n.ts'
 import { A, cx, styles } from '../styles.ts'
-import { LucideIcon, type IconName } from '../ui/icons.tsx'
-
-export type SelectionMenuAction = 'add' | 'copy' | 'open'
+import { LucideIcon } from '../ui/icons.tsx'
+import type { SelectionActionEntry } from './actions.ts'
 
 export interface SelectionMenuProps {
-  snapshot: SelectionSnapshot
+  /** The same ordered entries the toolbar renders, bound to the latched range. */
+  entries: readonly SelectionActionEntry[]
   /** Viewport point the menu's top-left corner anchors to. */
   x: number
   y: number
-  /** Runs the chosen action; the owner closes or retargets the menu. */
-  onAction(action: SelectionMenuAction): void
   /** Dismissed without an action (outside press, Escape, scroll). */
   onClose(): void
   /** Keyboard commands focus the first item; a pointer opens on the menu itself. */
   initialFocus?: 'first' | 'menu'
 }
 
-interface MenuItem {
-  key: SelectionMenuAction
-  icon: IconName
-  label: string
-}
-
 /** Space between the anchor line's bottom and the menu. */
 const ANCHOR_GAP = 2
 
 export function SelectionMenu({
-  snapshot,
+  entries,
   x,
   y,
-  onAction,
   onClose,
   initialFocus = 'first',
 }: SelectionMenuProps): ReactNode {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const firstRef = useRef<HTMLButtonElement | null>(null)
   const [placement, setPlacement] = useState<PopoverPlacement | null>(null)
-
-  const link = linkTarget(snapshot.text, snapshot.anchorHref)
-  const items: MenuItem[] = [
-    ...(link
-      ? [{ key: 'open' as const, icon: 'external-link' as const, label: t('toolbar.openLink') }]
-      : []),
-    { key: 'copy', icon: 'copy', label: t('toolbar.copy') },
-    { key: 'add', icon: 'plus', label: t('toolbar.addToTask') },
-  ]
 
   // Measure before the first paint: the menu is invisible until it has a
   // placement, so it never flashes at the document origin.
@@ -75,7 +55,7 @@ export function SelectionMenu({
         ANCHOR_GAP,
       ),
     )
-  }, [x, y, items.length])
+  }, [x, y, entries.length])
 
   // A keyboard command lands on the first item so Enter works immediately. A
   // pointer open focuses the menu itself: no item should look selected before
@@ -180,9 +160,9 @@ export function SelectionMenu({
       }}
       onKeyDown={handleKeyDown}
     >
-      {items.map((item, index) => (
+      {entries.map((entry, index) => (
         <button
-          key={item.key}
+          key={entry.key}
           ref={index === 0 ? firstRef : undefined}
           type="button"
           role="menuitem"
@@ -190,10 +170,10 @@ export function SelectionMenu({
           tabIndex={-1}
           onPointerDown={keepSelection}
           onPointerEnter={(event) => event.currentTarget.focus({ preventScroll: true })}
-          onClick={() => onAction(item.key)}
+          onClick={entry.onClick}
         >
-          <LucideIcon name={item.icon} size={15} />
-          <span>{item.label}</span>
+          <LucideIcon name={entry.icon} size={15} />
+          <span>{entry.label}</span>
         </button>
       ))}
     </div>,

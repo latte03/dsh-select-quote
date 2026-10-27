@@ -16,16 +16,10 @@ import { createPortal } from 'react-dom'
 import type { SelectionSnapshot } from '../dom/selection.ts'
 import { t } from '../i18n.ts'
 import { A, cx, styles } from '../styles.ts'
-import { LucideIcon, type IconName } from '../ui/icons.tsx'
+import { LucideIcon } from '../ui/icons.tsx'
 import type { VisualViewportMetrics } from '../ui/touch.ts'
+import type { SelectionActionEntry } from './actions.ts'
 import type { SelectionPhase } from './useSelectionWatcher.ts'
-
-export interface ToolbarAction {
-  readonly key: string
-  readonly icon: IconName
-  readonly label: string
-  readonly onClick: () => void
-}
 
 export interface ToolbarViewProps {
   readonly touch: boolean
@@ -33,7 +27,7 @@ export interface ToolbarViewProps {
   readonly active: SelectionSnapshot
   readonly status: string | null
   readonly viewport: VisualViewportMetrics
-  readonly actions: readonly ToolbarAction[]
+  readonly actions: readonly SelectionActionEntry[]
   readonly comment: string
   /** Question typed into the side-task composer. */
   readonly sideText: string
@@ -62,7 +56,7 @@ function ActionRow({
   actions,
   stacked,
 }: {
-  actions: readonly ToolbarAction[]
+  actions: readonly SelectionActionEntry[]
   stacked: boolean
 }): ReactNode {
   return actions.map((action, index) => (
@@ -109,6 +103,15 @@ function CommentField({
   )
 }
 
+/** Submit gesture painted on the accent buttons; touch has no keyboard hint. */
+function ShortcutHint(): ReactNode {
+  return (
+    <kbd className={styles.buttonKey} title="Enter" aria-hidden="true">
+      Enter
+    </kbd>
+  )
+}
+
 function CommentActions({
   comment,
   touch,
@@ -131,9 +134,11 @@ function CommentActions({
         type="button"
         className={cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment)}
         disabled={!comment.trim()}
+        aria-keyshortcuts="Enter"
         onClick={() => onFinishComment(true)}
       >
         {t('toolbar.addComment')}
+        {touch ? null : <ShortcutHint />}
       </button>
     </div>
   )
@@ -162,6 +167,7 @@ function SideComposer({
   quote,
   value,
   sending,
+  touch,
   sideRef,
   modelPicker,
   onChange,
@@ -172,6 +178,7 @@ function SideComposer({
   quote?: string
   value: string
   sending: boolean
+  touch: boolean
   sideRef: MutableRefObject<HTMLTextAreaElement | null>
   modelPicker?: ReactNode
   onChange: (value: string) => void
@@ -204,9 +211,11 @@ function SideComposer({
             type="button"
             className={cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment)}
             disabled={!value.trim() || sending}
+            aria-keyshortcuts="Enter"
             onClick={onSend}
           >
             {sending ? t('sideTask.sending') : t('sideTask.send')}
+            {touch || sending ? null : <ShortcutHint />}
           </button>
         </div>
       </div>
@@ -316,6 +325,7 @@ export function ToolbarView({
                 <SideComposer
                   value={sideText}
                   sending={sending}
+                  touch={touch}
                   sideRef={sideRef}
                   modelPicker={sideModelPicker}
                   onChange={onSideChange}
@@ -397,6 +407,7 @@ export function ToolbarView({
               quote={active.text}
               value={sideText}
               sending={sending}
+              touch={touch}
               sideRef={sideRef}
               modelPicker={sideModelPicker}
               onChange={onSideChange}

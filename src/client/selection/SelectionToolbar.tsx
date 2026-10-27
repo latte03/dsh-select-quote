@@ -24,8 +24,14 @@ import { linkTarget } from '../dom/selection-url.ts'
 import { t } from '../i18n.ts'
 import { ModelSelect } from '../model/ModelSelect.tsx'
 import type { ModelChoice } from '../model/types.ts'
-import { SelectionMenu, type SelectionMenuAction } from './SelectionMenu.tsx'
-import { ToolbarView, type ToolbarAction } from './ToolbarView.tsx'
+import {
+  selectionActions,
+  type SelectionActionEntry,
+  type SelectionActionKey,
+} from './actions.ts'
+import { SelectionMenu } from './SelectionMenu.tsx'
+import { popoverEnter } from './popover-keys.ts'
+import { ToolbarView } from './ToolbarView.tsx'
 import { useCommentPlacement } from './useCommentPlacement.ts'
 import { useSelectionWatcher, type SelectionPhase } from './useSelectionWatcher.ts'
 import { runtime, type SelectionBridge } from '../runtime.ts'
@@ -350,16 +356,6 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     [hide],
   )
 
-  const handleCopy = useCallback(() => {
-    const snapshot = activeRef.current
-    if (snapshot) void copySnapshot(snapshot)
-  }, [copySnapshot])
-
-  const openComment = useCallback(() => {
-    const snapshot = activeRef.current
-    if (snapshot) beginComment(snapshot)
-  }, [beginComment])
-
   /**
    * Hand the selected link to the system browser.
    *
@@ -380,24 +376,23 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     [hide],
   )
 
-  const handleOpenLink = useCallback(() => {
-    const snapshot = activeRef.current
-    if (snapshot) openLinkSnapshot(snapshot)
-  }, [openLinkSnapshot])
-
   /** Open the side-task composer for the latched quote. */
-  const openSide = useCallback(() => {
-    const snapshot = activeRef.current
-    if (!snapshot) return
-    if (!runtime.sideTask) {
-      setStatus(t('toolbar.sideTaskUnavailable'))
-      return
-    }
-    setStatus(null)
-    setSideText('')
-    dismissMenu()
-    setPhase('side')
-  }, [dismissMenu])
+  const openSide = useCallback(
+    (snapshot: SelectionSnapshot) => {
+      if (!runtime.sideTask) {
+        setStatus(t('toolbar.sideTaskUnavailable'))
+        return
+      }
+      setStatus(null)
+      // The popover renders from `active`; pin it to the range this surface
+      // latched instead of whatever a later refresh may have picked up.
+      setActive(snapshot)
+      setSideText('')
+      dismissMenu()
+      setPhase('side')
+    },
+    [dismissMenu],
+  )
 
   const handleSideChange = useCallback((value: string) => {
     setSideText(value)
@@ -440,7 +435,12 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         hide()
         return
       }
-      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      // Enter and the Cmd/Ctrl chord both submit, exactly like the host
+      // composer's gesture; Shift+Enter is the browser's own line break and is
+      // left alone. This textarea lives outside the host composer, so neither
+      // surface sees the other's Enter.
+      const gesture = popoverEnter(event.nativeEvent)
+      if (gesture === 'submit') {
         event.preventDefault()
         sendSide()
       }
@@ -454,15 +454,24 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     refresh()
   }, [dismissMenu, refresh])
 
-  const handleMenuAction = useCallback(
-    (action: SelectionMenuAction) => {
-      const current = menuRef.current
-      if (!current) return
-      if (action === 'add') beginComment(current.snapshot)
-      else if (action === 'copy') void copySnapshot(current.snapshot)
-      else openLinkSnapshot(current.snapshot)
+  /** Dispatch a shared action against the range the calling surface latched. */
+  const runAction = useCallback(
+    (key: SelectionActionKey, snapshot: SelectionSnapshot) => {
+      switch (key) {
+        case 'open':
+          openLinkSnapshot(snapshot)
+          return
+        case 'copy':
+          void copySnapshot(snapshot)
+          return
+        case 'add':
+          beginComment(snapshot)
+          return
+        case 'side':
+          openSide(snapshot)
+      }
     },
-    [beginComment, copySnapshot, openLinkSnapshot],
+    [beginComment, copySnapshot, openLinkSnapshot, openSide],
   )
 
   /** Close the optional comment step; the annotation stays saved either way. */
@@ -495,38 +504,26 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         hide()
         return
       }
-      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      // Same gestures as the button and the side composer: the host's submit
+      // predicate (Enter, Cmd/Ctrl+Enter) commits; an empty box commits
+      // nothing, matching the button's disabled state. Shift+Enter keeps its
+      // native line break.
+      const gesture = popoverEnter(event.nativeEvent)
+      if (gesture === 'submit') {
         event.preventDefault()
-        finishComment(true)
+        if (comment.trim()) finishComment(true)
       }
     },
-    [finishComment, hide],
+    [comment, finishComment, hide],
   )
 
   if (!active) return null
 
   const toolbarStyle: CSSProperties = { left: active.left, top: active.top }
-  const link = linkTarget(active.text, active.anchorHref)
-  const actions: ToolbarAction[] = [
-    ...(link
-      ? [
-          {
-            key: 'open',
-            icon: 'external-link' as const,
-            label: t('toolbar.openLink'),
-            onClick: handleOpenLink,
-          },
-        ]
-      : []),
-    { key: 'copy', icon: 'copy', label: t('toolbar.copy'), onClick: handleCopy },
-    { key: 'add', icon: 'plus', label: t('toolbar.addToTask'), onClick: openComment },
-    {
-      key: 'side',
-      icon: 'panel-right',
-      label: t('toolbar.askInSide'),
-      onClick: openSide,
-    },
-  ]
+  const actions: SelectionActionEntry[] = selectionActions(active).map((action) => ({
+    ...action,
+    onClick: () => runAction(action.key, active),
+  }))
 
   return (
     <>
@@ -567,11 +564,13 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       />
       {menu ? (
         <SelectionMenu
-          snapshot={menu.snapshot}
+          entries={selectionActions(menu.snapshot).map((action) => ({
+            ...action,
+            onClick: () => runAction(action.key, menu.snapshot),
+          }))}
           x={menu.x}
           y={menu.y}
           initialFocus={menu.initialFocus}
-          onAction={handleMenuAction}
           onClose={closeMenu}
         />
       ) : null}
