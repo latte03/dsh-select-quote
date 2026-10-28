@@ -14,6 +14,13 @@
  *   content-sized and the chat's own `.icaHSq_scroll` is `overflow: visible`;
  * - regular layout: `.icaHSq_scroll` is the scroller.
  * Walking up from the selected flow item finds whichever one is live.
+ *
+ * Message content may nest its own scroll containers, and those must never
+ * host the floating UI: the reasoning block renders its text as a nested flow
+ * item inside `r52wTW_body`, which caps itself at `min(400px, 50vh)` with its
+ * own scrolling and a bottom fade mask. A host placed there is clipped against
+ * that box and has the mask painted over it. Only a scroller that lives
+ * outside every flow item — the transcript's own — is eligible.
  */
 
 import { flowItemOf } from './message-text.ts'
@@ -169,6 +176,24 @@ function fallbackLayer(): FloatingLayer {
   return fallback
 }
 
+/** True when the element scrolls its own overflow on the y axis. */
+function isScrollContainer(overflowY: string): boolean {
+  return overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay'
+}
+
+/**
+ * May this ancestor host the floating UI?
+ *
+ * A scroll container inside a chat flow item is **message content**, not the
+ * transcript frame: the reasoning block nests a flow item inside a box capped
+ * at `min(400px, 50vh)` that scrolls on its own and fades its bottom edge with
+ * a mask. Hosting there would clip the toolbar against that box and paint the
+ * mask over it, so the walk keeps going until it leaves every flow item.
+ */
+export function canHostFloatingLayer(overflowY: string, insideFlowItem: boolean): boolean {
+  return isScrollContainer(overflowY) && !insideFlowItem
+}
+
 /** Layer for a node inside the transcript (falls back to a body host). */
 export function floatingLayerFor(node: Node | null): FloatingLayer {
   const item = flowItemOf(node)
@@ -177,8 +202,7 @@ export function floatingLayerFor(node: Node | null): FloatingLayer {
 
   let el: HTMLElement | null = item
   while (el && el !== document.body) {
-    const { overflowY } = getComputedStyle(el)
-    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
+    if (canHostFloatingLayer(getComputedStyle(el).overflowY, flowItemOf(el) !== null)) {
       const layer = layerFor(el)
       if (item) itemLayers.set(item, layer)
       return layer
