@@ -91,7 +91,16 @@ export function apply(ctx: Context): void {
 
   // Dictionary registrations are owned effects; the fallback chain must end at
   // `en`, and both shipped host locales are required in one typed call.
-  ctx.effect(() => ctx.locale.addLanguage(LANGUAGE_RU), 'dsh-select-quote: ru language')
+  //
+  // The language definition itself belongs to the Host: dsh 0.2.2-alpha.2 ships
+  // a built-in catalog (ja/es/fr/de/ru/pt), and `addLanguage` throws on a
+  // duplicate id — an unconditional call turns this plugin's whole fiber into
+  // `failed`, which the web boot audit reports as "1 entry did not activate"
+  // and blocks the GUI. Add `ru` only where the Host does not offer it.
+  const hostLanguageIds = ctx.locale.getSnapshot().locales.map((language) => language.id)
+  if (!hostLanguageIds.includes(LANGUAGE_RU.id)) {
+    ctx.effect(() => ctx.locale.addLanguage(LANGUAGE_RU), 'dsh-select-quote: ru language')
+  }
   ctx.effect(
     () => ctx.locale.register(LOCALE_NS, SHIPPED_DICTS),
     'dsh-select-quote: dictionaries (zh, en)',
