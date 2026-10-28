@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.15](https://github.com/latte03/dsh-select-quote/compare/v0.3.14...v0.3.15) (2026-10-28)
+
+### Bug Fixes
+
+* 浮层宿主不再落进消息内容里的嵌套滚动容器 ([2f43d57](https://github.com/latte03/dsh-select-quote/commit/2f43d57eeb5ad6ef70f93d78f57b2194c4b08b9a))
+
 ## [0.3.14](https://github.com/latte03/dsh-select-quote/compare/v0.3.13...v0.3.14) (2026-10-27)
 
 ### Features
