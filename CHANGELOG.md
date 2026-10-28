@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.16](https://github.com/latte03/dsh-select-quote/compare/v0.3.15...v0.3.16) (2026-10-28)
+
+### Bug Fixes
+
+* 宿主已内置 ru 语言时不再重复注册 ([2d1acff](https://github.com/latte03/dsh-select-quote/commit/2d1acff8a3ed43eb26e7f8ff3f84fe44164a953f))
+
 ## [0.3.15](https://github.com/latte03/dsh-select-quote/compare/v0.3.14...v0.3.15) (2026-10-28)
 
 ### Bug Fixes
