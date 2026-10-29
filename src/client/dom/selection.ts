@@ -1,4 +1,5 @@
 /** Selection snapshot used by the floating toolbar. */
+import { getConfig, type ToolbarPlacement } from '../config.ts'
 import { floatingLayerFor, type FloatingLayer } from './floating-layer.ts'
 import { isInsideTranscript, rangeOffsetsInFlowItem, type MessageLocator } from './message-text.ts'
 
@@ -11,7 +12,7 @@ export interface SelectionSnapshot {
    */
   readonly left: number
   readonly top: number
-  /** The toolbar hangs under the first line because there is no room above. */
+  /** The toolbar hangs under the first line (preference, or no room above). */
   readonly below: boolean
   /** Bottom of the whole selection (content coords), for the comment popover. */
   readonly selectionBottom: number
@@ -70,6 +71,23 @@ function getRangeFirstLineRect(range: Range): DOMRect | undefined {
   const firstTop = Math.min(...rects.map((rect) => rect.top))
   const firstLineRects = rects.filter((rect) => Math.abs(rect.top - firstTop) <= LINE_TOP_TOLERANCE)
   return mergeRects(firstLineRects)
+}
+
+/**
+ * Resolve the toolbar side from the user preference and the two fits.
+ *
+ * `above` keeps the shipped behaviour: above the first line, flipping below
+ * only when the transcript top leaves no room. `below` flips back up when the
+ * toolbar would cross the visible bottom edge; if neither side fits (a tiny
+ * viewport), the preference wins.
+ */
+export function toolbarHangsBelow(
+  preferred: ToolbarPlacement,
+  aboveFits: boolean,
+  belowFits: boolean,
+): boolean {
+  if (preferred === 'below') return belowFits || !aboveFits
+  return !aboveFits
 }
 
 /** Keep the centered toolbar inside the visible horizontal band. */
@@ -143,7 +161,11 @@ export function readSelectionSnapshot(toolbarRoot?: HTMLElement | null): Selecti
   const above = layer.toContent(x, rect.top - TOOLBAR_OFFSET)
   // At the very top of the transcript there is no room above the first line at
   // all; hanging it under the line is better than clipping it away entirely.
-  const below = above.top < TOOLBAR_HEIGHT
+  const aboveFits = above.top >= TOOLBAR_HEIGHT
+  // Below must clear the scroller's own bottom edge, which already stops at the
+  // composer seat in the overlay layout.
+  const belowFits = rect.bottom + BELOW_GAP + TOOLBAR_HEIGHT <= bounds.bottom
+  const below = toolbarHangsBelow(getConfig().toolbarPlacement, aboveFits, belowFits)
   const anchor = below ? layer.toContent(x, rect.bottom + BELOW_GAP) : above
   // The comment popover starts under the whole selection, not under the
   // toolbar: the toolbar sits only 12px above the first line, so a popover

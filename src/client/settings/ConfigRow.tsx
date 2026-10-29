@@ -6,7 +6,12 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
-import { normalizeConfig, type SideTaskMode, type TriggerMode } from '../config.ts'
+import {
+  normalizeConfig,
+  type SideTaskMode,
+  type ToolbarPlacement,
+  type TriggerMode,
+} from '../config.ts'
 import { t as translate } from '../i18n.ts'
 import { getShortcutRows, subscribeShortcutRows } from '../shortcut-menu.ts'
 import { styles } from '../styles.ts'
@@ -28,6 +33,7 @@ export interface ConfigRowProps {
 }
 
 const CHOICES: readonly TriggerMode[] = ['auto', 'contextmenu', 'both']
+const PLACEMENT_CHOICES: readonly ToolbarPlacement[] = ['above', 'below']
 const SIDE_TASK_CHOICES: readonly SideTaskMode[] = ['separate', 'reuse']
 
 /**
@@ -155,6 +161,24 @@ function ConfigSection({
           onChange={(mode) => void form.set('triggerMode', mode)}
         />
       </div>
+      {/* A right-click-only setup has no floating toolbar, so its side is not
+          a meaningful choice; the row appears with auto / both. */}
+      {current.triggerMode === 'contextmenu' ? null : (
+        <div className={styles.settingsSection}>
+          <div className={styles.settingsCopy}>
+            <span className={styles.settingsLabel}>{t('settings.toolbarPlacement')}</span>
+            <span className={styles.settingsHint}>{t('settings.toolbarPlacementHint')}</span>
+          </div>
+          <Segmented
+            name="dsq-toolbar-placement"
+            ariaLabel={t('settings.toolbarPlacement')}
+            choices={PLACEMENT_CHOICES}
+            value={current.toolbarPlacement}
+            label={(placement) => t(`settings.toolbarPlacement.${placement}`)}
+            onChange={(placement) => void form.set('toolbarPlacement', placement)}
+          />
+        </div>
+      )}
       <div className={styles.settingsDivider} aria-hidden="true" />
       <label className={styles.settingsSwitchRow}>
         <span className={styles.settingsCopy}>

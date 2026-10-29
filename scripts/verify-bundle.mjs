@@ -1701,6 +1701,14 @@ function checkConfigWiring(code) {
   ) {
     problems.push('the settings section is registered without its locale seat')
   }
+  // The toolbar side is chosen from the live config each time a selection is
+  // read, so a change applies without a reload.
+  if (!code.includes('toolbarPlacement')) {
+    problems.push('built client never reads toolbarPlacement — the position setting would be inert')
+  }
+  if (!code.includes('dsq-toolbar-placement')) {
+    problems.push('the settings page has no toolbar-position control')
+  }
   for (const token of [
     '--dsw-alias-brand-primary',
     '--dsw-alias-border-l3',

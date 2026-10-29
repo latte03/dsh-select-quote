@@ -139,7 +139,7 @@ Each item contains text selected from an earlier message ...
 - **浮层的磨砂材质用官方 material 图层同款 token**：工具条、评论气泡、悬停面板、右键菜单以及触屏/预览浮层的底色与模糊都画在一个 `z-index:-1` 的 `::before` 图层上（`background: var(--dsq-menu)` + `backdrop-filter: var(--dsq-menu-backdrop)`，即宿主的 `--dsw-menu-surface-fill` / `--dsw-menu-backdrop-filter`，后者恒为 `blur(40px) saturate(150%)`，亮暗自动翻）。**必须画在独立图层上**：`backdrop-filter` 直接写在容器上会连容器自己的子树一起糊，而负 z 图层只取身后的页面。悬停面板为此把 `overflow-y: auto` 从面板挪到内层 `.dsq_summaryList`——绝对定位的图层留在会滚动的容器里会跟着内容跑掉，滚到底部时面板顶部就露空。老浏览器没有 `backdrop-filter` 时（`@supports not`）图层退成 `--dsq-bg-raised` 不透明底，避免半透明直接糊在文字上；
 - **阴影统一用 `--dsw-elevation-prominent` 一档**（别名 `--dsq-shadow`）：和宿主自己的菜单/弹层同档，且它自带 `0 0 0 .5px` 的描边环（`--dsw-elevation-stroke`）——浮层因此不画 border 也有轮廓。以前工具条用 soft、两个气泡用 prominent 两档，现在合成一个别名；兜底值按真 token 的组成补齐那一圈描边。所有浮层都把描边覆写成更淡的 `--dsw-alias-border-l1`（磨砂边缘自带分界，不需要再勾一道）——**覆写和 `--dsq-shadow` 的声明都必须写在浮层选择器上**：自定义属性在声明处展开，`--dsq-shadow` 留在 body 上时浮层上的覆写够不着；
 - **磨砂的视觉验证只能在真实客户端里做**：本机 headless Chrome（CLI 与 MCP 两通道）不渲染 `backdrop-filter`，最小页面可复现——别把"没模糊"当代码缺陷，也别用那里的帧率数字下结论（2026-10-19 的教训，见 [`archive/investigations.md`](archive/investigations.md)）；
-- **入场动画绝不带 opacity**：规范实锤祖先 `opacity<1` 会成为 backdrop root，`::before` 采样不到身后的页面，磨砂在整段淡入里消失、结束才糊上。transform 不在禁止列（用户已在真实客户端验证 scale 无恙），现行入场是 `translate(-50%,-100%) translateY(4px) scale(0.96) → 归位`；内容顶部没地方放时工具条翻到首行下方（`data-anchor="below"`），换成 `dsq-toolbar-in-below` 关键帧；
+- **入场动画绝不带 opacity**：规范实锤祖先 `opacity<1` 会成为 backdrop root，`::before` 采样不到身后的页面，磨砂在整段淡入里消失、结束才糊上。transform 不在禁止列（用户已在真实客户端验证 scale 无恙），现行入场是 `translate(-50%,-100%) translateY(4px) scale(0.96) → 归位`；工具条默认在首行上方，配置改成「下方」或内容顶部没地方放时翻到首行下方（`data-anchor="below"`），换成 `dsq-toolbar-in-below` 关键帧；
 - 样式通过 `ensureToolbarStyles()` 注入一个 `<style data-plugin-css="dsh-select-quote/toolbar.css">`，**改完 CSS 必须刷新页面**（函数只插入一次）；桌面端可用 `pnpm run sync:desktop` 热更新（见「桌面客户端的热更新」）。
 
 **9. 装饰观察者不许自我触发**
@@ -214,19 +214,19 @@ Each item contains text selected from an earlier message ...
 
 - **出现**：拖拽结束（`pointerup`）后读一次活选区——非空、在对话区、不在输入框/工具条自身里；
 - **挂载**：`dom/floating-layer.ts` 从选区所在的 flow item 往上找**真正的滚动容器**（桌面抽屉布局是 `.ST7X_W_scrollBody`，此时 `.icaHSq_scroll` 的计算 overflow 是 visible；普通布局是 `.icaHSq_scroll`），在容器里挂一个零尺寸的 absolute host（必要时把容器补成 `position: relative`），浮层 portal 进去。**flow item 内部的滚动容器一律跳过**（`canHostFloatingLayer`）：思考块把正文当成嵌套 flow item 渲染在 `.r52wTW_body` 里，那是 `max-height: min(400px, 50vh)` + 自己的滚动 + 底部 `mask-image` 淡出，宿主落进去会被那个盒子裁剪、被 mask 淡掉；只有离开所有 flow item 之后找到的滚动容器（转写自己的）才合格，全程找不到才退回 body 级 host。坐标是**相对滚动内容**的，所以滚动时工具条/评论泡随正文一起走，不需要逐帧重定位；容器负责裁剪——滚到容器上边缘就滑进 header 下面，和正文一致。思考块**自己**滚动时选区的内容坐标会变，由 `refresh()`（scroll 捕获监听）重读重排，工具条仍然跟着走。host 的 `z-index` 平时 **6**：低于 composer seat 的 7（不穿过输入框），高于内容里吸顶元素的 6；**评论步骤打开期间抬到 8**——摘要卡在 composer 座位里、会伸进滚动区，z 6 的评论泡会被它盖住；关闭评论立即还原，空闲工具条仍不会压输入框；
-- **跟随**：滚动时仍会触发 `refresh()`（合并同一 tick 的多次事件），但选区的**内容坐标**不变，`setActive` 去重后不重渲染。真正需要重排的只有 resize / 布局变化，以及内容顶部选中时改为挂在首行下方的翻转（`below`）；
+- **跟随**：滚动时仍会触发 `refresh()`（合并同一 tick 的多次事件），但选区的**内容坐标**不变，`setActive` 去重后不重渲染。真正需要重排的只有 resize / 布局变化，以及按 `toolbarPlacement` 偏好或内容顶部空间不足时改为挂在首行下方的翻转（`below`）——偏好为「下方」时反过来检查是否越过可见底边（`bounds().bottom`，已含 composer 顶边）；
 - **收起**：选区真的没了、或**选中行的首行完全滚出视口**（`isFirstLineOnScreen`，没有可锚定的东西了）。滚回去会重新出现；半可见时由容器裁剪，不再用视口边缘钳位；
 - **评论气泡例外**：`refresh` 只在 `idle` 相位收起工具条，`comment` 相位一律不动。评论泡与工具条共享同一套内容坐标，滚动时一起走；**垂直位置以整个选区的下边缘**（`selectionBottom`）为准，先试选区下方、放不下再放到工具条上方——不会盖住正在评论的文字。**「下方」的可用边界是 composer seat 的顶边，不是滚动容器自己的盒子**（`floating-layer.ts` 的 `bounds().bottom` 取两者较小值）：桌面布局里 composer 是 sticky、z-7 覆盖在滚动容器下半段，用容器盒子会把评论泡放到输入框底下（[data-composer-seat]，缺失时退回 [data-composer-card]；seat 从当前滚动容器沿祖先链就近解析，不取文档里第一个，避免多窗格时钳到别的输入框）。评论阶段工具条本身（「添加批注…」提示）改放到评论泡**上方、左对齐**，底边距评论泡顶边 6px；顶部空间不够时翻到评论泡下方。它和评论泡的重排都由 `placeCommentPop` 负责。评论框换行/变高时在 layout effect 里重排（滚动本身不重排），首帧不会闪位。**「添加到任务」即保存**：批注在打开评论步骤时就已写进 store（摘要块同时出现），评论只是它的可选补充。点空白处只是关闭评论泡，已保存的批注不撤销，已输入的评论会顺手写回该条批注；Esc / 「暂不评论」显式丢弃评论文本，批注仍在。`pendingIdRef` 记录这次要编辑的批注 id，`flushComment()` 是唯一的写回口。
 - **触屏不走这套**：coarse pointer 下工具条/评论泡换成了 body 级 fixed 的底部操作条与评论抽屉（见机制 6 的触屏条目），因为系统选择菜单和软键盘占据了选区锚定所需的同一块空间；`placeCommentPop` 在触屏下直接返回，评论阶段也不再抬 host 的 z-index。
 
 **14. 配置：Host 持有，client 通过 configForms 跟随**
 
-- **Host 半**（`src/index.ts`）导出 schemastery `Config`，字段全部 `.volatile()`：`triggerMode`（`auto` / `contextmenu` / `both`，默认 `auto`）、`shortcut`（默认 `false`）与 `sideTaskMode`（`separate` / `reuse`，默认 `separate`）。只有 volatile 字段进入设置镜像，普通字段不可编辑。`lib/index.js` 现在由 `tsdown.host.config.ts` 编译，schemastery 打进产物——发布包不依赖 profile 如何解析宿主包。`apply(ctx, config)` 收到的是 volatile 引用，读取用 `.get()`。
-- **client 拿不到 `apply` 的配置**。`src/client/config.ts` 在嵌套的 `ctx.inject(['configForms'], …)` 里按**行 id**（`select-quote`，不是包名）取 `configForms.get(ROW_ID)`，把快照 `value` 归一化后发布到模块级 store；缺服务、`loading`、非法枚举都落在默认 `auto/false`。`ROW_ID` 与 `PACKAGE_NAME` 只在 `src/shared/identity.ts` 定义；两份 patch 的行 id 由 verify 对齐。
-- **配置区不是 `Config` 的副产物**：注册 `plugins.bundle.config`（key = 包名 `dsh-select-quote`），宿主把它渲染在插件页的**外层**——描述与行列表之间，不需要再进入某一行的「配置」页。Host 对这个槽位**不传 `form`**（只有 `plugins.row.config` 的 page 才传），所以注册项用 slot 的 `inject` 面把 `scope.configForms.get(ROW_ID)` 的控制器交给组件；组件用 `useSyncExternalStore` 订阅快照，写入走控制器的 `set(field, value)`。注册仍包在 `configForms.whileServed([ROW_ID], …)` 里：namespace 不在 describe 镜像中时不出现配置区，也不留半死的表单；`locale` 座位填 `select-quote`，文案走同一套词典。页面里有四块内容：`triggerMode` 分段控件、`shortcut` 开关、开关下方两条快捷键命令的**当前生效键位**、`sideTaskMode` 分段控件。两个分段控件共用一个 `Segmented`（`ConfigRow.tsx`）：选中格是一块绝对定位的 thumb，切值只改 `transform`/`width`，尺寸按当前标签的 `getBoundingClientRect()` 测量并用 `ResizeObserver` 跟随语言和字体变化；`prefers-reduced-motion` 下关掉过渡。键位另有来源：`shortcut-menu.ts` 订阅 `ctx.shortcuts.catalog`，把本插件两条命令的 `label` / `keys` / `issue` / `conflicts` 发布到模块级 store，`ConfigRow` 用 `useSyncExternalStore` 读取；开关关闭、命令未注册时列表不显示，撞键或未绑定时分别显示提示，用户在宿主「快捷键」设置里改键后这里不问刷新就更新。
-- **控件点击即提交**：`form.set('triggerMode' | 'shortcut' | 'sideTaskMode', value)`。控制器负责写入排队、revision 与失败后的恢复；Host 校验后持久化到 profile 的用户层 patch（`id: select-quote` 下的 `config.*`），刷新/重启由 Host 重新解析；其它标签页改值会经设置文档推过来，`subscribeConfig()` 触发 `refresh()` / 快捷键重注册，工具条与命令即时跟上。
-- **读取点在事件里**：`SelectionToolbar.refresh()` 每次都用 `resolveTriggers(getConfig()).auto` 判断，不是渲染时快照；触屏不受 `triggerMode` 影响，始终走底部操作条。`shortcut` 独立于 `triggerMode`，由 `shortcut-menu.ts` 在开启时向宿主注册命令（见机制 15）。
-- **改字段要同步**：`src/index.ts` 的 `Config`、`src/client/config.ts` 的 `DEFAULT_CONFIG` / `normalizeConfig`、`ConfigRow` 组件、三份词典与 verify 的 host/client 对齐断言。verify 会直接加载 `lib/index.js` 核对字段集合、默认值、`.volatile()` 与非法值拒绝，并跑一次没有 `configForms` 的降级 `apply()`。
+- **Host 半**（`src/index.ts`）导出 schemastery `Config`，字段全部 `.volatile()`：`triggerMode`（`auto` / `contextmenu` / `both`，默认 `auto`）、`toolbarPlacement`（`above` / `below`，默认 `above`）、`shortcut`（默认 `false`）与 `sideTaskMode`（`separate` / `reuse`，默认 `separate`）。只有 volatile 字段进入设置镜像，普通字段不可编辑。`lib/index.js` 现在由 `tsdown.host.config.ts` 编译，schemastery 打进产物——发布包不依赖 profile 如何解析宿主包。`apply(ctx, config)` 收到的是 volatile 引用，读取用 `.get()`。
+- **client 拿不到 `apply` 的配置**。`src/client/config.ts` 在嵌套的 `ctx.inject(['configForms'], …)` 里按**行 id**（`select-quote`，不是包名）取 `configForms.get(ROW_ID)`，把快照 `value` 归一化后发布到模块级 store；缺服务、`loading`、非法枚举都落在默认值（`auto` / `above` / `false` / `separate`）。`ROW_ID` 与 `PACKAGE_NAME` 只在 `src/shared/identity.ts` 定义；两份 patch 的行 id 由 verify 对齐。
+- **配置区不是 `Config` 的副产物**：注册 `plugins.bundle.config`（key = 包名 `dsh-select-quote`），宿主把它渲染在插件页的**外层**——描述与行列表之间，不需要再进入某一行的「配置」页。Host 对这个槽位**不传 `form`**（只有 `plugins.row.config` 的 page 才传），所以注册项用 slot 的 `inject` 面把 `scope.configForms.get(ROW_ID)` 的控制器交给组件；组件用 `useSyncExternalStore` 订阅快照，写入走控制器的 `set(field, value)`。注册仍包在 `configForms.whileServed([ROW_ID], …)` 里：namespace 不在 describe 镜像中时不出现配置区，也不留半死的表单；`locale` 座位填 `select-quote`，文案走同一套词典。页面里有五块内容：`triggerMode` 分段控件、`toolbarPlacement` 分段控件（仅当 `triggerMode` 为 `auto` / `both` 时出现；右键菜单模式没有浮出工具条）、`shortcut` 开关、开关下方两条快捷键命令的**当前生效键位**、`sideTaskMode` 分段控件。三段控件共用一个 `Segmented`（`ConfigRow.tsx`）：选中格是一块绝对定位的 thumb，切值只改 `transform`/`width`，尺寸按当前标签的 `getBoundingClientRect()` 测量并用 `ResizeObserver` 跟随语言和字体变化；`prefers-reduced-motion` 下关掉过渡。键位另有来源：`shortcut-menu.ts` 订阅 `ctx.shortcuts.catalog`，把本插件两条命令的 `label` / `keys` / `issue` / `conflicts` 发布到模块级 store，`ConfigRow` 用 `useSyncExternalStore` 读取；开关关闭、命令未注册时列表不显示，撞键或未绑定时分别显示提示，用户在宿主「快捷键」设置里改键后这里不问刷新就更新。
+- **控件点击即提交**：`form.set('triggerMode' | 'toolbarPlacement' | 'shortcut' | 'sideTaskMode', value)`。控制器负责写入排队、revision 与失败后的恢复；Host 校验后持久化到 profile 的用户层 patch（`id: select-quote` 下的 `config.*`），刷新/重启由 Host 重新解析；其它标签页改值会经设置文档推过来，`subscribeConfig()` 触发 `refresh()` / 快捷键重注册，工具条与命令即时跟上。
+- **读取点在事件里**：`SelectionToolbar.refresh()` 每次都用 `resolveTriggers(getConfig()).auto` 判断，不是渲染时快照；`readSelectionSnapshot()` 每次读 `getConfig().toolbarPlacement` 决定挂首行上方还是下方，所以改配置后一次 `refresh()` 就换边。触屏不受 `triggerMode` / `toolbarPlacement` 影响，始终走底部操作条。`shortcut` 独立于 `triggerMode`，由 `shortcut-menu.ts` 在开启时向宿主注册命令（见机制 15）。
+- **改字段要同步**：`src/index.ts` 的 `Config`、`src/client/config.ts` 的 `DEFAULT_CONFIG` / `normalizeConfig` / `publishConfig` 去重、`ConfigRow` 组件、八份词典与 verify 的 host/client 对齐断言。verify 会直接加载 `lib/index.js` 核对字段集合、默认值、`.volatile()` 与非法值拒绝，并跑一次没有 `configForms` 的降级 `apply()`。
 
 **15. 右键菜单与快捷键：只在选区上接管**
 
@@ -254,7 +254,7 @@ Each item contains text selected from an earlier message ...
 
 | 名称 | 类名 | 挂载位置 | z-index | 作用 |
 |---|---|---|---|---|
-| 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6 / 评论阶段 8） | 复制 / 添加到任务 / 打开链接；评论阶段缩成提示 |
+| 工具条 | `.dsq_toolbar` | 对话滚动容器内的 `[data-dsq-layer]` host | 2（host 6 / 评论阶段 8） | 复制 / 添加到任务 / 打开链接；浮在首行上方或下方（`toolbarPlacement`，没空间时翻面）；评论阶段缩成提示 |
 | 状态提示 | `.dsq_status` | 同上 | 3 | 复制失败等瞬时提示 |
 | 评论泡 | `.dsq_commentPop` | 同上 | 1 | 可选评论框；放在整个选区下方，放不下时改到工具条上方；评论阶段「添加批注…」提示条在它上方左对齐、间距 6px。侧边提问复用同一浮层（原文引用 + 问题输入 + 取消/发送） |
 | 触屏操作条 | `.dsq_touchBar` | `document.body`（fixed） | 60 | coarse pointer 下替代工具条：复制 / 添加到任务 / 打开链接，贴 visual viewport 底部 |
@@ -273,7 +273,7 @@ Each item contains text selected from an earlier message ...
 
 ```
 .github/workflows/check.yml        # CI：push/PR 上跑 pnpm run check
-src/index.ts                       # Node 半：导出 schemastery Config（triggerMode / shortcut，全部 volatile）并注册 SelectQuoteSideTask
+src/index.ts                       # Node 半：导出 schemastery Config（triggerMode / toolbarPlacement / shortcut / sideTaskMode，全部 volatile）并注册 SelectQuoteSideTask
 src/shared/identity.ts             # 包名、Loader 行 id、配置槽 key 的唯一来源
 src/shared/side-task-remote.ts     # 侧边提问的方法描述（Host 清单与客户端贡献共用）
 src/shared/side-task-reuse.ts      # 复用模式：确定性子会话 id 与 not-resumable 判定

@@ -15,12 +15,14 @@ import { PACKAGE_NAME } from './shared/identity.ts'
  */
 export interface Config {
   triggerMode: Volatile<'auto' | 'contextmenu' | 'both'>
+  toolbarPlacement: Volatile<'above' | 'below'>
   shortcut: Volatile<boolean>
   sideTaskMode: Volatile<'separate' | 'reuse'>
 }
 
 export const Config = z.object({
   triggerMode: z.union(['auto', 'contextmenu', 'both']).default('auto').volatile(),
+  toolbarPlacement: z.union(['above', 'below']).default('above').volatile(),
   shortcut: z.boolean().default(false).volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
 })

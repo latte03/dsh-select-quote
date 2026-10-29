@@ -11,11 +11,13 @@ describe('normalizeConfig', () => {
   it('keeps known values and each field independently', () => {
     expect(normalizeConfig({ triggerMode: 'both' })).toEqual({
       triggerMode: 'both',
+      toolbarPlacement: 'above',
       shortcut: false,
       sideTaskMode: 'separate',
     })
     expect(normalizeConfig({ shortcut: true })).toEqual({
       triggerMode: 'auto',
+      toolbarPlacement: 'above',
       shortcut: true,
       sideTaskMode: 'separate',
     })
@@ -24,6 +26,11 @@ describe('normalizeConfig', () => {
   it('accepts both side-task modes and rejects unknown ones', () => {
     expect(normalizeConfig({ sideTaskMode: 'reuse' }).sideTaskMode).toBe('reuse')
     expect(normalizeConfig({ sideTaskMode: 'shared' }).sideTaskMode).toBe('separate')
+  })
+
+  it('accepts both toolbar sides and rejects unknown ones', () => {
+    expect(normalizeConfig({ toolbarPlacement: 'below' }).toolbarPlacement).toBe('below')
+    expect(normalizeConfig({ toolbarPlacement: 'left' }).toolbarPlacement).toBe('above')
   })
 })
 

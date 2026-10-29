@@ -8,23 +8,29 @@
  * collapse to the same defaults.
  *
  * `triggerMode` gates entry points; `shortcut` belongs to the keyboard entry.
- * Only volatile fields reach this store — that is also why every Host field is
- * declared `.volatile()`.
+ * `toolbarPlacement` picks the side of the selected text the auto toolbar hangs
+ * on. Only volatile fields reach this store — that is also why every Host field
+ * is declared `.volatile()`.
  */
 
 export type TriggerMode = 'auto' | 'contextmenu' | 'both'
+
+/** Preferred side of the first selected line for the floating toolbar. */
+export type ToolbarPlacement = 'above' | 'below'
 
 /** One side-task child per parent session, or a fresh fork for every question. */
 export type SideTaskMode = 'separate' | 'reuse'
 
 export interface SelectQuoteConfig {
   triggerMode: TriggerMode
+  toolbarPlacement: ToolbarPlacement
   shortcut: boolean
   sideTaskMode: SideTaskMode
 }
 
 export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   triggerMode: 'auto',
+  toolbarPlacement: 'above',
   shortcut: false,
   sideTaskMode: 'separate',
 })
@@ -34,6 +40,8 @@ const TRIGGER_MODES: ReadonlySet<string> = new Set<TriggerMode>([
   'contextmenu',
   'both',
 ])
+
+const TOOLBAR_PLACEMENTS: ReadonlySet<string> = new Set<ToolbarPlacement>(['above', 'below'])
 
 const SIDE_TASK_MODES: ReadonlySet<string> = new Set<SideTaskMode>(['separate', 'reuse'])
 
@@ -52,6 +60,9 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
     triggerMode: TRIGGER_MODES.has(record.triggerMode as string)
       ? (record.triggerMode as TriggerMode)
       : DEFAULT_CONFIG.triggerMode,
+    toolbarPlacement: TOOLBAR_PLACEMENTS.has(record.toolbarPlacement as string)
+      ? (record.toolbarPlacement as ToolbarPlacement)
+      : DEFAULT_CONFIG.toolbarPlacement,
     shortcut:
       typeof record.shortcut === 'boolean' ? record.shortcut : DEFAULT_CONFIG.shortcut,
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
@@ -89,6 +100,7 @@ export function publishConfig(value: unknown): SelectQuoteConfig {
   const next = normalizeConfig(value)
   if (
     next.triggerMode === current.triggerMode &&
+    next.toolbarPlacement === current.toolbarPlacement &&
     next.shortcut === current.shortcut &&
     next.sideTaskMode === current.sideTaskMode
   ) {
