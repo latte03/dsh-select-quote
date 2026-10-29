@@ -92,7 +92,7 @@ export function addToTaskCommand() {
   return {
     id: ADD_TO_TASK_COMMAND_ID,
     label: () => t('menu.addShortcutLabel'),
-    aliases: ['add to task', 'annotate selection'],
+    aliases: ['add annotation', 'annotate selection'],
     defaults: ADD_TO_TASK_DEFAULTS,
     regions: ['page'] as const,
     modals: [],

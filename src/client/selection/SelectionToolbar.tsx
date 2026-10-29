@@ -159,7 +159,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   }, [])
 
   /**
-   * "Add to task" is the commit: the quote is saved immediately, with or
+   * "Add annotation" is the commit: the quote is saved immediately, with or
    * without a comment. The popover only edits that saved entry, so dismissing
    * it (outside click, new selection) can never undo the annotation.
    */

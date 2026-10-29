@@ -74,7 +74,7 @@ export function useSelectionWatcher({
       dragging = true
 
       // Outside click ends the optional comment step, never the annotation:
-      // it was saved the moment "add to task" was pressed. Keep what was typed
+      // it was saved the moment "add annotation" was pressed. Keep what was typed
       // too — only an explicit skip / Escape discards the comment text.
       if (phaseRef.current === 'comment') {
         flushComment()
