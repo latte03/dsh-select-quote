@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.17](https://github.com/latte03/dsh-select-quote/compare/v0.3.16...v0.3.17) (2026-10-29)
+
+### Features
+
+* 划词工具条支持固定显示在选区上方或下方 ([902ccf4](https://github.com/latte03/dsh-select-quote/commit/902ccf412deacea1ce0f45eb54981db505849052))
+* 覆盖宿主全部八种界面语言 ([bddb7ea](https://github.com/latte03/dsh-select-quote/commit/bddb7ea5b3804abb381596531d51a88b44856ae8))
+
 ## [0.3.16](https://github.com/latte03/dsh-select-quote/compare/v0.3.15...v0.3.16) (2026-10-28)
 
 ### Bug Fixes
