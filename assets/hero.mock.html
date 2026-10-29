@@ -1,0 +1,377 @@
+<!--
+  assets/hero.png 的源文件（README 头图）。左侧文案 + 右侧按产品真实设计 token
+  渲染的「主对话 + 侧边子代理」窗口示意。
+
+  渲染：
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless=new --disable-gpu --hide-scrollbars \
+      --force-device-scale-factor=1 --window-size=2560,1350 \
+      --screenshot=assets/hero.png "file://$PWD/assets/hero.mock.html"
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>dsh-select-quote hero</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 2560px; height: 1350px; overflow: hidden; }
+      body {
+        font-family: -apple-system, "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+        color: #191713;
+        background:
+          radial-gradient(1180px 760px at 8% 10%, rgba(255, 205, 155, 0.65), transparent 64%),
+          radial-gradient(1000px 720px at 96% 88%, rgba(170, 205, 190, 0.45), transparent 68%),
+          linear-gradient(152deg, #f7f2e8 0%, #f1eadc 52%, #ece2d2 100%);
+        -webkit-font-smoothing: antialiased;
+      }
+      .grid {
+        position: absolute; inset: 0;
+        background-image: radial-gradient(rgba(58, 46, 32, 0.13) 1.2px, transparent 1.2px);
+        background-size: 40px 40px;
+        -webkit-mask-image: radial-gradient(1700px 1100px at 40% 46%, #000 0%, transparent 78%);
+        mask-image: radial-gradient(1700px 1100px at 40% 46%, #000 0%, transparent 78%);
+      }
+      .halo {
+        position: absolute; width: 1400px; height: 980px; right: -280px; top: -220px;
+        background: radial-gradient(closest-side, rgba(255, 176, 112, 0.34), transparent);
+        filter: blur(10px);
+      }
+      .page {
+        position: relative; display: grid; grid-template-columns: 960px 1300px; gap: 80px;
+        align-items: center; height: 100%; padding: 110px;
+      }
+
+      /* ---------- left copy ---------- */
+      .kicker {
+        display: flex; align-items: center; gap: 18px; color: #b4491f;
+        font-size: 22px; font-weight: 700; letter-spacing: 0.24em;
+      }
+      .kicker::before {
+        content: ""; width: 46px; height: 3px; border-radius: 3px;
+        background: linear-gradient(90deg, #c7522a, #e0a03a);
+      }
+      h1 {
+        margin-top: 32px; font-size: 110px; line-height: 1.04; font-weight: 800;
+        letter-spacing: -0.045em; white-space: nowrap; color: #191713;
+      }
+      .subtitle {
+        margin-top: 36px; max-width: 960px; color: #5d564a;
+        font-size: 32px; line-height: 1.66; letter-spacing: 0.005em;
+      }
+      .subtitle b { color: #191713; font-weight: 700; }
+      .bar { margin-top: 48px; display: flex; gap: 5px; width: 900px; height: 10px; }
+      .bar span { flex: 1; border-radius: 999px; }
+      .bar .b1 { background: #c7522a; }
+      .bar .b2 { background: #e0a03a; }
+      .bar .b3 { background: #7c9a76; }
+      .bar .b4 { background: #3f7f7a; }
+      .legend {
+        margin-top: 18px; display: flex; gap: 32px; color: #4f483c;
+        font-size: 23px; font-weight: 600;
+      }
+      .legend i {
+        display: inline-block; width: 14px; height: 14px; border-radius: 4px;
+        margin-right: 10px; vertical-align: -1px;
+      }
+      .chips { margin-top: 46px; display: flex; flex-wrap: wrap; gap: 15px; width: 660px; }
+      .chip {
+        padding: 14px 25px; border: 1px solid rgba(25, 23, 19, 0.18);
+        border-radius: 999px; background: rgba(255, 255, 255, 0.55);
+        color: #3b372f; font-size: 22px; font-weight: 600; white-space: nowrap;
+      }
+      .chip.hot {
+        border-color: transparent;
+        background: #191713; color: #f7f2e8;
+      }
+      .chip.hot.alt { background: #c7522a; color: #fff7ec; }
+
+      /* ---------- app window ---------- */
+      .shotWrap { position: relative; justify-self: end; width: 1300px; }
+      .shotWrap::before {
+        content: ""; position: absolute; inset: -46px -38px -52px -34px; border-radius: 52px;
+        background: radial-gradient(closest-side, rgba(199, 82, 42, 0.22), transparent 72%);
+        filter: blur(18px);
+      }
+      .window {
+        position: relative; width: 1300px; height: 850px; border-radius: 26px;
+        border: 1px solid rgba(25, 23, 19, 0.16); overflow: hidden;
+        background: #ffffff; color: #0f1115;
+        box-shadow: 0 44px 100px rgba(84, 58, 34, 0.28), 0 2px 0 rgba(255, 255, 255, 0.8) inset;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+        font-size: 14px; line-height: 22px; -webkit-font-smoothing: antialiased;
+      }
+      .titlebar {
+        display: flex; align-items: center; gap: 11px; height: 52px; padding: 0 22px;
+        background: linear-gradient(180deg, #f9fbfe, #f2f6fb);
+        border-bottom: 1px solid #e6ecf5;
+      }
+      .dot { width: 12px; height: 12px; border-radius: 50%; }
+      .dot.r { background: #ff6b6b; } .dot.y { background: #ffd166; } .dot.g { background: #4ade80; }
+      .titlebar span { margin-left: 8px; color: #6b7c93; font-size: 13px; letter-spacing: 0.02em; }
+      .titlebar .agent-count {
+        margin-left: auto; margin-right: 0; display: inline-flex; align-items: center; gap: 6px;
+        color: #4176e6; font-size: 12px; background: #eef4ff; border: .5px solid #d7e5ff;
+        padding: 4px 10px; border-radius: 999px;
+      }
+      .app-body { display: flex; height: 798px; }
+
+      /* ---------- main chat ---------- */
+      .chat { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 26px 34px 22px; }
+      .stream { width: 664px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+      .status { display: flex; align-items: center; gap: 8px; color: #81858c; font-size: 12px; line-height: 18px; }
+      .status .n {
+        display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
+        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 6px; font-size: 11px; color: #61666b;
+      }
+      .msg p { margin: 9px 0 0; color: #0f1115; }
+      .bubble {
+        max-width: 78%; padding: 10px 16px; border-radius: 22px; background: #edf3fe;
+        color: #0f1115; line-height: 22px;
+      }
+      .turn-user { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+      .mark {
+        position: relative; background: #eaf3ff; border-radius: 2px;
+        text-decoration: underline dashed #3b82f6; text-decoration-thickness: 2px;
+        text-underline-offset: 2px;
+      }
+      .mark::after {
+        content: "1"; position: absolute; bottom: 8px; left: 100%;
+        display: grid; place-items: center; min-width: 15px; height: 15px;
+        margin-left: 2px; padding: 0 3px; border-radius: 999px;
+        background: #3b82f6; color: #fff; font-size: 10px; font-weight: 600;
+        line-height: 1; pointer-events: none;
+      }
+      .summary {
+        display: flex; align-items: center; gap: 10px; width: 170px; padding: 8px 10px;
+        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 18px; background: #fff;
+      }
+      .summary-icon {
+        flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+        background: #f5f5f5; color: #4176e6; font-size: 13px; font-weight: 600;
+      }
+      .summary-title { font-size: 14px; font-weight: 500; line-height: 20px; }
+      .summary-hint { font-size: 12px; line-height: 18px; color: #81858c; }
+      .chip-ref {
+        display: inline-flex; align-items: center; margin: 0 2px; padding: 0 7px;
+        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 6px; background: #f5f5f5;
+        color: #4176e6; font-size: 12px; line-height: 19px; vertical-align: baseline;
+      }
+      .main-composer {
+        width: 664px; margin: auto auto 0; padding: 10px 14px 10px;
+        border-radius: 20px; background: #fff;
+        box-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05);
+      }
+      .main-editor { color: #0f1115; min-height: 22px; }
+      .main-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+      .tools, .trailing { display: flex; align-items: center; gap: 10px; }
+      .iconbtn {
+        width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+        color: #61666b; border: .5px solid rgba(0, 0, 0, 0.10); font-size: 13px;
+      }
+      .mode {
+        display: inline-flex; align-items: center; gap: 5px; color: #dd8629; font-size: 12px;
+        padding: 3px 9px; border-radius: 999px; background: rgba(247, 173, 49, 0.10);
+      }
+      .picker { display: inline-flex; align-items: center; gap: 6px; color: #61666b; font-size: 12px; }
+      .picker .pdot { width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, #4176e6, #7aa7ff); }
+      .send {
+        width: 30px; height: 30px; border-radius: 999px; background: #0f1115; color: #fff;
+        display: grid; place-items: center; font-size: 15px;
+      }
+
+      /* ---------- side task panel ---------- */
+      .sidebar {
+        width: 440px; flex: none; display: flex; flex-direction: column;
+        background: #fbfcfe; border-left: 1px solid #e6ecf5;
+      }
+      .side-head {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+        padding: 16px 18px 14px; border-bottom: 1px solid #eef2f8;
+      }
+      .side-copy { min-width: 0; }
+      .side-tag {
+        display: inline-flex; align-items: center; gap: 6px; color: #2f6fed; font-size: 11px;
+        font-weight: 600; letter-spacing: 0.04em; background: #eaf1ff;
+        border: .5px solid #d7e5ff; border-radius: 999px; padding: 3px 9px;
+      }
+      .side-title {
+        margin-top: 8px; font-size: 13px; font-weight: 600; line-height: 20px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .side-sub { margin-top: 2px; color: #81858c; font-size: 11px; line-height: 16px; }
+      .side-close {
+        flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+        color: #81858c; border: .5px solid rgba(0, 0, 0, 0.08);
+      }
+      .side-body {
+        flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 16px 16px 8px; overflow: hidden;
+      }
+      .quote-card {
+        display: flex; gap: 10px; padding: 10px 11px; background: #fff;
+        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 14px;
+      }
+      .quote-badge {
+        flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center;
+        background: #eef4ff; color: #4176e6; font-size: 12px; font-weight: 600;
+      }
+      .quote-label { color: #81858c; font-size: 11px; line-height: 16px; }
+      .quote-text { color: #0f1115; font-size: 12.5px; line-height: 19px; margin-top: 2px; }
+      .side-user {
+        align-self: flex-end; max-width: 92%; padding: 9px 13px; border-radius: 18px;
+        background: #edf3fe; font-size: 13px; line-height: 20px;
+      }
+      .side-answer { font-size: 13px; line-height: 21px; color: #0f1115; }
+      .side-answer p + p { margin-top: 8px; }
+      .side-meta {
+        display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+        color: #81858c; font-size: 11px;
+      }
+      .side-meta .mdot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; }
+      .side-composer {
+        margin: 0 14px 14px; padding: 10px 11px 9px; background: #fff; border-radius: 18px;
+        box-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05);
+      }
+      .side-editor { color: #9aa0a8; font-size: 12.5px; line-height: 19px; min-height: 19px; }
+      .side-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+      .side-picker {
+        display: inline-flex; align-items: center; gap: 5px; color: #61666b; font-size: 11.5px;
+      }
+      .side-picker .pdot { width: 11px; height: 11px; border-radius: 50%; background: linear-gradient(135deg, #4176e6, #7aa7ff); }
+      .side-send {
+        width: 26px; height: 26px; border-radius: 999px; background: #0f1115; color: #fff;
+        display: grid; place-items: center; font-size: 13px;
+      }
+
+      .badge {
+        position: absolute; right: 64px; bottom: 46px; display: flex; align-items: center; gap: 14px;
+        color: #7a7264; font-size: 21px; letter-spacing: 0.04em;
+      }
+      .badge b {
+        color: #191713; font-weight: 700; padding: 9px 16px;
+        border: 1px solid rgba(25, 23, 19, 0.18); border-radius: 999px;
+        background: rgba(255, 255, 255, 0.55);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid"></div>
+    <div class="halo"></div>
+    <div class="page">
+      <main>
+        <div class="kicker">DEEPSEEK HARNESS PLUGIN</div>
+        <h1>dsh-select-quote</h1>
+        <p class="subtitle">
+          划词加批注：选中的原文连同评论随下一条消息交给模型，<br />
+          <b>正文留下标记，也可以就任意一段原文在侧边开启子代理对话。</b>
+        </p>
+        <div class="bar" aria-hidden="true">
+          <span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span>
+        </div>
+        <div class="legend">
+          <span><i style="background:#c7522a"></i>选中原文</span>
+          <span><i style="background:#e0a03a"></i>批注评论</span>
+          <span><i style="background:#7c9a76"></i>模型回指</span>
+          <span><i style="background:#3f7f7a"></i>侧边子代理</span>
+        </div>
+        <div class="chips">
+          <span class="chip hot">划词工具条</span>
+          <span class="chip">右键菜单</span>
+          <span class="chip">快捷键</span>
+          <span class="chip">批注摘要</span>
+          <span class="chip">正文标记</span>
+          <span class="chip">模型回指</span>
+          <span class="chip hot alt">侧边子代理</span>
+          <span class="chip">八种语言</span>
+        </div>
+      </main>
+
+      <div class="shotWrap">
+        <div class="window">
+          <div class="titlebar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span>dsh-select-quote · 对话</span>
+            <span class="agent-count">2 个子智能体</span>
+          </div>
+          <div class="app-body">
+            <div class="chat">
+              <div class="stream">
+                <div class="turn-user">
+                  <div class="bubble">批注是怎么跟着消息发给模型的？</div>
+                </div>
+                <div class="msg">
+                  <div class="status"><span class="n">1</span> 已处理</div>
+                  <p><span class="mark">选中的原文和评论会随下一条消息交给模型</span></p>
+                  <p>正文里只留下标记。</p>
+                </div>
+                <div class="turn-user">
+                  <div class="summary">
+                    <div class="summary-icon">1</div>
+                    <div>
+                      <div class="summary-title">1 条批注</div>
+                      <div class="summary-hint">悬停查看批注</div>
+                    </div>
+                  </div>
+                  <div class="bubble">那模型怎么知道说的是哪一段？</div>
+                </div>
+                <div class="msg">
+                  <div class="status"><span class="n">1</span> 已处理</div>
+                  <p>模型不需要重复原文，只要在回答里标出它指的是哪一段：<span class="chip-ref">批注 1</span></p>
+                  <p>标记留在原文里，摘要和评论跟着消息走。</p>
+                </div>
+              </div>
+              <div class="main-composer">
+                <div class="main-editor">那评论为空时还会保留批注吗？</div>
+                <div class="main-row">
+                  <div class="tools">
+                    <span class="iconbtn">＋</span>
+                    <span class="iconbtn">◌</span>
+                    <span class="mode">△ 完全访问</span>
+                  </div>
+                  <div class="trailing">
+                    <span class="picker"><span class="pdot"></span>DeepSeek-V4-Flash⌄</span>
+                    <span class="send">↑</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside class="sidebar">
+              <div class="side-head">
+                <div class="side-copy">
+                  <span class="side-tag">◈ 侧边子代理</span>
+                  <div class="side-title">在侧边提问 · 原文怎么发送</div>
+                  <div class="side-sub">继承主会话上下文 · 独立模型</div>
+                </div>
+                <span class="side-close">×</span>
+              </div>
+              <div class="side-body">
+                <div class="quote-card">
+                  <div class="quote-badge">1</div>
+                  <div>
+                    <div class="quote-label">选中的文本</div>
+                    <div class="quote-text">选中的原文和评论会随下一条消息交给模型</div>
+                  </div>
+                </div>
+                <div class="side-user">这块原文和评论，具体是怎么一起发出去的？</div>
+                <div class="side-answer">
+                  <p>它们会随下一条消息发送：原文与评论进入协议块，正文只剩一个 <span class="chip-ref">批注 1</span> 标记。</p>
+                  <p>我这边是 fork 出来的子代理，回答不会插回主会话。</p>
+                  <div class="side-meta"><span class="mdot"></span>子代理 · DeepSeek-V4-Flash</div>
+                </div>
+              </div>
+              <div class="side-composer">
+                <div class="side-editor">就这段原文继续追问…</div>
+                <div class="side-row">
+                  <span class="side-picker"><span class="pdot"></span>DeepSeek-V4-Flash⌄</span>
+                  <span class="side-send">↑</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="badge"><b>v0.3.16</b><span>DeepSeek Harness · web plugin</span></div>
+  </body>
+</html>
