@@ -20,8 +20,8 @@ import { composeQuotedMessage, previewTitle } from './protocol/annotation-protoc
 import {
   bindLocale,
   DICTIONARIES,
-  LANGUAGE_RU,
   LOCALE_NS,
+  OPTIONAL_LANGUAGES,
   SHIPPED_DICTS,
   subscribeLocale,
   t,
@@ -92,23 +92,32 @@ export function apply(ctx: Context): void {
   // Dictionary registrations are owned effects; the fallback chain must end at
   // `en`, and both shipped host locales are required in one typed call.
   //
-  // The language definition itself belongs to the Host: dsh 0.2.2-alpha.2 ships
-  // a built-in catalog (ja/es/fr/de/ru/pt), and `addLanguage` throws on a
+  // The language definitions belong to the Host: dsh 0.2.2-alpha.2 ships a
+  // built-in catalog (ja/es/fr/de/ru/pt), and `addLanguage` throws on a
   // duplicate id — an unconditional call turns this plugin's whole fiber into
   // `failed`, which the web boot audit reports as "1 entry did not activate"
-  // and blocks the GUI. Add `ru` only where the Host does not offer it.
-  const hostLanguageIds = ctx.locale.getSnapshot().locales.map((language) => language.id)
-  if (!hostLanguageIds.includes(LANGUAGE_RU.id)) {
-    ctx.effect(() => ctx.locale.addLanguage(LANGUAGE_RU), 'dsh-select-quote: ru language')
+  // and blocks the GUI. Add a pack only where the Host does not offer it;
+  // dictionaries are registered either way.
+  const hostLanguageIds = new Set(
+    ctx.locale.getSnapshot().locales.map((language) => language.id.toLowerCase()),
+  )
+  for (const language of OPTIONAL_LANGUAGES) {
+    if (hostLanguageIds.has(language.id)) continue
+    ctx.effect(
+      () => ctx.locale.addLanguage(language),
+      `dsh-select-quote: ${language.id} language`,
+    )
   }
   ctx.effect(
     () => ctx.locale.register(LOCALE_NS, SHIPPED_DICTS),
     'dsh-select-quote: dictionaries (zh, en)',
   )
-  ctx.effect(
-    () => ctx.locale.register(LOCALE_NS, LANGUAGE_RU.id, DICTIONARIES.ru),
-    'dsh-select-quote: dictionary (ru)',
-  )
+  for (const language of OPTIONAL_LANGUAGES) {
+    ctx.effect(
+      () => ctx.locale.register(LOCALE_NS, language.id, DICTIONARIES[language.id]),
+      `dsh-select-quote: dictionary (${language.id})`,
+    )
+  }
   bindLocale({
     translate: ctx.locale.bind(LOCALE_NS),
     getActive: () => ctx.locale.getLocale().active,

@@ -65,7 +65,7 @@ Each item contains text selected from an earlier message ...
 | `ctx.sessions` | 客户端服务 | 读会话摘要的 `origin`，让侧边子代理会话不接管主会话绑定（见机制 16） |
 | `ctx.modelDirectories` | 客户端服务（可选） | 读主会话的模型目录快照，给侧边提问的模型 chip 提供分组、搜索与推理等级；只读，不调用 `select()`（见机制 16） |
 | `remote.selectQuoteSideTask` | Typert Remote | Host 服务 `SelectQuoteSideTask` 经 `exports["./typert"]` 清单自动注册；客户端 `ctx.remote.$mount` 后按命名空间调用 `create(agentId, { prompt, label })`，返回 `childId`（见机制 16） |
-| `ctx.locale` | 语言服务 | `addLanguage(ru)` + `register('select-quote', {zh,en})` + `register('select-quote','ru',…)` + `bind('select-quote')`，见下面第 10 节 |
+| `ctx.locale` | 语言服务 | 宿主缺 `ja/es/fr/de/ru/pt` 时先 `addLanguage`，再 `register('select-quote', {zh,en})` + 六种语言包各一次三参 `register` + `bind('select-quote')`，见下面第 10 节 |
 
 不再注册 `select-quote` Chat 节点，也不再注册 Conversation Definition——摘要块内联在 `user` 节点里，原因见下面第 4 节。
 
@@ -159,9 +159,9 @@ Each item contains text selected from an earlier message ...
 
 | 调用 | 用途 |
 |---|---|
-| `register(ns, {zh, en})` | 一次注册全部内置语言的词典；宿主强制要求两种都在 |
-| `addLanguage({id:'ru', label:'Русский', fallback:'en'})` | 把非内置语言加进设置里的候选；回退链必须以 `en` 结束，否则注册即抛 |
-| `register(ns, 'ru', dict)` | 三参形式，给外部语言补词典 |
+| `register(ns, {zh, en})` | 一次注册两种基线语言的词典；宿主强制要求两种都在 |
+| `addLanguage({id, label, fallback})` | 把宿主没有的语言包加进设置里的候选；回退链必须以 `en` 结束，否则注册即抛。0.2.2-alpha.2 起宿主自带 `ja/es/fr/de/ru/pt`，对已占用 id 调用会抛，所以先查 `getSnapshot().locales` |
+| `register(ns, id, dict)` | 三参形式，给语言包补词典；与语言是否由插件添加无关，宿主不校验词典语言是否在目录里 |
 | `bind(ns)` | 拿到稳定的 `t(key, params)`，每次调用都按当前 active 语言解析 |
 | `subscribe(fn)` | 语言或词典变化时通知（注册本身也会推进 `revision`） |
 
@@ -169,7 +169,7 @@ Each item contains text selected from an earlier message ...
 
 **即时切换**：React 侧经 `useLocale()`（`useSyncExternalStore` 挂在 `subscribe` 与 `revision` 上）重渲染；chip 和正文 mark 是直接写 DOM 的，所以在 `apply()` 里订阅一次 `refreshDirectiveChips()` / `refreshAnnotationMarkLabels()` 重写文案。写 DOM 的订阅不会触发第 9 节那个循环——新文本不含指令字面量，`decorateTextNode()` 在入口就返回。
 
-**复数**：宿主的词典是「键 → 单个模板字符串」，没有复数概念。带 `{count}` 的文案因此拆成 `key.one` / `key.few` / `key.many` / `key.other`，由 `i18n.ts` 按语言挑形式，挑不到就退 `key.other`。`pnpm run verify` 按复数组比对三种语言：组必须都存在，且**每组必须有 `.other`**，占位符名也不允许漂移——漏一个键会渲染出键名本身，漏一个占位符会把 `{count}` 直接印在界面上。
+**复数**：宿主的词典是「键 → 单个模板字符串」，没有复数概念。带 `{count}` 的文案因此拆成 `key.one` / `key.few` / `key.many` / `key.other`，由 `i18n.ts` 按语言挑形式，挑不到就退 `key.other`。`i18n.ts` 的 `pluralForm()` 只区分两类：`ru` 走 one/few/many，`en/es/fr/de/pt` 走 one/other，`zh/ja` 及其他语言只用 `.other`。`pnpm run verify` 按复数组比对八种语言：组必须都存在，且**每组必须有 `.other`**，占位符名也不允许漂移——漏一个键会渲染出键名本身，漏一个占位符会把 `{count}` 直接印在界面上。
 
 **11. 待发批注的持久化**
 
@@ -200,7 +200,7 @@ Each item contains text selected from an earlier message ...
 
 | 件 | 作用 |
 |---|---|
-| `locale/{en,zh,ru}.json` | 三份展示文案，`en` 是发现入口；与界面文案（`i18n.ts`）是两套东西，各管各的 |
+| `locale/{en,zh,ja,es,fr,de,ru,pt}.json` | 八份展示文案，`en` 是发现入口；与界面文案（`i18n.ts`）是两套东西，各管各的 |
 | `icon.svg` | 36×36 对话气泡 + 加号，B2FFDA → 0099FF 渐变、透明底（面板自供背景）；≤256 KiB、自包含（data URL 里没有网络可谈，外链一律无效） |
 | `package.json` | `exports` 加 `./locale/*.json` 与 `./icon`；`files` 加 `locale/*.json` 与 `icon.svg`——漏了 `files`，npm 包里的插件页就只剩默认插画 |
 
@@ -324,7 +324,7 @@ src/client/transcript/quote-registry.ts # 用户消息 flow key → 解析后的
 src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡：委托宿主 UserMessageNodeView，只改文本块并前置摘要块
 src/client/ui/AnnotationCardView.tsx  # 摘要块与悬停列表面板（portal 到 body、内联编辑）
 src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus）
-src/client/i18n.ts                   # 三份词典（zh / en / ru）、复数形式挑选、把 t() 转给宿主 bind 结果
+src/client/i18n.ts                   # 八份词典（zh/en + ja/es/fr/de/ru/pt）、语言包清单、复数形式挑选、把 t() 转给宿主 bind 结果
 src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
 src/client/styles.ts               # 全部 CSS，四层：token / 原子 / 组件 / 宿主（模板字符串注入）
 src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId、selection 快捷键桥、sideTask、子代理会话判定）
@@ -334,12 +334,12 @@ tsdown.host.config.ts              # Host 半构建配置（ESM / Node，bundle 
 tsdown.typert.config.ts            # Typert 清单构建配置（bundle zod，避免宿主解析依赖）
 scripts/sync-desktop.mjs           # 把 lib/ 写进桌面 profile 已安装副本，借宿主热更新（--watch 常驻）
 scripts/dev-desktop.mjs            # 拉起 build --watch + sync --watch 两个子进程，任一退出就收摊
-scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED = 上面 10 项，另查配置链路、三种语言词典、包展示元信息与发货清单）
+scripts/verify-bundle.mjs          # 无头 bundle 校验（EXPECTED 贡献项、配置链路、八种语言词典与占位符守恒、宿主已内置语言包时不重复 addLanguage、包展示元信息与发货清单）
 cordis.patch.yml                   # bundle 加载层（按包名，随 npm 包发布）
 dev.patch.example.yml              # 本地 --patch 开发层模板（复制为 gitignored 的 dev.patch.yml）
 docs/internals.md                  # 本文档（现存机制；历史记录在 docs/archive/）
 docs/archive/                      # 历史调查记录（只读存档，结论已并入正文）
-locale/                            # 插件页展示元信息（en/zh/ru 的 meta.title / meta.description，宿主不激活插件即可读）
+locale/                            # 插件页展示元信息（en/zh/ja/es/fr/de/ru/pt 的 meta.title / meta.description，宿主不激活插件即可读）
 icon.svg                           # 插件页图标（36×36 气泡 + 加号，随 npm 包发布）
 lib/                               # 构建产物（已提交，运行时直接读它）
 ```
@@ -353,7 +353,7 @@ lib/                               # 构建产物（已提交，运行时直接�
 - 深色属性 `data-ds-dark-theme` 由 `dsh-client-ui-layout` 挂在 `body`；
 - 槽位名 `shell.overlay` / `conversation.input.overlay` / `conversation.chat.node` 及其 props（`useInput`、`inputActions.setDraft`）；
 - `ctx.slots.entries('conversation.chat.node')` 可枚举全部条目（包括被遮蔽的宿主条目）；宿主把同一个 `UserMessageNodeView` 同时注册在 `user` 与 `steering` 两个 key 下，`component.type.name` 是 `UserMessageNodeView`、`options` 只有 `key`（没有 `priority`）——插件自己的注册项要用组件身份排除，不能靠 `priority` 值（解析时还要按 key 过滤，两个 key 的宿主项不能互相借用）；宿主改名时只有唯一的非自己候选才可退用，多候选必须走纯文本回退。委托渲染时要把 kit 里的 `renderFactorySlot`、`loadImage` 与 hooks 原样透传，并给注册项声明 `locale: 'chat'`——否则宿主的复制/已复制文案拿不到词典。`conversation.chat.user.content` 工厂（子槽 `conversation.chat.user.images` 渲染图片）由宿主视图自己调用，插件不再直接碰；**`renderMessageImages` 不是 0.2.1-rc.2 的宿主 prop**；
-- `ctx.locale` 服务存在；`register` 两参形式要求 `zh` / `en` 齐全，`addLanguage` 的回退链必须终止于 `en`。**语言目录从 0.2.2-alpha.2 起归宿主**：`dsh-client-locale` 在构造时预置 `ja` / `es` / `fr` / `de` / `ru` / `pt`（各带 `fallback: "en"`），`addLanguage` 对已占用的 id **直接抛错**（`locale "ru" is already registered`）。插件对 `ru` 是「补语言 + 注册词典」：先用 `ctx.locale.getSnapshot().locales`（`{id,label,fallback}[]`）判断宿主是否已有该 id，没有才 `addLanguage`，词典注册与本判断无关、照常执行。漏掉这一步会让整个 fiber 变 `failed`，Web 端表现为启动页 `Failed to load plugins` + `web boot: 1 entry did not activate`（0.2.2-alpha.2 实测，2026-10-29）；
+- `ctx.locale` 服务存在；`register` 两参形式要求 `zh` / `en` 齐全，`addLanguage` 的回退链必须终止于 `en`。**语言目录从 0.2.2-alpha.2 起归宿主**：`dsh-client-locale` 在构造时预置 `ja` / `es` / `fr` / `de` / `ru` / `pt`（各带 `fallback: "en"`），`addLanguage` 对已占用的 id **直接抛错**（`locale "ru" is already registered`）。插件对这六个语言包是「缺则补语言 + 一律注册词典」：先用 `ctx.locale.getSnapshot().locales`（`{id,label,fallback}[]`）判断宿主是否已有该 id，没有才 `addLanguage`（id 与 label 跟宿主一致，旧宿主升级后设置项不会变成两条），词典注册与本判断无关、照常执行。漏掉这一步会让整个 fiber 变 `failed`，Web 端表现为启动页 `Failed to load plugins` + `web boot: 1 entry did not activate`（0.2.2-alpha.2 实测，2026-10-29）；
 - `ctx.configForms`（`dsh-client-ui-settings`）提供 `get(<Loader 行 id>)`、`whileServed(namespaces, register)` 与表单的 `getSnapshot` / `subscribe` / `set` / `unset` / `mutate`。插件页有两个配置槽：`plugins.row.config`（key 为 `<包名>#<行 id>`，页面以 `view: 'page'` 收到 `{ form: { state, mutate } }`）和 `plugins.bundle.config`（key 为包名，渲染在**包页外层**的描述与行列表之间，只传 `view: 'page'`，**不传 form**——组件要自己 `configForms.get(<行 id>)`，并可用 slot 注册项的 `inject` 面把控制器注入 props）。带设置区的 `dsh.client.inject` 需要列出 `@deepseek-ai/dsh-client-locale`、`@deepseek-ai/dsh-client-ui-settings`、`@deepseek-ai/dsh-client-ui-plugin-manager`、`@deepseek-ai/dsh-api-remotes`；
 - `ctx.shortcuts`（`@deepseek-ai/dsh-client-shortcuts`，可选注入）：`register({id,label,aliases,defaults,regions,modals,resolve})` 会为全部 runtime/platform 预检默认值并在撞键、非法 Web 组合、保留键时抛错（必须 try/catch）；默认值按 `desktop:macos|windows|linux` / `web:macos|windows|linux` 给，Web Linux 只接受 `primary+Slash`、`primary+shift+Comma`、`primary+shift+Period`，其中 `primary+Slash` 被宿主的 `shortcuts.open` 占用；`resolve` 返回 `handled`（带 `run`）/ `blocked`（带 `reason`）/ `pass`。`ctx.shortcuts.catalog` 是当前窗口所有命令的生效行（`id` / `label` / `keys` / `issue` / `conflicts`，`keys` 已是平台化 keycap 文案），订阅它可在宿主改键或冲突后同步 UI。`dsh.client.inject` 里也要列出它，缺服务时本插件只少快捷键入口；
 - **Typert 远程（0.2.1-rc.3 复核）**：`package.json` 的 `exports["./typert"]` 清单会被 `dsh-typert-loader` 自动注册；`wire: 'agentId'` 的 lookup 经 session controller 解析，子代理拥有的会话会被拒绝（`owned by subagent routing`）。服务实例必须有**可见的** `typertRemote`（`{service, serviceKey, namespace}`），类原型上挂 `@deepseek-ai/dsh-typert-protocol/remote-methods` 标记（`{version: 1, methods: [{method, invocation: {kind: 'direct'}}]}`），否则网关报 `gateway/binding-invalid`；客户端 `ctx.remote.$mount(contribution)` 后以动态服务 `remote.<namespace>` 调用，回包是 `{ok: true, value}` / `{ok: false, error}`；`direct` 调用传完整参数（`agentId` + request）；

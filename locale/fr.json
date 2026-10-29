@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Annotations de sélection",
+    "description": "Citez le texte sélectionné de la conversation dans votre prochain message : la sélection reste marquée dans l’original et le modèle répond à chaque passage."
+  }
+}

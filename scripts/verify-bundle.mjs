@@ -38,14 +38,27 @@ const EXPECTED = [
   { kind: 'slots.register', label: 'conversation.chat.node / user' },
   { kind: 'slots.register', label: 'conversation.chat.node / steering' },
   { kind: 'slots.register', label: 'plugins.bundle.config / dsh-select-quote' },
+  { kind: 'locale.language', label: 'ja' },
+  { kind: 'locale.language', label: 'es' },
+  { kind: 'locale.language', label: 'fr' },
+  { kind: 'locale.language', label: 'de' },
   { kind: 'locale.language', label: 'ru' },
+  { kind: 'locale.language', label: 'pt' },
   { kind: 'locale.register', label: 'select-quote (en, zh)' },
+  { kind: 'locale.register', label: 'select-quote (ja)' },
+  { kind: 'locale.register', label: 'select-quote (es)' },
+  { kind: 'locale.register', label: 'select-quote (fr)' },
+  { kind: 'locale.register', label: 'select-quote (de)' },
   { kind: 'locale.register', label: 'select-quote (ru)' },
+  { kind: 'locale.register', label: 'select-quote (pt)' },
   { kind: 'locale.bind', label: 'select-quote' },
 ]
 
-/** Languages the host ships; a namespace must carry both in one typed call. */
+/** Baseline languages every host ships; both must land in one typed call. */
 const SHIPPED_LOCALES = ['en', 'zh']
+
+/** Language packs the host ships from 0.2.2-alpha.2 on, in its own order. */
+const HOST_LANGUAGE_PACKS = ['ja', 'es', 'fr', 'de', 'ru', 'pt']
 
 const SEEDS = new Set([
   'react',
@@ -307,7 +320,16 @@ const MAGIC_BYTES = [
   [Buffer.from([0xff, 0xd8, 0xff]), 'JPEG'],
   [Buffer.from('RIFF', 'ascii'), 'WebP'],
 ]
-const LOCALE_FILES = ['en.json', 'zh.json', 'ru.json']
+const LOCALE_FILES = [
+  'en.json',
+  'zh.json',
+  'ja.json',
+  'es.json',
+  'fr.json',
+  'de.json',
+  'ru.json',
+  'pt.json',
+]
 
 /**
  * Package display metadata (locale + icon), checked the way the host reads it.
@@ -449,7 +471,12 @@ function checkPackageMeta() {
       'icon.svg',
       'locale/en.json',
       'locale/zh.json',
+      'locale/ja.json',
+      'locale/es.json',
+      'locale/fr.json',
+      'locale/de.json',
       'locale/ru.json',
+      'locale/pt.json',
     ]) {
       if (!packed.includes(path)) problems.push(`npm pack would not ship ${path}`)
     }
@@ -997,7 +1024,12 @@ function loadFactory(code, storage) {
 function mockContext(record, options = {}) {
   /** Registered copy: namespace -> locale -> key -> template. */
   const dicts = new Map()
-  const snapshot = { active: 'en', locales: [{ id: 'en', label: 'English' }], revision: 0 }
+  const hostLanguages = options.hostLocales ?? ['en']
+  const snapshot = {
+    active: 'en',
+    locales: hostLanguages.map((id) => ({ id, label: id, fallback: 'en' })),
+    revision: 0,
+  }
   const ctx = {
     effect(callback, label) {
       record.push({ kind: 'effect', label: String(label) })
@@ -1040,6 +1072,11 @@ function mockContext(record, options = {}) {
         if (typeof definition[field] !== 'string' || !definition[field]) {
           throw new Error(`addLanguage: malformed or missing "${field}"`)
         }
+      }
+      // The Host throws on a duplicate id; a silent overwrite would hide the
+      // boot failure this guard exists to prevent.
+      if (snapshot.locales.some((language) => language.id === definition.id)) {
+        throw new Error(`locale "${definition.id}" is already registered`)
       }
       record.push({ kind: 'locale.language', label: definition.id })
       return () => {}
@@ -1853,6 +1890,31 @@ if (degradeRecord.some((entry) => entry.kind === 'shortcuts.register')) {
   degradeProblems.push('a shortcut was registered although no shortcut service is served')
 }
 
+// dsh 0.2.2-alpha.2 already ships every language pack, and `addLanguage`
+// throws on a duplicate id — which fails the whole fiber and blocks the GUI.
+// On that catalog the plugin must only add its dictionaries.
+const hostCatalogRecord = []
+const { ctx: hostCatalogCtx } = mockContext(hostCatalogRecord, {
+  hostLocales: ['zh', 'en', ...HOST_LANGUAGE_PACKS],
+})
+loadModule().apply(hostCatalogCtx)
+const hostCatalogProblems = []
+const readdedLanguages = hostCatalogRecord.filter((entry) => entry.kind === 'locale.language')
+if (readdedLanguages.length > 0) {
+  hostCatalogProblems.push(
+    `the Host already ships [${HOST_LANGUAGE_PACKS.join(', ')}], yet the plugin re-added [${readdedLanguages
+      .map((entry) => entry.label)
+      .join(', ')}]`,
+  )
+}
+const hostRegistrations = hostCatalogRecord.filter((entry) => entry.kind === 'locale.register')
+const wantRegistrations = 1 + HOST_LANGUAGE_PACKS.length
+if (hostRegistrations.length !== wantRegistrations) {
+  hostCatalogProblems.push(
+    `a host-shipped catalog got ${hostRegistrations.length} dictionary registrations, want ${wantRegistrations}`,
+  )
+}
+
 const missing = EXPECTED.filter(
   (expected) => !record.some((entry) => entry.kind === expected.kind && entry.label === expected.label),
 )
@@ -1900,6 +1962,7 @@ if (
   configFixtureProblems.length > 0 ||
   bundleFormProblems.length > 0 ||
   degradeProblems.length > 0 ||
+  hostCatalogProblems.length > 0 ||
   configWiringProblems.length > 0 ||
   configStoreProblems.length > 0 ||
   menuWiringProblems.length > 0 ||
@@ -1925,6 +1988,7 @@ if (
   for (const problem of configFixtureProblems) console.error(`CONFIG FIXTURE: ${problem}`)
   for (const problem of bundleFormProblems) console.error(`BUNDLE FORM: ${problem}`)
   for (const problem of degradeProblems) console.error(`CONFIG FALLBACK: ${problem}`)
+  for (const problem of hostCatalogProblems) console.error(`HOST LOCALE CATALOG: ${problem}`)
   for (const problem of configWiringProblems) console.error(`CONFIG WIRING: ${problem}`)
   for (const problem of configStoreProblems) console.error(`CONFIG STORE: ${problem}`)
   for (const problem of menuWiringProblems) console.error(`MENU WIRING: ${problem}`)
