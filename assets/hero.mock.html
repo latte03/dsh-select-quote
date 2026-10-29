@@ -45,46 +45,36 @@
       /* ---------- left copy ---------- */
       .kicker {
         display: flex; align-items: center; gap: 18px; color: #b4491f;
-        font-size: 22px; font-weight: 700; letter-spacing: 0.24em;
+        font-size: 21px; font-weight: 700; letter-spacing: 0.24em;
       }
       .kicker::before {
-        content: ""; width: 46px; height: 3px; border-radius: 3px;
+        content: ""; width: 44px; height: 3px; border-radius: 3px;
         background: linear-gradient(90deg, #c7522a, #e0a03a);
       }
       h1 {
-        margin-top: 32px; font-size: 110px; line-height: 1.04; font-weight: 800;
+        margin-top: 30px; font-size: 112px; line-height: 1.04; font-weight: 800;
         letter-spacing: -0.045em; white-space: nowrap; color: #191713;
       }
       .subtitle {
-        margin-top: 36px; max-width: 960px; color: #5d564a;
-        font-size: 32px; line-height: 1.66; letter-spacing: 0.005em;
+        margin-top: 32px; max-width: 960px; color: #5d564a;
+        font-size: 33px; line-height: 1.62; letter-spacing: 0.005em;
       }
       .subtitle b { color: #191713; font-weight: 700; }
-      .bar { margin-top: 48px; display: flex; gap: 5px; width: 900px; height: 10px; }
+      .bar {
+        display: flex; gap: 5px; width: 760px; height: 8px; margin-top: 38px;
+      }
       .bar span { flex: 1; border-radius: 999px; }
       .bar .b1 { background: #c7522a; }
       .bar .b2 { background: #e0a03a; }
       .bar .b3 { background: #7c9a76; }
       .bar .b4 { background: #3f7f7a; }
-      .legend {
-        margin-top: 18px; display: flex; gap: 32px; color: #4f483c;
-        font-size: 23px; font-weight: 600;
-      }
-      .legend i {
-        display: inline-block; width: 14px; height: 14px; border-radius: 4px;
-        margin-right: 10px; vertical-align: -1px;
-      }
-      .chips { margin-top: 46px; display: flex; flex-wrap: wrap; gap: 15px; width: 660px; }
+      .chips { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 36px; width: 780px; }
       .chip {
-        padding: 14px 25px; border: 1px solid rgba(25, 23, 19, 0.18);
+        padding: 12px 22px; border: 1px solid rgba(25, 23, 19, 0.18);
         border-radius: 999px; background: rgba(255, 255, 255, 0.55);
-        color: #3b372f; font-size: 22px; font-weight: 600; white-space: nowrap;
+        color: #3b372f; font-size: 20px; font-weight: 600; white-space: nowrap;
       }
-      .chip.hot {
-        border-color: transparent;
-        background: #191713; color: #f7f2e8;
-      }
-      .chip.hot.alt { background: #c7522a; color: #fff7ec; }
+      .chip.hot { border-color: transparent; background: #c7522a; color: #fff7ec; }
 
       /* ---------- app window ---------- */
       .shotWrap { position: relative; justify-self: end; width: 1300px; }
@@ -243,15 +233,6 @@
         display: grid; place-items: center; font-size: 13px;
       }
 
-      .badge {
-        position: absolute; right: 64px; bottom: 46px; display: flex; align-items: center; gap: 14px;
-        color: #7a7264; font-size: 21px; letter-spacing: 0.04em;
-      }
-      .badge b {
-        color: #191713; font-weight: 700; padding: 9px 16px;
-        border: 1px solid rgba(25, 23, 19, 0.18); border-radius: 999px;
-        background: rgba(255, 255, 255, 0.55);
-      }
     </style>
   </head>
   <body>
@@ -262,27 +243,17 @@
         <div class="kicker">DEEPSEEK HARNESS PLUGIN</div>
         <h1>dsh-select-quote</h1>
         <p class="subtitle">
-          划词加批注：选中的原文连同评论随下一条消息交给模型，<br />
-          <b>正文留下标记，也可以就任意一段原文在侧边开启子代理对话。</b>
+          选中原文，批注随消息交给模型。<br />
+          <b>也可以在侧边开启子代理，单独追问。</b>
         </p>
         <div class="bar" aria-hidden="true">
           <span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span>
         </div>
-        <div class="legend">
-          <span><i style="background:#c7522a"></i>选中原文</span>
-          <span><i style="background:#e0a03a"></i>批注评论</span>
-          <span><i style="background:#7c9a76"></i>模型回指</span>
-          <span><i style="background:#3f7f7a"></i>侧边子代理</span>
-        </div>
         <div class="chips">
-          <span class="chip hot">划词工具条</span>
-          <span class="chip">右键菜单</span>
-          <span class="chip">快捷键</span>
-          <span class="chip">批注摘要</span>
+          <span class="chip">划词加批注</span>
           <span class="chip">正文标记</span>
           <span class="chip">模型回指</span>
-          <span class="chip hot alt">侧边子代理</span>
-          <span class="chip">八种语言</span>
+          <span class="chip hot">侧边子代理</span>
         </div>
       </main>
 
@@ -372,6 +343,5 @@
         </div>
       </div>
     </div>
-    <div class="badge"><b>v0.3.16</b><span>DeepSeek Harness · web plugin</span></div>
   </body>
 </html>
