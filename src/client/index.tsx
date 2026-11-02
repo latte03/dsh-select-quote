@@ -26,11 +26,17 @@ import {
   subscribeLocale,
   t,
 } from './i18n.ts'
-import sideTaskRemote from './remote.ts'
+import pluginRemote from './remote.ts'
+import type { TranslateStreamEvent } from '../shared/plugin-remote.ts'
 import { ensureToolbarStyles } from './styles.ts'
 import type { SelectionSnapshot } from './dom/selection.ts'
-import type { ModelChoice } from './model/types.ts'
+import type { ModelChoice, ModelGroup } from './model/types.ts'
 import { runtime } from './runtime.ts'
+import {
+  MAX_TRANSLATE_CHARS,
+  resolveTranslatePrompt,
+  type TranslateLanguage,
+} from './translate.ts'
 import {
   UserMessageDisplay,
   type HostNodeComponent,
@@ -82,6 +88,47 @@ interface SideTaskRemoteApi {
     request: { prompt: string; label?: string; model?: ModelChoice },
   ): Promise<
     | { ok: true; value: { childId: string } }
+    | { ok: false; error: { message: string } }
+  >
+}
+
+/** Shape of the dynamic `remote.selectQuoteTranslate` namespace service. */
+interface TranslateRemoteApi {
+  translate(
+    agentId: string,
+    request: {
+      text: string
+      target: string
+      prompt: string
+      provider?: string
+      model?: string
+    },
+    signal?: AbortSignal,
+  ): AsyncIterable<unknown>
+}
+
+/** The right sidebar's resource entry point. */
+interface SidebarRightApi {
+  openResource(address: string, options: { kind: string }): void
+}
+
+/** The Host-generation model catalog, not tied to one session. */
+interface SessionCatalogApi {
+  modelCatalog(): Promise<
+    | {
+        ok: true
+        value: {
+          groups: readonly {
+            id: string
+            name: string
+            models: readonly {
+              id: string
+              name: string
+              reasoning?: ModelGroup['models'][number]['reasoning']
+            }[]
+          }[]
+        }
+      }
     | { ok: false; error: { message: string } }
   >
 }
@@ -150,6 +197,19 @@ export function apply(ctx: Context): void {
     // section to the row's describe mirror, so an unserved row leaves no
     // half-alive form behind.
     const form = scope.configForms.get(ROW_ID)
+    // The translation language menu lives in the selection overlay, outside the
+    // settings slot, but must persist through the same form so both surfaces
+    // show one value.
+    const setField = (field: string, value: unknown): void => {
+      void form.set(field, value)
+    }
+    runtime.setConfigField = setField
+    scope.effect(
+      () => () => {
+        if (runtime.setConfigField === setField) delete runtime.setConfigField
+      },
+      'dsh-select-quote: config writer',
+    )
     scope.effect(
       () =>
         scope.configForms.whileServed([ROW_ID], () =>
@@ -211,84 +271,179 @@ export function apply(ctx: Context): void {
     )
   })
 
+  // The settings page has no session, so its translation-model picker reads the
+  // Host-generation catalog instead. The namespace is resolved lazily: the
+  // session remote may mount after this plugin activates.
+  ctx.inject(['remote'], (scope) => {
+    runtime.modelCatalog = async () => {
+      const api = scope.get('remote.session') as SessionCatalogApi | undefined
+      if (api === undefined) throw new Error('the model catalog is unavailable')
+      const outcome = await api.modelCatalog()
+      if (!outcome.ok) throw new Error(outcome.error.message)
+      return outcome.value.groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        models: group.models,
+      }))
+    }
+    scope.effect(
+      () => () => {
+        delete runtime.modelCatalog
+      },
+      'dsh-select-quote: global model catalog',
+    )
+  })
+
   /**
-   * Side task: the browser mounts the Host's Remote descriptor group, then a
-   * toolbar click asks the Host to start a fork-backed subagent for the live
-   * session. Only the Host can create one, and only a subagent session carries
-   * `origin: "subagent"` — which is what keeps it out of the ordinary list.
+   * Side task and translation share one Remote descriptor group. The side task
+   * asks the Host to start a fork-backed subagent for the live session; the
+   * translation runs one direct model call with no conversation context. Only a
+   * subagent session carries `origin: "subagent"` — which is what keeps it out
+   * of the ordinary list.
    *
-   * `$mount` installs the namespace as its own dynamic service
-   * (`remote.<namespace>`); the mount callback reads it back by that key, so
-   * the entry point only exists once the namespace is actually callable.
+   * `$mount` installs each namespace as its own dynamic service
+   * (`remote.<namespace>`); the mount callback reads them back by that key, so
+   * each entry point only exists once its namespace is actually callable.
    */
-  ctx.inject(['remote', 'sidebarRight'], (scope) => {
+  ctx.inject(['remote'], (scope) => {
     scope.effect(() => {
       let dispose: (() => Promise<void>) | undefined
       let stopped = false
-      let published:
+      let publishedSide:
         | ((
             snapshot: SelectionSnapshot,
             question: string,
             model: ModelChoice | null,
           ) => Promise<void>)
         | undefined
+      let publishedTranslate:
+        | ((
+            snapshot: SelectionSnapshot,
+            target: TranslateLanguage,
+            signal: AbortSignal,
+            onEvent: (event: TranslateStreamEvent) => void,
+          ) => Promise<void>)
+        | undefined
 
       const publish = (): void => {
         const api = scope.get('remote.selectQuoteSideTask') as SideTaskRemoteApi | undefined
-        if (api === undefined) return
+        // Resolved at publish time: the mount resolves asynchronously, so a
+        // service that activates just after this plugin is already visible.
+        const sidebar = scope.get('sidebarRight') as SidebarRightApi | undefined
+        if (api !== undefined && sidebar !== undefined) {
+          const openSideTask = async (
+            snapshot: SelectionSnapshot,
+            question: string,
+            model: ModelChoice | null,
+          ): Promise<void> => {
+            const sessionId = runtime.sessionId
+            if (!sessionId) throw new Error('no active session')
+            // Same wire format as the main conversation: the Host copies the
+            // prompt into the child's transcript, so the quote must be a parsed
+            // annotation block there, not prose the user never typed.
+            const source = snapshot.source
+            const prompt = composeQuotedMessage(question, {
+              text: snapshot.text,
+              ...(source === undefined
+                ? {}
+                : {
+                    source: {
+                      text: snapshot.text,
+                      messageId: source.messageId,
+                      messageKind: source.messageKind,
+                      startOffset: source.startOffset,
+                      endOffset: source.endOffset,
+                    },
+                  }),
+            })
+            // The Host uses this label for both the sidebar tab title and the
+            // parent's subagent catalog row, so repeated side questions stay
+            // distinguishable without opening each child.
+            const excerpt = previewTitle(question, 24)
+            const label = excerpt
+              ? `${t('toolbar.askInSide')} · ${excerpt}`
+              : t('toolbar.askInSide')
+            // The mounted namespace returns the gateway envelope; the child id
+            // only exists inside `value`.
+            // Reuse mode keeps one side child per main session, so it has no
+            // per-question route choice: the child keeps the model it was born
+            // with (the parent's, unless the first question overrode it).
+            const reuse = getConfig().sideTaskMode === 'reuse'
+            const outcome = await api.create(sessionId, {
+              label,
+              prompt,
+              ...(reuse ? { reuse: true } : model === null ? {} : { model }),
+            })
+            if (!outcome.ok) throw new Error(outcome.error.message)
+            const { childId } = outcome.value
+            const address = `dsh-resource://subagentchat/session/${encodeURIComponent(childId)}?parent=${encodeURIComponent(sessionId)}&mode=continuable`
+            sidebar.openResource(address, { kind: 'subagentchat' })
+          }
 
-        const openSideTask = async (
-          snapshot: SelectionSnapshot,
-          question: string,
-          model: ModelChoice | null,
-        ): Promise<void> => {
-          const sessionId = runtime.sessionId
-          if (!sessionId) throw new Error('no active session')
-          // Same wire format as the main conversation: the Host copies the
-          // prompt into the child's transcript, so the quote must be a parsed
-          // annotation block there, not prose the user never typed.
-          const source = snapshot.source
-          const prompt = composeQuotedMessage(question, {
-            text: snapshot.text,
-            ...(source === undefined
-              ? {}
-              : {
-                  source: {
-                    text: snapshot.text,
-                    messageId: source.messageId,
-                    messageKind: source.messageKind,
-                    startOffset: source.startOffset,
-                    endOffset: source.endOffset,
-                  },
-                }),
-          })
-          // The Host uses this label for both the sidebar tab title and the
-          // parent's subagent catalog row, so repeated side questions stay
-          // distinguishable without opening each child.
-          const excerpt = previewTitle(question, 24)
-          const label = excerpt ? `${t('toolbar.askInSide')} · ${excerpt}` : t('toolbar.askInSide')
-          // The mounted namespace returns the gateway envelope; the child id
-          // only exists inside `value`.
-          // Reuse mode keeps one side child per main session, so it has no
-          // per-question route choice: the child keeps the model it was born
-          // with (the parent's, unless the first question overrode it).
-          const reuse = getConfig().sideTaskMode === 'reuse'
-          const outcome = await api.create(sessionId, {
-            label,
-            prompt,
-            ...(reuse ? { reuse: true } : model === null ? {} : { model }),
-          })
-          if (!outcome.ok) throw new Error(outcome.error.message)
-          const { childId } = outcome.value
-          const address = `dsh-resource://subagentchat/session/${encodeURIComponent(childId)}?parent=${encodeURIComponent(sessionId)}&mode=continuable`
-          scope.sidebarRight.openResource(address, { kind: 'subagentchat' })
+          publishedSide = openSideTask
+          runtime.sideTask = openSideTask
         }
 
-        published = openSideTask
-        runtime.sideTask = openSideTask
+        const translateApi = scope.get('remote.selectQuoteTranslate') as
+          | TranslateRemoteApi
+          | undefined
+        if (translateApi !== undefined) {
+          const translate = async (
+            snapshot: SelectionSnapshot,
+            target: TranslateLanguage,
+            signal: AbortSignal,
+            onEvent: (event: TranslateStreamEvent) => void,
+          ): Promise<void> => {
+            const sessionId = runtime.sessionId
+            if (!sessionId) throw new Error('no active session')
+            if (snapshot.text.length > MAX_TRANSLATE_CHARS) {
+              throw new Error(`the selection exceeds ${MAX_TRANSLATE_CHARS} characters`)
+            }
+            const config = getConfig()
+            const provider = config.translateProvider.trim()
+            const model = config.translateModel.trim()
+            const stream = translateApi.translate(
+              sessionId,
+              {
+                text: snapshot.text,
+                target,
+                prompt: resolveTranslatePrompt(config.translatePrompt, target),
+                ...(provider.length > 0 && model.length > 0 ? { provider, model } : {}),
+              },
+              signal,
+            )
+            let finished = false
+            try {
+              for await (const frame of stream) {
+                if (signal.aborted) break
+                if (typeof frame !== 'object' || frame === null) continue
+                const record = frame as Record<string, unknown>
+                if (record.type === 'thinking') {
+                  onEvent({ type: 'thinking', active: record.active === true })
+                } else if (record.type === 'reasoning' && typeof record.text === 'string') {
+                  onEvent({ type: 'reasoning', text: record.text })
+                } else if (record.type === 'text' && typeof record.text === 'string') {
+                  onEvent({ type: 'text', text: record.text })
+                } else if (record.type === 'done' && typeof record.text === 'string') {
+                  finished = true
+                  onEvent({ type: 'done', text: record.text })
+                }
+              }
+            } finally {
+              // Closing the handle sends the Gateway's stream cancel, which
+              // aborts the host call even when the toolbar stopped early.
+              ;(stream as { dispose?: () => void }).dispose?.()
+            }
+            if (signal.aborted) return
+            if (!finished) throw new Error('the translation stream ended without a result')
+          }
+
+          publishedTranslate = translate
+          runtime.translate = translate
+        }
       }
 
-      void scope.remote.$mount(sideTaskRemote).then(
+      void scope.remote.$mount(pluginRemote).then(
         (value) => {
           if (stopped) {
             void value()
@@ -298,16 +453,21 @@ export function apply(ctx: Context): void {
           publish()
         },
         (error) => {
-          console.error('dsh-select-quote: side task remote mount failed', error)
+          console.error('dsh-select-quote: plugin remote mount failed', error)
         },
       )
 
       return () => {
         stopped = true
-        if (published !== undefined && runtime.sideTask === published) delete runtime.sideTask
+        if (publishedSide !== undefined && runtime.sideTask === publishedSide) {
+          delete runtime.sideTask
+        }
+        if (publishedTranslate !== undefined && runtime.translate === publishedTranslate) {
+          delete runtime.translate
+        }
         if (dispose) void dispose()
       }
-    }, 'dsh-select-quote: side task remote')
+    }, 'dsh-select-quote: plugin remote')
   })
 
   // Assistant replies may echo :dsh-annotation{index="N"}; decorate them as chips.

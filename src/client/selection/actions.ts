@@ -4,7 +4,7 @@ import { t } from '../i18n.ts'
 import type { IconName } from '../ui/icons.tsx'
 
 /** The entry points offered for a selection, whichever surface shows them. */
-export type SelectionActionKey = 'open' | 'copy' | 'add' | 'side'
+export type SelectionActionKey = 'open' | 'copy' | 'translate' | 'add' | 'side'
 
 export interface SelectionAction {
   readonly key: SelectionActionKey
@@ -29,6 +29,7 @@ export function selectionActions(
       ? []
       : [{ key: 'open' as const, icon: 'external-link' as const, label: t('toolbar.openLink') }]),
     { key: 'copy', icon: 'copy', label: t('toolbar.copy') },
+    { key: 'translate', icon: 'languages', label: t('toolbar.translate') },
     { key: 'add', icon: 'plus', label: t('toolbar.addToTask') },
     { key: 'side', icon: 'panel-right', label: t('toolbar.askInSide') },
   ]

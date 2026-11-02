@@ -1,6 +1,6 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
-import { SIDE_TASK_SERVICE } from './shared/side-task-remote.ts'
+import { SIDE_TASK_SERVICE } from './shared/plugin-remote.ts'
 import { isNotResumable, reusableChildId } from './shared/side-task-reuse.ts'
 
 /**

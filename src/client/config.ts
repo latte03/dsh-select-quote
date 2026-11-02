@@ -21,11 +21,22 @@ export type ToolbarPlacement = 'above' | 'below'
 /** One side-task child per parent session, or a fresh fork for every question. */
 export type SideTaskMode = 'separate' | 'reuse'
 
+import { isTranslateTarget, type TranslateTarget } from './translate.ts'
+
+/** Translation target: `auto` follows the UI language per selection. */
+export type { TranslateTarget }
+
 export interface SelectQuoteConfig {
   triggerMode: TriggerMode
   toolbarPlacement: ToolbarPlacement
   shortcut: boolean
   sideTaskMode: SideTaskMode
+  translateTarget: TranslateTarget
+  /** Empty provider+model pair follows the conversation's own route. */
+  translateProvider: string
+  translateModel: string
+  /** Empty prompt uses the built-in translator instructions. */
+  translatePrompt: string
 }
 
 export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
@@ -33,6 +44,10 @@ export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   toolbarPlacement: 'above',
   shortcut: false,
   sideTaskMode: 'separate',
+  translateTarget: 'auto',
+  translateProvider: '',
+  translateModel: '',
+  translatePrompt: '',
 })
 
 const TRIGGER_MODES: ReadonlySet<string> = new Set<TriggerMode>([
@@ -68,6 +83,21 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
       ? (record.sideTaskMode as SideTaskMode)
       : DEFAULT_CONFIG.sideTaskMode,
+    translateTarget: isTranslateTarget(record.translateTarget)
+      ? record.translateTarget
+      : DEFAULT_CONFIG.translateTarget,
+    translateProvider:
+      typeof record.translateProvider === 'string'
+        ? record.translateProvider
+        : DEFAULT_CONFIG.translateProvider,
+    translateModel:
+      typeof record.translateModel === 'string'
+        ? record.translateModel
+        : DEFAULT_CONFIG.translateModel,
+    translatePrompt:
+      typeof record.translatePrompt === 'string'
+        ? record.translatePrompt
+        : DEFAULT_CONFIG.translatePrompt,
   }
 }
 
@@ -102,7 +132,11 @@ export function publishConfig(value: unknown): SelectQuoteConfig {
     next.triggerMode === current.triggerMode &&
     next.toolbarPlacement === current.toolbarPlacement &&
     next.shortcut === current.shortcut &&
-    next.sideTaskMode === current.sideTaskMode
+    next.sideTaskMode === current.sideTaskMode &&
+    next.translateTarget === current.translateTarget &&
+    next.translateProvider === current.translateProvider &&
+    next.translateModel === current.translateModel &&
+    next.translatePrompt === current.translatePrompt
   ) {
     return current
   }

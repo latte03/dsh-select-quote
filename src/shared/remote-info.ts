@@ -45,6 +45,9 @@ interface DefinitionLike {
   service: string
   description: string
   invocation: { kind: 'direct' }
+  /** `stream` marks an async-iterable method carried by the Gateway's stream mux. */
+  mode?: 'stream'
+  cancellation?: { parameter: 'signal' }
   scope?: { context: string; wire: string }
   parameters: ParameterLike[]
   result: ResultLike

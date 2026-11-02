@@ -21,9 +21,16 @@ import {
 } from '../dom/selection.ts'
 import { focusComposer } from '../dom/composer-host.ts'
 import { linkTarget } from '../dom/selection-url.ts'
-import { t } from '../i18n.ts'
+import { activeLocale, t } from '../i18n.ts'
 import { ModelSelect } from '../model/ModelSelect.tsx'
 import type { ModelChoice } from '../model/types.ts'
+import {
+  MAX_TRANSLATE_CHARS,
+  resolveTranslatePrompt,
+  resolveTranslateTarget,
+  type TranslateLanguage,
+} from '../translate.ts'
+import { readTranslation, writeTranslation } from '../translate-cache.ts'
 import {
   selectionActions,
   type SelectionActionEntry,
@@ -32,6 +39,7 @@ import {
 import { SelectionMenu } from './SelectionMenu.tsx'
 import { popoverEnter } from './popover-keys.ts'
 import { ToolbarView } from './ToolbarView.tsx'
+import type { TranslationState } from './translation-view.ts'
 import { useCommentPlacement } from './useCommentPlacement.ts'
 import { useSelectionWatcher, type SelectionPhase } from './useSelectionWatcher.ts'
 import { runtime, type SelectionBridge } from '../runtime.ts'
@@ -75,6 +83,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [translation, setTranslation] = useState<TranslationState | null>(null)
+  const [translateTarget, setTranslateTarget] = useState<TranslateLanguage>('en')
+  const [translateCopied, setTranslateCopied] = useState(false)
+  /** Invalidates a late response after close, stop, or a new target. */
+  const translateRunRef = useRef(0)
+  /** Aborts the host call and its stream when the surface or target changes. */
+  const translateControllerRef = useRef<AbortController | null>(null)
+  const copiedTimerRef = useRef<number | null>(null)
   const activeRef = useRef<SelectionSnapshot | null>(null)
   activeRef.current = active
   const menuRef = useRef<MenuState | null>(null)
@@ -118,6 +134,13 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const hide = useCallback(() => {
     pendingIdRef.current = null
     dismissMenu()
+    translateRunRef.current += 1
+    translateControllerRef.current?.abort()
+    translateControllerRef.current = null
+    if (copiedTimerRef.current !== null) {
+      window.clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = null
+    }
     setActive(null)
     setPhase('idle')
     setComment('')
@@ -125,6 +148,8 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     setSideModel(null)
     setSending(false)
     setStatus(null)
+    setTranslation(null)
+    setTranslateCopied(false)
   }, [dismissMenu])
 
   /**
@@ -175,12 +200,38 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     [dismissMenu, saveSelection],
   )
 
+  /**
+   * A live selection inside our own popover is the reader selecting result
+   * text (the translation, the quote), not a new passage to quote. Treating it
+   * as "no selection" would close the popover mid-drag, which read as the
+   * result being unselectable.
+   */
+  const selectionInOwnSurface = useCallback((): boolean => {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return false
+    const owns = (root: HTMLElement | null, node: Node | null): boolean =>
+      root !== null && node !== null && root.contains(node)
+    const { anchorNode, focusNode } = selection
+    return (
+      owns(commentWrapRef.current, anchorNode) ||
+      owns(commentWrapRef.current, focusNode) ||
+      owns(toolbarRef.current, anchorNode) ||
+      owns(toolbarRef.current, focusNode)
+    )
+  }, [])
+
   const refresh = useCallback(() => {
+    if (selectionInOwnSurface()) return
     const next = readSelectionSnapshot(toolbarRef.current)
     if (!next) {
       // A menu latched on a selection that no longer exists has nothing to act
       // on; drop it together with the idle toolbar.
       dismissMenu()
+      // A translation belongs to the exact passage it was requested for.
+      if (phaseRef.current === 'translate') {
+        hide()
+        return
+      }
       // Keep an open comment popover; only drop idle toolbar when selection dies.
       if (phaseRef.current === 'idle') setActive(null)
       return
@@ -196,6 +247,11 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       return
     }
     const current = activeRef.current
+    // A different passage means the old translation no longer belongs here.
+    if (phaseRef.current === 'translate' && current && current.text !== next.text) {
+      hide()
+      return
+    }
     if (phaseRef.current === 'comment' && current && current.text !== next.text) {
       // A new range replaces the comment step: keep the typed comment on the
       // old (already saved) annotation, then retarget the toolbar.
@@ -213,7 +269,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         ? prev
         : next,
     )
-  }, [dismissMenu, flushComment, touch])
+  }, [dismissMenu, flushComment, hide, selectionInOwnSurface, touch])
 
   /** Latch the selection and anchor; the menu outlives later refresh passes. */
   const openMenu = useCallback(
@@ -294,13 +350,37 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     commentWrapRef,
   })
 
+  // The result area grows while text streams in; re-place once per frame so a
+  // flipped popover keeps clearing the selection and the viewport edge.
+  const placeFrameRef = useRef<number | null>(null)
+  const schedulePlace = useCallback(() => {
+    if (placeFrameRef.current !== null) return
+    placeFrameRef.current = window.requestAnimationFrame(() => {
+      placeFrameRef.current = null
+      placeCommentPop()
+    })
+  }, [placeCommentPop])
+  useEffect(
+    () => () => {
+      if (placeFrameRef.current !== null) {
+        window.cancelAnimationFrame(placeFrameRef.current)
+        placeFrameRef.current = null
+      }
+    },
+    [],
+  )
+  useLayoutEffect(() => {
+    if (phase !== 'translate') return
+    schedulePlace()
+  }, [phase, schedulePlace, translateTarget, translation])
+
   // The composer summary card lives in the seat (z 7) and can reach over the
   // scroller area; the popover is clipped to the scroller at z 6, so the card
   // would paint over it. Lift the host only while the comment step is open.
   const layer = active?.layer
   useLayoutEffect(() => {
     if (!layer || touch) return
-    layer.setAboveComposer(phase === 'comment' || phase === 'side')
+    layer.setAboveComposer(phase === 'comment' || phase === 'side' || phase === 'translate')
     return () => layer.setAboveComposer(false)
   }, [layer, phase, touch])
 
@@ -311,6 +391,31 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     if (touch) return
     if (phase === 'comment') commentRef.current?.focus()
     else if (phase === 'side') sideRef.current?.focus()
+  }, [phase, touch])
+
+  // No input owns the translation popover, so Escape is handled at the window.
+  // An open language menu owns its own Escape; leave that press to it.
+  useEffect(() => {
+    if (phase !== 'translate') return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      const focused = document.activeElement
+      if (focused instanceof Element && focused.closest('[data-dsq-menu]') !== null) return
+      event.preventDefault()
+      clearNativeSelection()
+      hide()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [hide, phase])
+
+  // Keyboard opens land on the language button; the popover has no text field
+  // to focus. Touch keeps the sheet free of a raised keyboard.
+  useEffect(() => {
+    if (phase !== 'translate' || touch) return
+    queueMicrotask(() => {
+      commentWrapRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    })
   }, [phase, touch])
 
   // Grow the comment box with its content (up to a cap) instead of letting it
@@ -329,11 +434,15 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const handleToolbarPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     // Text fields must keep their native press: focus and caret placement are
     // the default action. Cancelling it everywhere left the composer unable to
-    // regain focus once the model chip had taken it.
+    // regain focus once the model chip had taken it. The selectable regions
+    // (quote and translation body) behave the same way: their press starts a
+    // native text selection, which is the only way to copy part of a result.
     const target = event.target
     if (
       target instanceof Element &&
-      target.closest('textarea, input, [contenteditable="true"]') !== null
+      target.closest(
+        'textarea, input, [contenteditable="true"], [data-dsq-selectable]',
+      ) !== null
     ) {
       event.stopPropagation()
       return
@@ -393,6 +502,161 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     },
     [dismissMenu],
   )
+
+  /** Run one translation; a later attempt invalidates and aborts this stream. */
+  const requestTranslation = useCallback(
+    (snapshot: SelectionSnapshot, target: TranslateLanguage) => {
+      const run = runtime.translate
+      translateControllerRef.current?.abort()
+      translateControllerRef.current = null
+      const generation = ++translateRunRef.current
+      setTranslateCopied(false)
+      if (snapshot.text.length > MAX_TRANSLATE_CHARS) {
+        setTranslation({ status: 'tooLong' })
+        return
+      }
+      // The key mirrors exactly what the host will send: the same text, target,
+      // route and resolved prompt, under the same session. A hit skips the call
+      // entirely and paints the finished translation at once.
+      const settings = getConfig()
+      const cacheKey = {
+        text: snapshot.text,
+        target,
+        provider: settings.translateProvider.trim(),
+        model: settings.translateModel.trim(),
+        prompt: resolveTranslatePrompt(settings.translatePrompt, target),
+        sessionId: sessionId ?? '',
+      }
+      const cached = readTranslation(cacheKey)
+      if (cached !== undefined) {
+        setTranslation({ status: 'done', text: cached })
+        return
+      }
+      if (!run) {
+        console.warn('dsh-select-quote: translation is unavailable; the remote is not mounted')
+        setTranslation({ status: 'unavailable' })
+        return
+      }
+      const controller = new AbortController()
+      translateControllerRef.current = controller
+      setTranslation({ status: 'pending' })
+      void run(snapshot, target, controller.signal, (event) => {
+        if (generation !== translateRunRef.current) return
+        if (event.type === 'thinking') {
+          setTranslation((previous) => ({
+            status: 'pending',
+            text: previous?.text,
+            reasoning: previous?.reasoning,
+            thinking: event.active,
+          }))
+          return
+        }
+        if (event.type === 'reasoning') {
+          setTranslation((previous) => ({
+            status: 'pending',
+            text: previous?.text,
+            reasoning: event.text,
+            thinking: true,
+          }))
+          return
+        }
+        if (event.type === 'text') {
+          setTranslation((previous) => ({
+            status: 'pending',
+            text: event.text,
+            reasoning: previous?.reasoning,
+            thinking: false,
+          }))
+          return
+        }
+        writeTranslation(cacheKey, event.text)
+        setTranslation((previous) => ({
+          status: 'done',
+          text: event.text,
+          reasoning: previous?.reasoning,
+        }))
+      }).then(
+        () => {
+          if (generation === translateRunRef.current) {
+            translateControllerRef.current = null
+          }
+        },
+        (error) => {
+          if (generation !== translateRunRef.current || controller.signal.aborted) return
+          translateControllerRef.current = null
+          const detail = error instanceof Error ? error.message : String(error)
+          console.error('dsh-select-quote: translation failed', {
+            target,
+            chars: snapshot.text.length,
+            error,
+          })
+          setTranslation((previous) => ({
+            status: 'error',
+            text: previous?.text,
+            reasoning: previous?.reasoning,
+            error: detail,
+          }))
+        },
+      )
+    },
+    [sessionId],
+  )
+
+  /** Open the translate popover for the latched quote and start at once. */
+  const beginTranslate = useCallback(
+    (snapshot: SelectionSnapshot) => {
+      const target = resolveTranslateTarget(
+        snapshot.text,
+        getConfig().translateTarget,
+        activeLocale(),
+      )
+      setStatus(null)
+      setActive(snapshot)
+      dismissMenu()
+      setPhase('translate')
+      setTranslateTarget(target)
+      requestTranslation(snapshot, target)
+    },
+    [dismissMenu, requestTranslation],
+  )
+
+  const changeTranslateTarget = useCallback(
+    (target: TranslateLanguage) => {
+      const snapshot = activeRef.current
+      if (!snapshot) return
+      setTranslateTarget(target)
+      // The same live config the settings page edits: the next selection and
+      // the settings row both start from this pick.
+      runtime.setConfigField?.('translateTarget', target)
+      requestTranslation(snapshot, target)
+    },
+    [requestTranslation],
+  )
+
+  const copyTranslation = useCallback(() => {
+    if (translation?.status !== 'done' || translation.text === undefined) return
+    void copyText(translation.text).then(
+      () => {
+        setTranslateCopied(true)
+        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current)
+        copiedTimerRef.current = window.setTimeout(() => {
+          copiedTimerRef.current = null
+          setTranslateCopied(false)
+        }, 1600)
+      },
+      () => setStatus(t('toolbar.copyFailed')),
+    )
+  }, [translation])
+
+  const retryTranslation = useCallback(() => {
+    const snapshot = activeRef.current
+    if (snapshot) requestTranslation(snapshot, translateTarget)
+  }, [requestTranslation, translateTarget])
+
+  const closeTranslation = useCallback(() => {
+    clearNativeSelection()
+    hide()
+  }, [hide])
 
   const handleSideChange = useCallback((value: string) => {
     setSideText(value)
@@ -467,11 +731,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         case 'add':
           beginComment(snapshot)
           return
+        case 'translate':
+          beginTranslate(snapshot)
+          return
         case 'side':
           openSide(snapshot)
       }
     },
-    [beginComment, copySnapshot, openLinkSnapshot, openSide],
+    [beginComment, beginTranslate, copySnapshot, openLinkSnapshot, openSide],
   )
 
   /** Close the optional comment step; the annotation stays saved either way. */
@@ -561,6 +828,20 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         onSideKeyDown={handleSideKeyDown}
         onSendSide={sendSide}
         onCancelSide={hide}
+        translate={
+          phase === 'translate'
+            ? {
+                target: translateTarget,
+                state: translation ?? { status: 'pending' },
+                copied: translateCopied,
+                onTarget: changeTranslateTarget,
+                onCopy: copyTranslation,
+                onRetry: retryTranslation,
+                onStop: hide,
+                onClose: closeTranslation,
+              }
+            : null
+        }
       />
       {menu ? (
         <SelectionMenu

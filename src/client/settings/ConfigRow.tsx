@@ -1,6 +1,8 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -10,11 +12,22 @@ import {
   normalizeConfig,
   type SideTaskMode,
   type ToolbarPlacement,
+  type TranslateTarget,
   type TriggerMode,
 } from '../config.ts'
 import { t as translate } from '../i18n.ts'
+import { createGlobalModelDirectory } from '../model/globalDirectory.ts'
+import { ModelSelect } from '../model/ModelSelect.tsx'
+import type { ModelChoice } from '../model/types.ts'
+import { runtime } from '../runtime.ts'
+import { LanguageMenu } from '../selection/LanguageMenu.tsx'
 import { getShortcutRows, subscribeShortcutRows } from '../shortcut-menu.ts'
 import { styles } from '../styles.ts'
+import {
+  DEFAULT_TRANSLATE_PROMPT,
+  LANGUAGE_LABELS,
+  TRANSLATE_LANGUAGES,
+} from '../translate.ts'
 import { useLocale } from '../useLocale.ts'
 
 /** The live Host form for this plugin's Loader row, injected by the bundle slot. */
@@ -145,6 +158,45 @@ function ConfigSection({
   )
   const t = slotTranslate ?? translate
 
+  const languageOptions = useMemo<readonly { value: TranslateTarget; label: string }[]>(
+    () => [
+      { value: 'auto', label: t('translate.auto') },
+      ...TRANSLATE_LANGUAGES.map((code) => ({
+        value: code,
+        label: LANGUAGE_LABELS[code],
+      })),
+    ],
+    [t],
+  )
+  // The settings page lives outside any session, so its picker reads the
+  // Host-generation catalog instead of a session directory.
+  const catalogue = useMemo(
+    () =>
+      createGlobalModelDirectory(async () => {
+        const read = runtime.modelCatalog
+        if (read !== undefined) return read()
+        // Older shells without the global catalog can still offer the live
+        // conversation's directory while that session is mounted.
+        const sessionId = runtime.sessionId
+        const directory =
+          sessionId === undefined ? undefined : runtime.modelDirectoryFor?.(sessionId)
+        if (directory === undefined) throw new Error('the model catalog is unavailable')
+        await directory.load()
+        return directory.store.getSnapshot().groups
+      }),
+    [],
+  )
+  const translateModel: ModelChoice | null =
+    current.translateProvider.length > 0 && current.translateModel.length > 0
+      ? { provider: current.translateProvider, model: current.translateModel }
+      : null
+
+  const [prompt, setPrompt] = useState(current.translatePrompt)
+  const promptFocused = useRef(false)
+  useEffect(() => {
+    if (!promptFocused.current) setPrompt(current.translatePrompt)
+  }, [current.translatePrompt])
+
   return (
     <div className={styles.settings}>
       <div className={styles.settingsSection}>
@@ -237,6 +289,63 @@ function ConfigSection({
           value={current.sideTaskMode}
           label={(mode) => t(`settings.sideTaskMode.${mode}`)}
           onChange={(mode) => void form.set('sideTaskMode', mode)}
+        />
+      </div>
+      <div className={styles.settingsDivider} aria-hidden="true" />
+      <div className={styles.settingsSection}>
+        <div className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.translateTarget')}</span>
+          <span className={styles.settingsHint}>{t('settings.translateTargetHint')}</span>
+        </div>
+        <LanguageMenu
+          value={current.translateTarget}
+          options={languageOptions}
+          ariaLabel={t('settings.translateTarget')}
+          triggerClassName={styles.settingsSelect}
+          onChange={(target) => void form.set('translateTarget', target)}
+        />
+      </div>
+      <div className={styles.settingsSection}>
+        <div className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.translateModel')}</span>
+          <span className={styles.settingsHint}>{t('settings.translateModelHint')}</span>
+        </div>
+        <div className={styles.settingsModel}>
+          <ModelSelect
+            directory={catalogue}
+            value={translateModel}
+            onChange={(choice) => {
+              // Two fields, two revisions; a partial write normalizes back to
+              // "follow the conversation" instead of pairing a wrong route.
+              void (async () => {
+                await form.set('translateProvider', choice?.provider ?? '')
+                await form.set('translateModel', choice?.model ?? '')
+              })()
+            }}
+          />
+        </div>
+      </div>
+      <div className={styles.settingsField}>
+        <div className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.translatePrompt')}</span>
+          <span className={styles.settingsHint}>{t('settings.translatePromptHint')}</span>
+        </div>
+        <textarea
+          className={styles.settingsInput}
+          value={prompt}
+          maxLength={8000}
+          aria-label={t('settings.translatePrompt')}
+          placeholder={DEFAULT_TRANSLATE_PROMPT}
+          onFocus={() => {
+            promptFocused.current = true
+          }}
+          onBlur={() => {
+            promptFocused.current = false
+            if (prompt !== current.translatePrompt) {
+              void form.set('translatePrompt', prompt)
+            }
+          }}
+          onChange={(event) => setPrompt(event.target.value)}
         />
       </div>
     </div>

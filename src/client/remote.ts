@@ -1,9 +1,9 @@
-import { createSideTaskRemote } from '../shared/side-task-remote.ts'
+import { createPluginRemote } from '../shared/plugin-remote.ts'
 
 /**
- * Browser half of the side-task Remote.
+ * Browser half of the plugin's Remote group (side task + translation).
  *
  * Mounted with `ctx.remote.$mount(...)`; the Host registered the matching
  * descriptor group from `src/typert.ts`.
  */
-export default createSideTaskRemote()
+export default createPluginRemote()

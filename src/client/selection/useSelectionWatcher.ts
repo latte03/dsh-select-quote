@@ -12,7 +12,7 @@ import { isInsideTranscript } from '../dom/message-text.ts'
 import { pointInRects, shouldOpenSelectionMenu } from '../dom/menu-trigger.ts'
 import { readSelectionSnapshot, type SelectionSnapshot } from '../dom/selection.ts'
 
-export type SelectionPhase = 'idle' | 'comment' | 'side'
+export type SelectionPhase = 'idle' | 'comment' | 'side' | 'translate'
 
 /** The menu's own chrome; a press inside it must not dismiss the selection. */
 const MENU_SELECTOR = '[data-dsq-menu]'
@@ -84,6 +84,11 @@ export function useSelectionWatcher({
       // The side composer holds no saved annotation: an outside press is a
       // plain dismissal of the question that has not been sent yet.
       if (phaseRef.current === 'side') {
+        hide()
+        return
+      }
+      // A translation is a transient reading aid; it goes with the press.
+      if (phaseRef.current === 'translate') {
         hide()
         return
       }

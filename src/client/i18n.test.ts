@@ -40,6 +40,19 @@ describe('language coverage', () => {
   })
 })
 
+describe('key coverage', () => {
+  it('keeps every non-plural key in every dictionary', () => {
+    const userKeys = (dictionary: Record<string, string>): string[] =>
+      Object.keys(dictionary)
+        .filter((key) => !/\.(one|few|many|other)$/.test(key))
+        .sort()
+    const expected = userKeys(DICTIONARIES.en)
+    for (const [locale, dictionary] of Object.entries(DICTIONARIES)) {
+      expect(userKeys(dictionary), locale).toEqual(expected)
+    }
+  })
+})
+
 describe('plural form selection', () => {
   it.each([
     ['en', 1, 'one'],

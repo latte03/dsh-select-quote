@@ -1,7 +1,7 @@
 import { PACKAGE_NAME } from './shared/identity.ts'
-import { createSideTaskRemote } from './shared/side-task-remote.ts'
+import { createPluginRemote } from './shared/plugin-remote.ts'
 
-const $remote = createSideTaskRemote()
+const $remote = createPluginRemote()
 
 
 /**

@@ -18,6 +18,7 @@ describe('selection actions', () => {
   it('lists every entry point once, in render order', () => {
     expect(selectionActions(snapshot()).map((action) => action.key)).toEqual([
       'copy',
+      'translate',
       'add',
       'side',
     ])
@@ -27,6 +28,7 @@ describe('selection actions', () => {
     expect(selectionActions(snapshot('https://example.com')).map((action) => action.key)).toEqual([
       'open',
       'copy',
+      'translate',
       'add',
       'side',
     ])
@@ -35,6 +37,6 @@ describe('selection actions', () => {
   it('offers nothing to open for a non-http anchor', () => {
     expect(
       selectionActions(snapshot('javascript:alert(1)')).map((action) => action.key),
-    ).toEqual(['copy', 'add', 'side'])
+    ).toEqual(['copy', 'translate', 'add', 'side'])
   })
 })

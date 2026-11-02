@@ -1,6 +1,7 @@
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { SelectQuoteSideTask } from './side-task-service.ts'
+import { SelectQuoteTranslate } from './translate-service.ts'
 import { PACKAGE_NAME } from './shared/identity.ts'
 
 /**
@@ -18,6 +19,10 @@ export interface Config {
   toolbarPlacement: Volatile<'above' | 'below'>
   shortcut: Volatile<boolean>
   sideTaskMode: Volatile<'separate' | 'reuse'>
+  translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
+  translateProvider: Volatile<string>
+  translateModel: Volatile<string>
+  translatePrompt: Volatile<string>
 }
 
 export const Config = z.object({
@@ -25,6 +30,13 @@ export const Config = z.object({
   toolbarPlacement: z.union(['above', 'below']).default('above').volatile(),
   shortcut: z.boolean().default(false).volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
+  translateTarget: z
+    .union(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'])
+    .default('auto')
+    .volatile(),
+  translateProvider: z.string().default('').volatile(),
+  translateModel: z.string().default('').volatile(),
+  translatePrompt: z.string().default('').volatile(),
 })
 
 export const name = PACKAGE_NAME
@@ -35,5 +47,10 @@ export function apply(ctx: Context, _config: Config): void {
   // subagents into an activation failure instead of a missing button.
   ctx.inject(['subagents'], (scope) => {
     new SelectQuoteSideTask(scope)
+  })
+  // Translation calls the provider directly; no subagent, no conversation
+  // context. A shell without `llm` simply never publishes the button's bridge.
+  ctx.inject(['llm'], (scope) => {
+    new SelectQuoteTranslate(scope)
   })
 }

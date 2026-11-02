@@ -14,12 +14,20 @@ describe('normalizeConfig', () => {
       toolbarPlacement: 'above',
       shortcut: false,
       sideTaskMode: 'separate',
+      translateTarget: 'auto',
+      translateProvider: '',
+      translateModel: '',
+      translatePrompt: '',
     })
     expect(normalizeConfig({ shortcut: true })).toEqual({
       triggerMode: 'auto',
       toolbarPlacement: 'above',
       shortcut: true,
       sideTaskMode: 'separate',
+      translateTarget: 'auto',
+      translateProvider: '',
+      translateModel: '',
+      translatePrompt: '',
     })
   })
 
@@ -31,6 +39,31 @@ describe('normalizeConfig', () => {
   it('accepts both toolbar sides and rejects unknown ones', () => {
     expect(normalizeConfig({ toolbarPlacement: 'below' }).toolbarPlacement).toBe('below')
     expect(normalizeConfig({ toolbarPlacement: 'left' }).toolbarPlacement).toBe('above')
+  })
+
+  it('keeps a known translation target and rejects unknown codes', () => {
+    expect(normalizeConfig({ translateTarget: 'ja' }).translateTarget).toBe('ja')
+    expect(normalizeConfig({ translateTarget: 'ko' }).translateTarget).toBe('auto')
+  })
+
+  it('keeps the translation route and prompt only when they are strings', () => {
+    const config = normalizeConfig({
+      translateProvider: 'deepseek-account',
+      translateModel: 'deepseek-v4-pro',
+      translatePrompt: 'Translate into {target}.',
+    })
+    expect(config.translateProvider).toBe('deepseek-account')
+    expect(config.translateModel).toBe('deepseek-v4-pro')
+    expect(config.translatePrompt).toBe('Translate into {target}.')
+
+    const malformed = normalizeConfig({
+      translateProvider: 7,
+      translateModel: null,
+      translatePrompt: ['x'],
+    })
+    expect(malformed.translateProvider).toBe('')
+    expect(malformed.translateModel).toBe('')
+    expect(malformed.translatePrompt).toBe('')
   })
 })
 

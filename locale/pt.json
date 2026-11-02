@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Anotações de seleção",
-    "description": "Cite o texto selecionado da conversa na próxima mensagem: a seleção fica marcada no original e o modelo responde a cada trecho."
+    "description": "Cite o texto selecionado na próxima mensagem, pergunte em uma tarefa lateral ou traduza na hora: a seleção fica marcada no original e o modelo responde a cada trecho."
   }
 }
