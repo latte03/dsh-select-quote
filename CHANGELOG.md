@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.18](https://github.com/latte03/dsh-select-quote/compare/v0.3.17...v0.3.18) (2026-11-02)
+
+### Features
+
+* 划词工具条新增就地翻译 ([d65b1bb](https://github.com/latte03/dsh-select-quote/commit/d65b1bbdc94cc87b67d6ef0f89d309e0c94c9524))
+* 角标预览支持编辑与删除待发批注 ([16dbeaa](https://github.com/latte03/dsh-select-quote/commit/16dbeaa34d58486ab692c5a9fc3343e21b26c09e))
+
 ## [0.3.17](https://github.com/latte03/dsh-select-quote/compare/v0.3.16...v0.3.17) (2026-10-29)
 
 ### Features
