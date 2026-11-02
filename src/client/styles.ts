@@ -330,19 +330,20 @@ ${atomRules}
 /* The submit gesture repeated on the accent button, so the shortcut is
    discoverable without hovering the field. Translucent currentColor keeps it
    readable on the accent fill and on a hovered fill alike. */
-.dsq_buttonKey {
+.dsq_kbd {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 16px;
   height: 16px;
-  padding: 0 5px;
+  padding: 0 4px;
   border-radius: 4px;
   background: color-mix(in srgb, currentColor 16%, transparent);
   color: inherit;
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   line-height: 16px;
-  letter-spacing: 0.01em;
   opacity: 0.8;
 }
 
@@ -1564,6 +1565,26 @@ ${atomRules}
   white-space: nowrap;
 }
 
+/* Edit/remove sit in the preview's title row, matching the summary list's
+   per-item actions so the two editing surfaces read as one. */
+.dsq_chipPreviewActions {
+  flex: none;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.dsq_chipPreviewAction {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--dsq-label-3);
+}
+
+.dsq_chipPreviewAction:hover {
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label);
+}
+
 /* Touch selection chrome. Fixed to the visual viewport and mounted on body:
    the OS selection menu owns the space around the selected text, and the soft
    keyboard owns the bottom, so neither content coordinates nor the scroller's
@@ -1843,6 +1864,7 @@ ${atomRules}
 .dsq_touchAction:focus-visible,
 .dsq_touchSheetClose:focus-visible,
 .dsq_chipPreviewJump:focus-visible,
+.dsq_chipPreviewAction:focus-visible,
 .dsq_annMark:focus-visible,
 .dsq_summaryItemAction:focus-visible,
 .dsq_summaryItemButton:focus-visible,
@@ -1870,6 +1892,10 @@ ${atomRules}
     min-height: 44px;
   }
   .dsq_summaryItemAction {
+    width: 44px;
+    height: 44px;
+  }
+  .dsq_chipPreviewAction {
     width: 44px;
     height: 44px;
   }
@@ -2237,7 +2263,7 @@ export const styles = {
   toolbarInner: 'dsq_toolbarInner',
   button: 'dsq_button',
   buttonAddComment: 'dsq_buttonAddComment',
-  buttonKey: 'dsq_buttonKey',
+  kbd: 'dsq_kbd',
   divider: 'dsq_divider',
   status: 'dsq_status',
   ctxMenu: 'dsq_ctxMenu',
@@ -2354,6 +2380,8 @@ export const styles = {
   chipPreviewComment: 'dsq_chipPreviewComment',
   chipPreviewCommentEmpty: 'dsq_chipPreviewCommentEmpty',
   chipPreviewJump: 'dsq_chipPreviewJump',
+  chipPreviewActions: 'dsq_chipPreviewActions',
+  chipPreviewAction: 'dsq_chipPreviewAction',
   touchBar: 'dsq_touchBar',
   touchAction: 'dsq_touchAction',
   touchScrim: 'dsq_touchScrim',

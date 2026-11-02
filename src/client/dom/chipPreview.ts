@@ -13,10 +13,17 @@ import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.t
 import { badgeContainsPoint, badgeHitBox } from './badge-layout.ts'
 import { placePopover } from './popoverPlacement.ts'
 import { scrollToAnnotation } from './scrollToAnnotation.ts'
+import { popoverEnter } from '../selection/popover-keys.ts'
 import { t } from '../i18n.ts'
-import { getAnnotations } from '../state/annotation-store.ts'
+import {
+  getAnnotations,
+  removeAnnotation,
+  updateAnnotationComment,
+} from '../state/annotation-store.ts'
 import { A, cx, styles } from '../styles.ts'
 import { messageQuotes } from '../transcript/quote-registry.ts'
+import { createKbd } from '../ui/Kbd.tsx'
+import { isCoarsePointer } from '../ui/touch.ts'
 
 const HOVER_DELAY = 250
 /** Just enough for the pointer to cross the 8px gap into the preview. */
@@ -26,6 +33,10 @@ const GAP = 8
 const EXIT_MS = 120
 const JUMP_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>'
+const EDIT_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>'
+const REMOVE_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
 
 let preview: HTMLDivElement | null = null
 let jumpButton: HTMLButtonElement | null = null
@@ -36,6 +47,8 @@ let activeMessageId: string | null = null
 let activeText = ''
 let activeIndex = 0
 let pinned = false
+/** An open inline comment editor pins the preview the way the summary does. */
+let editingPreview = false
 let showTimer = 0
 let hideTimer = 0
 let frame = 0
@@ -151,7 +164,7 @@ function cancelClose(): void {
 
 function scheduleClose(): void {
   cancelClose()
-  if (pinned) return
+  if (pinned || editingPreview) return
   hideTimer = window.setTimeout(() => closeChipPreview(false), CLOSE_DELAY)
 }
 
@@ -248,6 +261,7 @@ function buildPreview(
   quoteText: string,
   comment: string | null,
   withJump = true,
+  pendingId?: string,
 ): HTMLDivElement {
   const box = document.createElement('div')
   box.className = cx(A.col, styles.chipPreview)
@@ -261,39 +275,161 @@ function buildPreview(
   body.className = styles.chipPreviewBody
   body.style.animation = 'none'
 
-  const head = document.createElement('div')
-  head.className = cx(A.row, styles.chipPreviewHead)
-  const title = document.createElement('span')
-  title.className = styles.chipPreviewTitle
-  title.textContent = t('chip.annotation', { index })
+  let currentComment = comment ?? ''
+  let editing = false
+  /**
+   * Removing the focused textarea fires focusout synchronously; without this
+   * guard the panel would read that as "focus left" and close right after save.
+   */
+  let rebuilding = false
 
-  head.append(title)
-  if (withJump) {
-    jumpButton = document.createElement('button')
-    jumpButton.type = 'button'
-    jumpButton.className = cx(A.plain, A.inlineRow, styles.chipPreviewJump)
-    jumpButton.setAttribute('data-dsq-chip-jump', 'true')
-    jumpButton.setAttribute('aria-label', t('chip.jumpAria'))
-    jumpButton.title = t('chip.jumpAria')
-    jumpButton.insertAdjacentHTML('afterbegin', JUMP_ICON)
-    const jumpLabel = document.createElement('span')
-    jumpLabel.textContent = t('chip.jump')
-    jumpButton.append(jumpLabel)
-    jumpButton.addEventListener('click', jumpToMark)
-    head.append(jumpButton)
+  const renderHead = (): HTMLElement => {
+    const head = document.createElement('div')
+    head.className = cx(A.row, styles.chipPreviewHead)
+    const title = document.createElement('span')
+    title.className = styles.chipPreviewTitle
+    title.textContent = t('chip.annotation', { index })
+    head.append(title)
+    if (editing) return head
+
+    const actions = document.createElement('div')
+    actions.className = cx(A.row, styles.chipPreviewActions)
+    if (withJump) {
+      jumpButton = document.createElement('button')
+      jumpButton.type = 'button'
+      jumpButton.className = cx(A.plain, A.inlineRow, styles.chipPreviewJump)
+      jumpButton.setAttribute('data-dsq-chip-jump', 'true')
+      jumpButton.setAttribute('aria-label', t('chip.jumpAria'))
+      jumpButton.title = t('chip.jumpAria')
+      jumpButton.insertAdjacentHTML('afterbegin', JUMP_ICON)
+      const jumpLabel = document.createElement('span')
+      jumpLabel.textContent = t('chip.jump')
+      jumpButton.append(jumpLabel)
+      jumpButton.addEventListener('click', jumpToMark)
+      actions.append(jumpButton)
+    }
+    // Only the composer's pending annotations can be changed here: a durable
+    // mark belongs to a sent message, whose quote is history, not editable.
+    if (pendingId !== undefined) {
+      const edit = document.createElement('button')
+      edit.type = 'button'
+      edit.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
+      edit.setAttribute('aria-label', t('summary.edit', { index }))
+      edit.title = t('summary.edit', { index })
+      edit.insertAdjacentHTML('afterbegin', EDIT_ICON)
+      edit.addEventListener('click', enterEdit)
+      actions.append(edit)
+
+      const remove = document.createElement('button')
+      remove.type = 'button'
+      remove.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
+      remove.setAttribute('aria-label', t('summary.remove', { index }))
+      remove.title = t('summary.remove', { index })
+      remove.insertAdjacentHTML('afterbegin', REMOVE_ICON)
+      remove.addEventListener('click', () => {
+        removeAnnotation(undefined, pendingId)
+        closeChipPreview(false)
+      })
+      actions.append(remove)
+    }
+    if (actions.childElementCount > 0) head.append(actions)
+    return head
   }
-  body.append(head)
 
-  appendLabel(body, t('common.selectedText'))
-  appendText(body, styles.chipPreviewQuote, quoteText)
-  if (comment !== null) {
+  const renderView = (): void => {
+    body.replaceChildren()
+    body.append(renderHead())
+    appendLabel(body, t('common.selectedText'))
+    appendText(body, styles.chipPreviewQuote, quoteText)
+    if (comment !== null) {
+      appendLabel(body, t('summary.userComment'))
+      appendText(
+        body,
+        cx(styles.chipPreviewComment, currentComment === '' && styles.chipPreviewCommentEmpty),
+        currentComment === '' ? t('summary.noComment') : currentComment,
+      )
+    }
+  }
+
+  function enterEdit(): void {
+    editing = true
+    editingPreview = true
+    body.replaceChildren()
+    body.append(renderHead())
+    appendText(body, styles.chipPreviewQuote, quoteText)
     appendLabel(body, t('summary.userComment'))
-    appendText(
-      body,
-      cx(styles.chipPreviewComment, comment === '' && styles.chipPreviewCommentEmpty),
-      comment === '' ? t('summary.noComment') : comment,
-    )
+
+    const area = document.createElement('textarea')
+    area.className = cx(A.box, styles.annEditInput)
+    area.placeholder = t('common.commentPlaceholder')
+    area.value = currentComment
+    area.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        exitEdit()
+        return
+      }
+      // Same submit gesture as the toolbar's comment box and the host
+      // composer: Enter / Ctrl+Enter / Cmd+Enter save, Shift+Enter breaks.
+      if (popoverEnter(event) !== 'submit') return
+      event.preventDefault()
+      event.stopPropagation()
+      commitEdit()
+    })
+    body.append(area)
+
+    const actions = document.createElement('div')
+    actions.className = cx(A.row, styles.annEditActions)
+    const cancel = document.createElement('button')
+    cancel.type = 'button'
+    cancel.className = cx(A.plain, styles.annEditCancel)
+    cancel.textContent = t('common.cancel')
+    cancel.addEventListener('click', exitEdit)
+    const save = document.createElement('button')
+    save.type = 'button'
+    save.className = cx(A.plain, A.inlineRow, styles.annEditSave)
+    save.setAttribute('aria-keyshortcuts', 'Enter')
+    save.textContent = t('common.save')
+    if (!isCoarsePointer()) {
+      save.style.gap = '5px'
+      save.append(createKbd())
+    }
+    save.addEventListener('click', commitEdit)
+    actions.append(cancel, save)
+    body.append(actions)
+
+    scheduleReposition()
+    window.setTimeout(() => area.focus({ preventScroll: true }), 0)
   }
+
+  const rebuild = (): void => {
+    rebuilding = true
+    renderView()
+    scheduleReposition()
+    box.focus({ preventScroll: true })
+    window.setTimeout(() => {
+      rebuilding = false
+    }, 0)
+  }
+
+  function exitEdit(): void {
+    editing = false
+    editingPreview = false
+    rebuild()
+  }
+
+  function commitEdit(): void {
+    if (!editing) return
+    const area = body.querySelector('textarea')
+    currentComment = (area?.value ?? currentComment).trim()
+    if (pendingId !== undefined) updateAnnotationComment(undefined, pendingId, currentComment)
+    editing = false
+    editingPreview = false
+    rebuild()
+  }
+
+  renderView()
   box.append(body)
 
   box.addEventListener('pointerenter', cancelClose)
@@ -302,6 +438,9 @@ function buildPreview(
     scheduleClose()
   })
   box.addEventListener('focusout', (event) => {
+    // Editing owns the panel until save/cancel/Escape, like the summary list;
+    // the rebuild after either action removes the focused box on purpose.
+    if (editing || rebuilding) return
     const next = event.relatedTarget
     if (next instanceof Node && (box.contains(next) || activeChip?.contains(next))) return
     closeChipPreview(false)
@@ -310,6 +449,10 @@ function buildPreview(
     if (event.key !== 'Escape') return
     event.preventDefault()
     event.stopPropagation()
+    if (editing) {
+      exitEdit()
+      return
+    }
     closeChipPreview(true)
   })
 
@@ -332,6 +475,8 @@ function mountPreview(box: HTMLDivElement, anchor: DOMRect): void {
   if (animated) animated.style.animation = ''
 
   onDocPointerDown = (event) => {
+    // An open editor keeps its draft; outside presses do not dismiss it.
+    if (editingPreview) return
     const target = event.target
     if (!(target instanceof Node)) return
     if (box.contains(target) || activeChip?.contains(target)) return
@@ -400,6 +545,8 @@ interface MarkAnnotation {
   readonly comment: string
   readonly ownerKey: string | null
   readonly messageId: string | null
+  /** Pending composer entry: present only when this annotation is still editable. */
+  readonly pendingId: string | null
 }
 
 /**
@@ -423,6 +570,7 @@ function annotationOfMark(mark: HTMLElement): MarkAnnotation | null {
           comment: (quote.comment ?? '').trim(),
           ownerKey,
           messageId: quote.messageId ?? null,
+          pendingId: null,
         }
       : null
   }
@@ -435,6 +583,7 @@ function annotationOfMark(mark: HTMLElement): MarkAnnotation | null {
         comment: (item.comment ?? '').trim(),
         ownerKey: null,
         messageId: item.sources[0]?.messageId ?? null,
+        pendingId: item.id,
       }
     : null
 }
@@ -460,7 +609,7 @@ function showMarkPreview(mark: HTMLElement, focus: boolean): void {
   activeIndex = index
   pinned = true
   // The mark is already in view, so the preview has nothing to jump to.
-  const box = buildPreview(index, data.text, data.comment, false)
+  const box = buildPreview(index, data.text, data.comment, false, data.pendingId ?? undefined)
   mountPreview(box, mark.getBoundingClientRect())
   if (focus) box.focus({ preventScroll: true })
 }
@@ -558,6 +707,7 @@ export function closeChipPreview(restoreFocus: boolean): void {
   activeText = ''
   activeIndex = 0
   pinned = false
+  editingPreview = false
   // Focus before retiring the preview: the focused button lives inside it, and
   // removing it would hand focus to <body>. The chip's focus handler must not
   // re-open what Escape is closing.

@@ -7,13 +7,14 @@ import { useEffect, useState } from 'react'
  */
 const COARSE_POINTER = '(hover: none), (pointer: coarse)'
 
-function coarsePointer(): boolean {
+/** One-shot check for plain-DOM surfaces; React callers use the hook below. */
+export function isCoarsePointer(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
   return window.matchMedia(COARSE_POINTER).matches
 }
 
 export function useCoarsePointer(): boolean {
-  const [coarse, setCoarse] = useState(coarsePointer)
+  const [coarse, setCoarse] = useState(isCoarsePointer)
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
     const query = window.matchMedia(COARSE_POINTER)

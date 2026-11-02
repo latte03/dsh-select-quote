@@ -11,10 +11,13 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { placePopover } from '../dom/popoverPlacement.ts'
+import { popoverEnter } from '../selection/popover-keys.ts'
 import { A, cx, styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
+import { Kbd } from './Kbd.tsx'
 import { t } from '../i18n.ts'
 import { useLocale } from '../useLocale.ts'
+import { useCoarsePointer } from './touch.ts'
 
 export interface AnnotationSummaryItem {
   readonly id?: string
@@ -68,6 +71,7 @@ export function AnnotationSummary({
   onItemEdit,
 }: AnnotationSummaryProps): ReactNode {
   useLocale()
+  const touch = useCoarsePointer()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const popRef = useRef<HTMLDivElement | null>(null)
   const closeTimerRef = useRef<number | null>(null)
@@ -500,10 +504,11 @@ export function AnnotationSummary({
                           setEditing(null)
                           return
                         }
-                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                          e.preventDefault()
-                          commitEdit()
-                        }
+                        // Enter / Ctrl+Enter / Cmd+Enter save; Shift+Enter breaks,
+                        // matching the toolbar's comment box and the host composer.
+                        if (popoverEnter(e.nativeEvent) !== 'submit') return
+                        e.preventDefault()
+                        commitEdit()
                       }}
                     />
                     <div className={cx(A.row, styles.annEditActions)}>
@@ -516,10 +521,13 @@ export function AnnotationSummary({
                       </button>
                       <button
                         type="button"
-                        className={cx(A.plain, styles.annEditSave)}
+                        className={cx(A.plain, A.inlineRow, styles.annEditSave)}
+                        aria-keyshortcuts="Enter"
+                        style={touch ? undefined : { gap: 5 }}
                         onClick={commitEdit}
                       >
                         {t('common.save')}
+                        {touch ? null : <Kbd />}
                       </button>
                     </div>
                   </div>

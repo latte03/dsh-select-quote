@@ -20,6 +20,7 @@ import { t } from '../i18n.ts'
 import { A, cx, styles } from '../styles.ts'
 import { LANGUAGE_LABELS, TRANSLATE_LANGUAGES } from '../translate.ts'
 import { LucideIcon } from '../ui/icons.tsx'
+import { Kbd } from '../ui/Kbd.tsx'
 import type { VisualViewportMetrics } from '../ui/touch.ts'
 import type { SelectionActionEntry } from './actions.ts'
 import { LanguageMenu } from './LanguageMenu.tsx'
@@ -115,15 +116,6 @@ function CommentField({
   )
 }
 
-/** Submit gesture painted on the accent buttons; touch has no keyboard hint. */
-function ShortcutHint(): ReactNode {
-  return (
-    <kbd className={styles.buttonKey} title="Enter" aria-hidden="true">
-      Enter
-    </kbd>
-  )
-}
-
 function CommentActions({
   comment,
   touch,
@@ -150,7 +142,7 @@ function CommentActions({
         onClick={() => onFinishComment(true)}
       >
         {t('toolbar.addComment')}
-        {touch ? null : <ShortcutHint />}
+        {touch ? null : <Kbd />}
       </button>
     </div>
   )
@@ -227,7 +219,7 @@ function SideComposer({
             onClick={onSend}
           >
             {sending ? t('sideTask.sending') : t('sideTask.send')}
-            {touch || sending ? null : <ShortcutHint />}
+            {touch || sending ? null : <Kbd />}
           </button>
         </div>
       </div>
