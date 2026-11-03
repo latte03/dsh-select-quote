@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.19](https://github.com/latte03/dsh-select-quote/compare/v0.3.18...v0.3.19) (2026-11-03)
+
+### Features
+
+* 声明 DSH 兼容范围，README 补收录徽章 ([49fb31f](https://github.com/latte03/dsh-select-quote/commit/49fb31f6343d2c69e79bce94884c13f13b43bc73)), references [polang233/dsh-plugin-index#209](https://github.com/latte03/dsh-select-quote/issues/209)
+
 ## [0.3.18](https://github.com/latte03/dsh-select-quote/compare/v0.3.17...v0.3.18) (2026-11-02)
 
 ### Features
