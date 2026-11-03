@@ -2,6 +2,14 @@
 
 [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) 的客户端插件：在对话里**划词加批注**——选中的原文连同评论随下一条消息交给模型，正文留下标记，模型可以逐条回指；也可以就任意一段原文在侧边开启**子代理对话**，或就地**翻译**成另一种语言。
 
+[![开放插件市场](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-select-quote.json)](https://dshopen.org/zh/plugins/dsh-select-quote/)
+[![npm version](https://img.shields.io/npm/v/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
+[![npm monthly downloads](https://img.shields.io/npm/dm/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
+[![license](https://img.shields.io/npm/l/dsh-select-quote)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/latte03/dsh-select-quote)](https://github.com/latte03/dsh-select-quote)
+[![awesome-dsh-plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/)
+[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.2-blue)](package.json)
+
 ![dsh-select-quote](https://raw.githubusercontent.com/latte03/dsh-select-quote/main/assets/hero.png)
 
 ## 功能
