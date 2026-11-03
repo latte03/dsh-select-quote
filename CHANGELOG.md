@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.20](https://github.com/latte03/dsh-select-quote/compare/v0.3.19...v0.3.20) (2026-11-03)
+
 ## [0.3.19](https://github.com/latte03/dsh-select-quote/compare/v0.3.18...v0.3.19) (2026-11-03)
 
 ### Features
