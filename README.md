@@ -1,6 +1,6 @@
 # dsh-select-quote
 
-[DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) 的客户端插件：在对话里**划词加批注**——选中的原文连同评论随下一条消息交给模型，正文留下标记，模型可以逐条回指；也可以就任意一段原文在侧边开启**子代理对话**，或就地**翻译**成另一种语言。
+[DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) 客户端插件：为 DSH 增加**划词批注、引用**、**划词翻译**、**侧边子代理提问**，链接用**默认浏览器**打开。选中的原文连同评论随下一条消息交给模型，正文保留高亮与序号角标、可跳回原文；菜单可划词浮出或从右键打开，翻译可单独指定模型。
 
 [![开放插件市场](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-select-quote.json)](https://dshopen.org/zh/plugins/dsh-select-quote/)
 [![dsh.so risk](https://cdn.dsh.so/badge/dsh-select-quote.svg)](https://www.dsh.so/artifact/dsh-select-quote/?ref=badge)
