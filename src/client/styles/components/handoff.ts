@@ -20,48 +20,41 @@ export const HANDOFF_CSS = `
   transition: background-color 0.12s;
 }
 
-/* Ordinal as a superscript corner badge at the END of the marked text, so it
-   never sits between the reader and the sentence. Only the last fragment of a
-   multi-fragment mark carries the index, so the number appears exactly once.
-   Absolute so the badge adds no inline advance width: annotating never reflows
-   the paragraph or moves following words. Bottom (not top) anchors to the last
-   fragment: for a mark spanning several lines the containing block is the union
-   of the first and last fragments, so its bottom edge is the last line.
-   BADGE_BOTTOM / BADGE_HEIGHT / the 2px margin in annotate-text.ts mirror the
-   numbers below for collision measurement. */
-.dsq_annMark[data-dsq-ann-index]::after {
-  content: attr(data-dsq-ann-index);
+/* Badge painted at the END of a mark: the ordinal, the handoff arrow, or the
+   bot glyph for a side question.
+   A real element, not a ::after. A mark that wraps is one inline box spanning
+   several lines, and percentage offsets resolve against a width unrelated to
+   where the text actually ends (measured: a 678px two-line mark resolved
+   +left: 100%+ to 0, a 91px one-line mark to 90.88px). annotate-text.ts
+   therefore measures the last line fragment and writes left/top in pixels;
+   collision offsets become a transform on this element alone. */
+.dsq_annBadge {
   position: absolute;
-  bottom: 8px;
-  left: 100%;
-  /* Above the native selection highlight and the background of a later mark:
-     both otherwise paint over the badge when their ranges meet. */
-  z-index: 2;
-  /* JS shifts colliding badges right/up; the resting position is unchanged. */
-  transform: translate(var(--dsq-ann-badge-x, 0px), var(--dsq-ann-badge-y, 0px));
   display: grid;
   place-items: center;
   min-width: 15px;
   height: 15px;
-  margin-left: 2px;
   padding: 0 3px;
   border-radius: 999px;
   background: var(--dsq-mark-color);
   color: #fff;
   font-size: 10px;
+  font-style: normal;
   font-weight: 600;
   line-height: 1;
-  /* The only click target on a mark; the prose itself stays selectable. */
-  pointer-events: auto;
-  cursor: pointer;
+  /* Above the native selection highlight and the background of a later mark:
+     both otherwise paint over the badge when their ranges meet. */
+  z-index: 2;
+  /* The mark stays the click target; the badge is decoration. */
+  pointer-events: none;
 }
 
-/* Side-question mark: same badge slot, the lucide bot glyph instead of the
-   ordinal. Declared after the ordinal rule so it wins on equal specificity.
-   The glyph is a data-URI because ::after cannot hold an element; it is drawn
-   in white, matching the ordinal badge's ink on the accent fill. */
-.dsq_annMark[data-dsq-ann-robot]::after {
-  content: "";
+/* Side-question mark: the lucide bot glyph instead of the ordinal, drawn in
+   white to match the badge ink on the accent fill. The glyph is a data URI
+   because the badge is a single element with no room for an inline svg. */
+.dsq_annBadge[data-dsq-ann-robot] {
+  width: 15px;
+  padding: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
@@ -71,27 +64,9 @@ export const HANDOFF_CSS = `
 /* Arrow badge for a selection sent to another conversation. One glyph, so the
    width is fixed instead of digit-based; the box matches the ordinal badge so
    collision offsets stay interchangeable. */
-.dsq_annMark[data-dsq-ann-arrow]::after {
-  content: "↗";
-  position: absolute;
-  bottom: 8px;
-  left: 100%;
-  z-index: 2;
-  transform: translate(var(--dsq-ann-badge-x, 0px), var(--dsq-ann-badge-y, 0px));
-  display: grid;
-  place-items: center;
+.dsq_annBadge[data-dsq-ann-arrow] {
   width: 15px;
-  height: 15px;
-  margin-left: 2px;
   padding: 0;
-  border-radius: 999px;
-  background: var(--dsq-mark-color);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  pointer-events: auto;
-  cursor: pointer;
 }
 
 .dsq_annMark:hover {

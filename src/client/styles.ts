@@ -108,6 +108,7 @@ export const styles = {
   annDirective: 'dsq_annDirective',
   annAnchor: 'dsq_annAnchor',
   annMark: 'dsq_annMark',
+  annBadge: 'dsq_annBadge',
   annMarkFlash: 'dsq_annMarkFlash',
   annMessageFlash: 'dsq_annMessageFlash',
   handoffRow: 'dsq_handoffRow',

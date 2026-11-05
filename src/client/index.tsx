@@ -13,6 +13,7 @@ import {
   refreshAnnotationMarkLabels,
   syncHandoffMarks,
   syncPendingAnnotationJobs,
+  relayoutAnnotationMarks,
   watchAnnotationMarks,
 } from './dom/annotate-text.ts'
 import { bindAnnotationMarkPreview } from './dom/chipPreview.ts'
@@ -557,6 +558,16 @@ function applyBody(ctx: Context): void {
   ctx.effect(() => watchAnnotationDirectives(), 'dsh-select-quote: annotation directives')
   // Underline + ordinal badges on annotated text; survive transcript re-renders.
   ctx.effect(() => watchAnnotationMarks(), 'dsh-select-quote: annotation marks')
+  // Badges are placed from measured geometry; a resize or a late font swap
+  // rewraps the prose under them, so their anchors have to be recomputed.
+  ctx.effect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return () => {}
+    const relayout = (): void => relayoutAnnotationMarks()
+    window.addEventListener('resize', relayout)
+    const fonts = (document as Document & { fonts?: FontFaceSet }).fonts
+    void fonts?.ready.then(relayout).catch(() => {})
+    return () => window.removeEventListener('resize', relayout)
+  }, 'dsh-select-quote: mark badge relayout')
   // Click/keyboard preview for those marks (the same panel as model chips).
   ctx.effect(() => bindAnnotationMarkPreview(), 'dsh-select-quote: mark preview')
   // The optimistic send echo paints the composer draft, protocol block included.

@@ -193,6 +193,28 @@ function makeArrowInteractive(mark: HTMLElement, targetLabel?: string): void {
   if (mark.getAttribute('aria-label') !== label) mark.setAttribute('aria-label', label)
 }
 
+/**
+ * Attach the badge element to the mark's last fragment.
+ *
+ * Called **after** the mark is in the document: `Range.surroundContents()`
+ * clears the new parent's children before moving the range into it, so a badge
+ * appended beforehand is silently dropped.
+ */
+function attachBadge(mark: HTMLSpanElement, job: AnnotationJob): void {
+  const badge = document.createElement('i')
+  badge.className = styles.annBadge
+  badge.setAttribute('aria-hidden', 'true')
+  if (job.variant === 'arrow') {
+    badge.setAttribute(ARROW_ATTR, 'true')
+    badge.textContent = '↗'
+  } else if (job.variant === 'robot') {
+    badge.setAttribute(ROBOT_ATTR, 'true')
+  } else {
+    badge.textContent = String(job.index)
+  }
+  mark.append(badge)
+}
+
 function createMark(job: AnnotationJob, withIndex: boolean): HTMLSpanElement {
   const mark = document.createElement('span')
   mark.className = styles.annMark
@@ -208,10 +230,6 @@ function createMark(job: AnnotationJob, withIndex: boolean): HTMLSpanElement {
   // Only the last fragment carries the ordinal, so the corner badge shows once.
   if (withIndex) {
     mark.setAttribute(INDEX_ATTR, String(job.index))
-    // A side question's mark keeps the ordinal for lookups and previews but
-    // paints a bot glyph: the passage was quoted by the sidebar agent, not by
-    // an ordinary user annotation.
-    if (job.variant === 'robot') mark.setAttribute(ROBOT_ATTR, 'true')
     makeBadgeInteractive(mark, job.index)
   }
   return mark
@@ -242,8 +260,10 @@ function wrapRange(item: HTMLElement, job: AnnotationJob, from: number, to: numb
     const range = document.createRange()
     range.setStart(node, piece.start - piece.entry.start)
     range.setEnd(node, piece.end - piece.entry.start)
-    const mark = createMark(job, i === pieces.length - 1)
+    const last = i === pieces.length - 1
+    const mark = createMark(job, last)
     range.surroundContents(mark)
+    if (last) attachBadge(mark, job)
     wrapped = true
   })
   return wrapped
@@ -343,46 +363,59 @@ export function refreshAnnotationMarkLabels(): void {
  * never participates in text layout. Collisions are resolved inside each
  * message block, and a stack may not climb into the message above.
  */
+/** The badge element of one mark, when it has one. */
+function badgeOf(mark: HTMLElement): HTMLElement | null {
+  return mark.querySelector<HTMLElement>(`.${styles.annBadge}`)
+}
+
 /**
- * Horizontal distance from a mark's union box to its last line fragment.
+ * Position one badge at the end of its mark's **last line fragment**.
  *
- * The ordinal badge is pinned at `left: 100%` of the mark box, and an inline
- * box that wraps spans every line: its right edge is the widest line's. The
- * badge must instead sit immediately after the final character, so the caller
- * translates it by this (normally negative) delta.
+ * `left: 100%` cannot do this: a mark that wraps is one inline box spanning
+ * several lines, and the percentage resolves against a width that has nothing
+ * to do with where the text actually ends (measured: a 678px-wide two-line mark
+ * resolved to `left: 0`, another 91px-wide one to `left: 90.88px`). So the
+ * badge is a real element placed in pixels: measure the last client rect of a
+ * range over the mark's text, then convert it into the mark's own coordinate
+ * space.
  */
-function badgeBaseOffsetX(mark: HTMLElement): number {
-  if (typeof document === 'undefined') return 0
-  const box = mark.getBoundingClientRect()
-  if (box.width === 0 && box.height === 0) return 0
+function placeBadge(mark: HTMLElement, badge: HTMLElement): { dx: number; dy: number } | null {
+  const text = mark.firstChild
+  if (!(text instanceof Text) || text.length === 0) return null
   const range = document.createRange()
-  range.selectNodeContents(mark)
+  range.setStart(text, 0)
+  range.setEnd(text, text.length)
   const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0)
   const last = rects[rects.length - 1]
-  if (last === undefined) return 0
-  const delta = last.right - box.right
-  // Ignore sub-pixel noise from fractional layout.
-  return Math.abs(delta) < 1 ? 0 : delta
+  if (last === undefined) return null
+  // The badge's absolute origin inside an inline box is NOT the mark's own left
+  // edge: for an inline that wraps, Chrome derives it from the line boxes and
+  // it can sit hundreds of pixels to the right (measured: mark at x=325, badge
+  // at left:0 painted at x=653). So the origin is measured, not assumed.
+  badge.style.left = '0px'
+  badge.style.top = '0px'
+  badge.style.transform = 'none'
+  const origin = badge.getBoundingClientRect()
+  if (origin.width === 0 && origin.height === 0) return null
+  const height = origin.height || BADGE_HEIGHT
+  const dx = last.right + BADGE_MARGIN - origin.left
+  const dy = last.bottom - height - BADGE_BOTTOM - origin.top
+  badge.style.transform = `translate(${dx}px, ${dy}px)`
+  return { dx, dy }
 }
 
 function layoutBadges(scope: ParentNode): void {
   const marks = Array.from(
     scope.querySelectorAll<HTMLElement>(`[${INDEX_ATTR}], [${ARROW_ATTR}]`),
   )
+  const badges = new Map<HTMLElement, HTMLElement>()
+  const bases = new WeakMap<HTMLElement, { dx: number; dy: number }>()
   for (const mark of marks) {
-    mark.style.removeProperty('--dsq-ann-badge-x')
-    mark.style.removeProperty('--dsq-ann-badge-y')
-  }
-  // Correct the resting anchor first, for every mark. `getBoundingClientRect`
-  // on an inline element returns the union of its line fragments, so a mark
-  // that wraps reports the *widest* line's right edge — the badge then hangs
-  // off the end of the first line instead of after the last character. The
-  // last client rect of a range over the mark is the final line fragment.
-  const bases = new Map<HTMLElement, number>()
-  for (const mark of marks) {
-    const base = badgeBaseOffsetX(mark)
-    bases.set(mark, base)
-    if (base !== 0) mark.style.setProperty('--dsq-ann-badge-x', `${base}px`)
+    const badge = badgeOf(mark)
+    if (badge === null) continue
+    badges.set(mark, badge)
+    const base = placeBadge(mark, badge)
+    if (base !== null) bases.set(badge, base)
   }
   if (marks.length < 2) return
   const scroller = marks[0]?.closest('[data-conversation-scroll]')
@@ -409,29 +442,29 @@ function layoutBadges(scope: ParentNode): void {
       Math.max(scrollerTop, ownerRect && ownerRect.height > 0 ? ownerRect.top : scrollerTop) + 4
     const anchors = group
       .map((mark) => {
-        const rect = mark.getBoundingClientRect()
-        const arrow = mark.hasAttribute(ARROW_ATTR)
+        const badge = badges.get(mark)
+        if (badge === undefined) return null
+        const rect = badge.getBoundingClientRect()
         return {
-          mark,
+          badge,
           index: Number(mark.getAttribute(INDEX_ATTR) ?? 0),
-          x: rect.right + (bases.get(mark) ?? 0) + BADGE_MARGIN,
-          y: rect.bottom - BADGE_BOTTOM - BADGE_HEIGHT,
-          width: arrow ? 15 : BADGE_WIDTH,
-          height: BADGE_HEIGHT,
+          x: rect.left,
+          y: rect.top,
+          width: rect.width || BADGE_WIDTH,
+          height: rect.height || BADGE_HEIGHT,
           visible: rect.width > 0 && rect.height > 0,
         }
       })
-      .filter((anchor) => anchor.visible)
+      .filter((anchor): anchor is NonNullable<typeof anchor> => anchor !== null && anchor.visible)
       .sort((a, b) => a.index - b.index)
     if (anchors.length < 2) continue
     const offsets = placeBadges(anchors, { right: rightEdge - 4, top: topEdge })
     anchors.forEach((anchor, i) => {
       const { dx, dy } = offsets[i]
-      // The resting base correction is already on the element; the collision
-      // step must add to it, not replace it.
-      const total = (bases.get(anchor.mark) ?? 0) + dx
-      if (total !== 0) anchor.mark.style.setProperty('--dsq-ann-badge-x', `${total}px`)
-      if (dy !== 0) anchor.mark.style.setProperty('--dsq-ann-badge-y', `${dy}px`)
+      // Collisions add to the resting offset; the badge keeps its base position.
+      const base = bases.get(anchor.badge)
+      if (base === undefined) return
+      anchor.badge.style.transform = `translate(${base.dx + dx}px, ${base.dy + dy}px)`
     })
   }
 }
@@ -492,11 +525,23 @@ export function applyAnnotationMarks(
 
   if (!only) {
     layoutBadges(scope)
+    // Decoration runs before the browser has finished laying the message out
+    // (fonts, images, wrapping), so a badge measured here can be positioned
+    // against a stale line box. One frame later the geometry is final.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => layoutBadges(scope))
+    }
     return
   }
   for (const item of only) {
     if (item.isConnected) layoutBadges(item)
   }
+}
+
+/** Re-place every badge; call after any layout change that moves text. */
+export function relayoutAnnotationMarks(root?: ParentNode): void {
+  if (typeof document === 'undefined') return
+  layoutBadges(root ?? document.body)
 }
 
 /** Insert or refresh jobs; identical jobs are no-ops. */
