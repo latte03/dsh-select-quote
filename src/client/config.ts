@@ -32,6 +32,8 @@ export interface SelectQuoteConfig {
   shortcut: boolean
   sideTaskMode: SideTaskMode
   translateTarget: TranslateTarget
+  /** Hide the translate entry when the selection already is the target language. */
+  translateHideSameLanguage: boolean
   /** Empty provider+model pair follows the conversation's own route. */
   translateProvider: string
   translateModel: string
@@ -45,6 +47,7 @@ export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   shortcut: false,
   sideTaskMode: 'separate',
   translateTarget: 'auto',
+  translateHideSameLanguage: false,
   translateProvider: '',
   translateModel: '',
   translatePrompt: '',
@@ -86,6 +89,10 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
     translateTarget: isTranslateTarget(record.translateTarget)
       ? record.translateTarget
       : DEFAULT_CONFIG.translateTarget,
+    translateHideSameLanguage:
+      typeof record.translateHideSameLanguage === 'boolean'
+        ? record.translateHideSameLanguage
+        : DEFAULT_CONFIG.translateHideSameLanguage,
     translateProvider:
       typeof record.translateProvider === 'string'
         ? record.translateProvider
@@ -134,6 +141,7 @@ export function publishConfig(value: unknown): SelectQuoteConfig {
     next.shortcut === current.shortcut &&
     next.sideTaskMode === current.sideTaskMode &&
     next.translateTarget === current.translateTarget &&
+    next.translateHideSameLanguage === current.translateHideSameLanguage &&
     next.translateProvider === current.translateProvider &&
     next.translateModel === current.translateModel &&
     next.translatePrompt === current.translatePrompt

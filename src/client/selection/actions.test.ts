@@ -39,6 +39,12 @@ describe('selection actions', () => {
       selectionActions(snapshot('javascript:alert(1)')).map((action) => action.key),
     ).toEqual(['copy', 'translate', 'add', 'side'])
   })
+
+  it('drops translate when the selection already is the target language', () => {
+    expect(
+      selectionActions(snapshot(), undefined, { hideTranslate: true }).map((action) => action.key),
+    ).toEqual(['copy', 'add', 'side'])
+  })
 })
 
 describe('splitLabelAt', () => {

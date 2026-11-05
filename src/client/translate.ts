@@ -168,3 +168,23 @@ export function resolveTranslatePrompt(custom: string, target: TranslateLanguage
   const template = custom.trim().length > 0 ? custom : DEFAULT_TRANSLATE_PROMPT
   return template.replaceAll('{target}', LANGUAGE_NAMES[target])
 }
+
+/**
+ * Whether translating would be a no-op because the selection already is in the
+ * language the reader would translate into. Under `auto` the comparison uses
+ * the UI language rather than the flipped target (`resolveTranslateTarget`
+ * flips same-language text to English, which is exactly the case callers want
+ * to hide). Unknown source languages never match.
+ */
+export function isAlreadyTargetLanguage(
+  text: string,
+  configured: TranslateTarget,
+  uiLocale: string,
+): boolean {
+  const source = detectSourceLanguage(text)
+  if (source === null) return false
+  if (isTranslateLanguage(configured)) return source === configured
+  const base = uiLocale.toLowerCase().split(/[-_]/)[0]
+  const ui: TranslateLanguage = isTranslateLanguage(base) ? base : 'en'
+  return source === ui
+}

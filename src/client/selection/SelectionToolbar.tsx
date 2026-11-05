@@ -26,6 +26,7 @@ import { activeLocale, t } from '../i18n.ts'
 import { ModelSelect } from '../model/ModelSelect.tsx'
 import type { ModelChoice } from '../model/types.ts'
 import {
+  isAlreadyTargetLanguage,
   MAX_TRANSLATE_CHARS,
   resolveTranslatePrompt,
   resolveTranslateTarget,
@@ -1069,8 +1070,17 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
 
   if (!active) return null
 
+  const visibilityFor = (text: string): { hideTranslate: boolean } => ({
+    hideTranslate:
+      config.translateHideSameLanguage &&
+      isAlreadyTargetLanguage(text, config.translateTarget, activeLocale()),
+  })
   const toolbarStyle: CSSProperties = { left: active.left, top: active.top }
-  const actions: SelectionActionEntry[] = selectionActions(active, handoffOptions).map((action) => ({
+  const actions: SelectionActionEntry[] = selectionActions(
+    active,
+    handoffOptions,
+    visibilityFor(active.text),
+  ).map((action) => ({
     ...action,
     onClick: () => runAction(action.key, active),
   }))
@@ -1157,7 +1167,11 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       ) : null}
       {menu ? (
         <SelectionMenu
-          entries={selectionActions(menu.snapshot, handoffOptions).map((action) => ({
+          entries={selectionActions(
+            menu.snapshot,
+            handoffOptions,
+            visibilityFor(menu.snapshot.text),
+          ).map((action) => ({
             ...action,
             label: action.key === 'handoff' ? (action.menuLabel ?? action.label) : action.label,
             onClick: () => runAction(action.key, menu.snapshot, 'menu'),

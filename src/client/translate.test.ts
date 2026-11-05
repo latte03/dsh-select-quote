@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_TRANSLATE_PROMPT,
   detectSourceLanguage,
+  isAlreadyTargetLanguage,
   resolveTranslatePrompt,
   resolveTranslateTarget,
 } from './translate.ts'
@@ -48,6 +49,29 @@ describe('resolveTranslateTarget', () => {
 
   it('falls back to English for a UI language this plugin does not serve', () => {
     expect(resolveTranslateTarget('这是一段中文。', 'auto', 'ko')).toBe('en')
+  })
+})
+
+describe('isAlreadyTargetLanguage', () => {
+  it('matches the UI language under auto, even though the target flips', () => {
+    expect(isAlreadyTargetLanguage('这是一段中文。', 'auto', 'zh')).toBe(true)
+    expect(isAlreadyTargetLanguage('Hello there, this is a test.', 'auto', 'zh')).toBe(false)
+    expect(isAlreadyTargetLanguage('Hello there, this is a test.', 'auto', 'en')).toBe(true)
+  })
+
+  it('matches a fixed target language only when the selection is in it', () => {
+    expect(isAlreadyTargetLanguage('这是一段中文。', 'en', 'zh')).toBe(false)
+    expect(isAlreadyTargetLanguage('Hello there, this is a test.', 'en', 'zh')).toBe(true)
+    expect(isAlreadyTargetLanguage('Bonjour, ceci est un test.', 'fr', 'zh')).toBe(true)
+  })
+
+  it('never hides for content without a detectable language', () => {
+    expect(isAlreadyTargetLanguage('12345 !!! ---', 'auto', 'zh')).toBe(false)
+    expect(isAlreadyTargetLanguage('12345 !!! ---', 'en', 'en')).toBe(false)
+  })
+
+  it('falls back to English for an unsupported UI locale', () => {
+    expect(isAlreadyTargetLanguage('Hello there, this is a test.', 'auto', 'ko')).toBe(true)
   })
 })
 

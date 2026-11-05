@@ -15,6 +15,7 @@ describe('normalizeConfig', () => {
       shortcut: false,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
+      translateHideSameLanguage: false,
       translateProvider: '',
       translateModel: '',
       translatePrompt: '',
@@ -25,6 +26,7 @@ describe('normalizeConfig', () => {
       shortcut: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
+      translateHideSameLanguage: false,
       translateProvider: '',
       translateModel: '',
       translatePrompt: '',
@@ -44,6 +46,15 @@ describe('normalizeConfig', () => {
   it('keeps a known translation target and rejects unknown codes', () => {
     expect(normalizeConfig({ translateTarget: 'ja' }).translateTarget).toBe('ja')
     expect(normalizeConfig({ translateTarget: 'ko' }).translateTarget).toBe('auto')
+  })
+
+  it('keeps the hide-same-language switch only when boolean', () => {
+    expect(normalizeConfig({ translateHideSameLanguage: true }).translateHideSameLanguage).toBe(
+      true,
+    )
+    expect(
+      normalizeConfig({ translateHideSameLanguage: 'yes' }).translateHideSameLanguage,
+    ).toBe(false)
   })
 
   it('keeps the translation route and prompt only when they are strings', () => {

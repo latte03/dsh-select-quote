@@ -305,6 +305,28 @@ function ConfigSection({
           onChange={(target) => void form.set('translateTarget', target)}
         />
       </div>
+      <label className={styles.settingsSwitchRow}>
+        <span className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.translateHideSameLanguage')}</span>
+          <span className={styles.settingsHint}>
+            {t('settings.translateHideSameLanguageHint')}
+          </span>
+        </span>
+        <span className={styles.switch} data-on={current.translateHideSameLanguage}>
+          <input
+            type="checkbox"
+            className={styles.srOnly}
+            aria-label={t('settings.translateHideSameLanguage')}
+            checked={current.translateHideSameLanguage}
+            onChange={(event) => {
+              const next = event.target.checked
+              if (next === current.translateHideSameLanguage) return
+              void form.set('translateHideSameLanguage', next)
+            }}
+          />
+          <span className={styles.switchTrack} aria-hidden="true" />
+        </span>
+      </label>
       <div className={styles.settingsSection}>
         <div className={styles.settingsCopy}>
           <span className={styles.settingsLabel}>{t('settings.translateModel')}</span>

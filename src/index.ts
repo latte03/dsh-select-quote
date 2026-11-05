@@ -20,6 +20,7 @@ export interface Config {
   shortcut: Volatile<boolean>
   sideTaskMode: Volatile<'separate' | 'reuse'>
   translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
+  translateHideSameLanguage: Volatile<boolean>
   translateProvider: Volatile<string>
   translateModel: Volatile<string>
   translatePrompt: Volatile<string>
@@ -34,6 +35,7 @@ export const Config = z.object({
     .union(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'])
     .default('auto')
     .volatile(),
+  translateHideSameLanguage: z.boolean().default(false).volatile(),
   translateProvider: z.string().default('').volatile(),
   translateModel: z.string().default('').volatile(),
   translatePrompt: z.string().default('').volatile(),

@@ -60,6 +60,12 @@ export interface SelectionActionEntry extends SelectionAction {
   readonly onClick: () => void
 }
 
+/** Per-selection visibility switches that depend on the text itself. */
+export interface SelectionActionVisibility {
+  /** Hide translate when the selection already is the target language. */
+  readonly hideTranslate?: boolean
+}
+
 /**
  * One ordered list for both surfaces: the floating toolbar paints it inline,
  * the right-click menu paints it vertically. Adding or reordering an action
@@ -68,13 +74,16 @@ export interface SelectionActionEntry extends SelectionAction {
 export function selectionActions(
   snapshot: SelectionSnapshot,
   handoff?: HandoffActionOptions,
+  visibility?: SelectionActionVisibility,
 ): readonly SelectionAction[] {
   return [
     ...(linkTarget(snapshot.text, snapshot.anchorHref) === null
       ? []
       : [{ key: 'open' as const, icon: 'external-link' as const, label: t('toolbar.openLink') }]),
     { key: 'copy', icon: 'copy', label: t('toolbar.copy') },
-    { key: 'translate', icon: 'languages', label: t('toolbar.translate') },
+    ...(visibility?.hideTranslate
+      ? []
+      : [{ key: 'translate' as const, icon: 'languages' as const, label: t('toolbar.translate') }]),
     { key: 'add', icon: 'plus', label: t('toolbar.addToTask') },
     ...(handoff?.available
       ? [
