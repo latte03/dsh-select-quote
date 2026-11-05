@@ -29,6 +29,9 @@ export const ANNOTATIONS_CSS = `
   width: 20px;
   height: 20px;
   padding: 0;
+  /* On exit the confirm chip hands the corner back to this 20px button; the
+     label inside is still fading, so clip it instead of letting it spill. */
+  overflow: hidden;
   border-radius: 6px;
   color: var(--dsq-label-3);
   font-size: 14px;

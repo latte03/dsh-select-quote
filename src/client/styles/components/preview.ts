@@ -102,13 +102,19 @@ export const PREVIEW_CSS = `
   white-space: nowrap;
 }
 
+/* Exit transition (this rule is the state the label lands in when confirm is
+   cancelled). Text leaves first and the box collapses afterwards: a 50ms fade
+   followed by a delayed width run, so the eye never tracks a half-transparent
+   label sliding into the icon. The entering direction is declared on the
+   confirming rule below, which is the state the label lands in on the way in —
+   CSS uses the transition of the destination state, not the origin. */
 .dsq_deleteConfirmLabel {
   max-width: 0;
   margin-left: 0;
   overflow: hidden;
   opacity: 0;
   white-space: nowrap;
-  transition: max-width 0.16s ease, margin-left 0.16s ease, opacity 0.12s ease;
+  transition: opacity 0.05s ease, max-width 0.12s ease 0.05s, margin-left 0.12s ease 0.05s;
 }
 
 /* One grid item, so the icon-only state stays centered in the 26/20px button
@@ -118,10 +124,12 @@ export const PREVIEW_CSS = `
   align-items: center;
 }
 
+/* Enter transition: the box opens first, the text fades in once it has room. */
 .dsq_deleteConfirm[data-confirming='true'] .dsq_deleteConfirmLabel {
   max-width: 140px;
   margin-left: 4px;
   opacity: 1;
+  transition: max-width 0.14s ease, margin-left 0.14s ease, opacity 0.1s ease 0.06s;
 }
 
 /* Touch selection chrome. Fixed to the visual viewport and mounted on body:

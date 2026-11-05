@@ -671,6 +671,19 @@ function checkCascadePrecedence(code) {
   if (!/\.dsq_summaryTitle[^{]*\{[^}]*white-space:\s*nowrap/.test(css)) {
     problems.push("summary title lost nowrap — it stacks one character per line when space is tight")
   }
+
+  // 3. Exit must hide the text before the box collapses; enter must open the
+  //    box before the text appears. CSS uses the destination state transition,
+  //    so the base rule drives the exit and the confirming rule the entry.
+  if (!/\.dsq_deleteConfirmLabel\s*\{[^}]*transition:\s*opacity\s*0\.05s[^;]*;/.test(css)) {
+    problems.push("the confirm label lost its fast exit fade — the text lingers while the chip shrinks")
+  }
+  if (!/\.dsq_deleteConfirmLabel\s*\{[^}]*transition:[^;]*max-width\s*0\.12s(?:\s*ease)?\s*0\.05s/.test(css)) {
+    problems.push("the confirm label no longer collapses after the fade — text and width animate together")
+  }
+  if (!/\.dsq_deleteConfirm\[data-confirming='true'\] \.dsq_deleteConfirmLabel\s*\{[^}]*transition:[^;]*opacity\s*0\.1s(?:\s*ease)?\s*0\.06s/.test(css)) {
+    problems.push("the confirm label lost its delayed enter fade — the text pops in before the chip has room")
+  }
   return problems
 }
 async function checkSendKey() {
