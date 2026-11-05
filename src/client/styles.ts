@@ -143,6 +143,7 @@ export const styles = {
   translateHead: 'dsq_translateHead',
   translateTargetLabel: 'dsq_translateTargetLabel',
   translateClose: 'dsq_translateClose',
+  translateCopy: 'dsq_translateCopy',
   translateBody: 'dsq_translateBody',
   translateText: 'dsq_translateText',
   translateHint: 'dsq_translateHint',

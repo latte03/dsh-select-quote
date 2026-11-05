@@ -79,6 +79,10 @@ export const COMPOSER_CSS = `
 
 .dsq_translateHead {
   gap: 6px;
+  /* Without this the row stretches its children: the 24px close button then
+     pins to the top of a taller row, so its hover plate looks detached from
+     the icon. */
+  align-items: center;
 }
 
 .dsq_translateTargetLabel {
@@ -270,7 +274,28 @@ export const COMPOSER_CSS = `
 
 .dsq_translateActions {
   justify-content: flex-end;
+  align-items: center;
   gap: 6px;
+}
+
+/* Copy result: an icon button in the actions row, matching the close control's
+   footprint so the two read as one family. The check glyph is the copied
+   confirmation; the label stays on aria-label/title. */
+.dsq_translateCopy {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--dsq-label-2);
+}
+
+.dsq_translateCopy:hover {
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label);
+}
+
+.dsq_translateCopy[data-copied='true'] {
+  color: var(--dsq-accent);
 }
 
 /* Language dropdown shared by the popover and the settings page. The trigger

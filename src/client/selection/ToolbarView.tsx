@@ -530,10 +530,13 @@ function TranslatePanel({
         {state.status === 'done' ? (
           <button
             type="button"
-            className={cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment)}
+            className={cx(A.plain, A.gridMid, styles.translateCopy)}
+            aria-label={translate.copied ? t('translate.copied') : t('translate.copy')}
+            title={translate.copied ? t('translate.copied') : t('translate.copy')}
+            data-copied={translate.copied ? 'true' : undefined}
             onClick={translate.onCopy}
           >
-            {translate.copied ? t('translate.copied') : t('translate.copy')}
+            <LucideIcon name={translate.copied ? 'check' : 'copy'} size={16} />
           </button>
         ) : state.status === 'pending' ? (
           <button

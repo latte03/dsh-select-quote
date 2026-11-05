@@ -220,18 +220,41 @@ export function clearNativeSelection(): void {
   window.getSelection()?.removeAllRanges()
 }
 
+/**
+ * Put text on the clipboard, falling back to the legacy selection copy.
+ *
+ * The async Clipboard API is the good path, but it is not always available in
+ * practice: it rejects with `NotAllowedError` when the document is not focused
+ * (a popover opened over an unfocused window, DevTools holding focus, an
+ * embedded frame) and on origins the browser does not treat as secure. Only
+ * reaching for the fallback when the API is *missing* turned every one of those
+ * into a hard failure — the copy button reported "copy failed" and the text was
+ * lost. Try the API, and on rejection fall back before giving up.
+ */
 export async function copyText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {
+      // Fall through: the legacy path needs no permission, only a selection.
+    }
   }
   const area = document.createElement('textarea')
   area.value = text
   area.setAttribute('readonly', '')
   area.style.position = 'fixed'
+  area.style.top = '0'
   area.style.left = '-9999px'
   document.body.appendChild(area)
+  const previous = document.activeElement
   area.select()
-  document.execCommand('copy')
-  area.remove()
+  let copied = false
+  try {
+    copied = document.execCommand('copy')
+  } finally {
+    area.remove()
+    if (previous instanceof HTMLElement) previous.focus({ preventScroll: true })
+  }
+  if (!copied) throw new Error('the clipboard rejected the copy')
 }
