@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Selection Annotations",
-    "description": "Quote text from the conversation into your next message, ask in a sidebar subagent, or translate the selection in place: the selection stays marked in the source and the model points back at it."
+    "description": "Brings selection annotations, in-place translation and sidebar questions to dsh, plus sending annotations across conversations and jumping back to their source."
   }
 }

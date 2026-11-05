@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Anotaciones de selección",
-    "description": "Cita el texto seleccionado en el próximo mensaje, pregunta en una tarea lateral o tradúcelo en el sitio: la selección queda marcada en el original y el modelo responde a cada fragmento."
+    "description": "Añade a dsh anotaciones sobre el texto seleccionado, traducción y preguntas laterales, además de enviar anotaciones entre conversaciones y volver a su origen."
   }
 }
