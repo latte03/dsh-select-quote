@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.0](https://github.com/latte03/dsh-select-quote/compare/v0.3.21...v0.4.0) (2026-11-05)
+
+### Features
+
+* 状态提示改为表面配色并加错误图标，不可用入口改为禁用+悬浮说明 ([8595173](https://github.com/latte03/dsh-select-quote/commit/859517329ba84a81a61d8f2631fc9bf41a28bf03))
+
+### Bug Fixes
+
+* 草稿卡确认chip改为固定宽度绝对定位，卡内元素不再抖动 ([c29f263](https://github.com/latte03/dsh-select-quote/commit/c29f26306aedcb80e659f73b10d3cbc8b75d078c))
+* 草稿卡确认chip回到标题行，提示hint保持满宽，卡片最小宽度210px ([df9a8e6](https://github.com/latte03/dsh-select-quote/commit/df9a8e6e841cd742ab6f115b0c246f44426fd8d6))
+* 侧边提问的 mark 用机器人徽章并隔离父会话标记，修正换行 mark 的角标锚点 ([af9721a](https://github.com/latte03/dsh-select-quote/commit/af9721ae0eaf5672fe42736c34d292361e43b9f6))
+* 侧边提问发送成功后消费对应待发批注，避免草稿卡片残留 ([4859abd](https://github.com/latte03/dsh-select-quote/commit/4859abdd5854bb4b781ab0a68a4ba91707032b0b))
+* 翻译浮层关闭按钮居中对齐，复制改为图标按钮并补剪贴板兜底 ([d3fb048](https://github.com/latte03/dsh-select-quote/commit/d3fb0487683c5039580733e2b4a395fc84ecf19f))
+* 角标设为不可选中，并让 mark 文本比对跳过角标字形 ([7a3d21a](https://github.com/latte03/dsh-select-quote/commit/7a3d21ac4a6cf8df58fb2c9b71d300d0f2da903a))
+* 确认态改回流内撑开，chip 内 x 在左，不再遮挡或隐藏内容 ([af0e3b4](https://github.com/latte03/dsh-select-quote/commit/af0e3b4fbc1b947fe29c0ee71fb3babdebd78054))
+* 确认态让静态文案让位，避免「确认移除」盖住标题与 × ([37f2811](https://github.com/latte03/dsh-select-quote/commit/37f28118f75c512b6a559b9bc43dbe46f2ba4f94))
+* 删除确认退场先收文字再收宽度，进入则先开宽度 ([2104ee8](https://github.com/latte03/dsh-select-quote/commit/2104ee8dfa1721de95154e91f0118625649315d8))
+* 适配 dsh 0.2.2 气泡管线，修复批注卡缺失与动作行丢失 ([50209c0](https://github.com/latte03/dsh-select-quote/commit/50209c077426f402b69b5b9a955626ed0123fa49))
+* 修复状态提示白底白字，侧边提问按 Remote 可用性发布 ([e747bdb](https://github.com/latte03/dsh-select-quote/commit/e747bdba2a664fcae75ce2f5023dc17f1de5c45a))
+* 修空气泡、确认移除挤压与历史卡来源跳转，新增 sync:web ([1529ffd](https://github.com/latte03/dsh-select-quote/commit/1529ffdc00cfd40eedef24cad0c8ca821285db0b))
+* 子会话按 flow key 渲染自己的批注卡，并隔离父会话草稿与继承行的卡片 ([7ebc816](https://github.com/latte03/dsh-select-quote/commit/7ebc816ced810901a3f4a44e3842003b013b9fa8))
+
 ## [0.3.21](https://github.com/latte03/dsh-select-quote/compare/v0.3.20...v0.3.21) (2026-11-05)
 
 ### Features
