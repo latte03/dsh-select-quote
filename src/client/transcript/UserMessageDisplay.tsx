@@ -117,9 +117,15 @@ export function UserMessageDisplay(props: UserMessageDisplayProps): ReactNode {
     )
   }
 
-  // Host-view resolution failed (host renamed its internal component). Show
-  // the text rather than the protocol block; the actions row is host-owned, so
-  // there is deliberately no private copy of it here.
+  // Host-view resolution failed (host renamed its internal component, or the
+  // registry shape changed). Show the text rather than the protocol block; the
+  // actions row is host-owned, so there is deliberately no private copy of it
+  // here — a message that reaches this branch visibly loses its time/copy row,
+  // which is the signal to re-check the host registration shape.
+  console.warn(
+    'dsh-select-quote: host user node view was not resolved; falling back to a plain bubble',
+    { kind: (node as { kind?: unknown }).kind },
+  )
   const images = imageAttachments(node.data?.content)
   const loadImage = props.loadImage
   return (

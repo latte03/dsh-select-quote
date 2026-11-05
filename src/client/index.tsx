@@ -43,7 +43,8 @@ import {
   type HostNodeComponent,
   type UserMessageDisplayProps,
 } from './transcript/UserMessageDisplay.tsx'
-import { pickHostNode } from './transcript/host-user.ts'
+import { componentName, pickHostNode } from './transcript/host-user.ts'
+import { createProtocolRule } from './transcript/protocol-rule.ts'
 import {
   adoptStorageAnnotations,
   bindAnnotationSession,
@@ -555,6 +556,21 @@ export function apply(ctx: Context): void {
     }
   }, 'dsh-select-quote: annotation persistence')
 
+  // The selection toolbar above is ours end-to-end, but the durable bubble is
+  // no longer ours to rewrite on dsh 0.2.2: the host renders user text through
+  // `conversation.user.text` -> `uiConversation.userText` rules, and any text
+  // no rule claims paints literally. That is why a annotated message used to
+  // show its whole JSON payload in the bubble. Claim the protocol span here so
+  // it renders as nothing on both host generations.
+  //
+  // Optional service: a 0.2.1 host has no rule registry at all, and the
+  // `priority: -10` `conversation.chat.node` override below still covers it.
+  ctx.inject(['uiConversation'], (scope) => {
+    const rules = scope.uiConversation?.userText
+    if (typeof rules?.register !== 'function') return
+    scope.effect(() => rules.register(createProtocolRule()), 'dsh-select-quote: user-text rule')
+  })
+
   // Root: always mounted selection toolbar + comment popover.
   ctx.slots.inject('shell.overlay', () => {
     ctx.slots.register(
@@ -601,6 +617,8 @@ export function apply(ctx: Context): void {
   // steering send carries the same protocol block, so it needs the same
   // rewrite. Each wrapper passes itself by identity so the lookup never
   // resolves the plugin's own registration as the host.
+  /** Keys whose resolution failure was already reported (one console line each). */
+  const diagnosed = new Set<string>()
   const hostNodeOf = (
     key: 'user' | 'steering',
     self: unknown,
@@ -609,8 +627,51 @@ export function apply(ctx: Context): void {
       typeof ctx.slots.entries === 'function'
         ? ctx.slots.entries('conversation.chat.node')
         : []
-    return pickHostNode(entries, self, key) as HostNodeComponent | undefined
+    const picked = pickHostNode(entries, self, key) as HostNodeComponent | undefined
+    if (picked === undefined) {
+      // One-shot diagnostic: the fallback bubble has no actions row, so a
+      // resolution failure shows up as "the message lost its time/copy row".
+      // Print the registry shape once per key so the cause is visible without a
+      // debugger.
+      if (!diagnosed.has(key)) {
+        diagnosed.add(key)
+        const nameOf = (component: unknown): string | undefined => componentName(component)
+        console.warn(
+          `dsh-select-quote: no host view resolved for conversation.chat.node / ${key}`,
+          entries.map((entry) => ({
+            key: entry.options?.key,
+            priority: entry.options?.priority,
+            name: nameOf(entry.component),
+            self: entry.component === self,
+          })),
+        )
+      }
+    }
+    return picked
   }
+
+  /**
+   * Slot declarations that travel with the winning entry.
+   *
+   * dsh 0.2.2 renders the user bubble through `conversation.chat.user.before`
+   * and `conversation.chat.user.content`, and the slot core asserts that the
+   * *entry* declares a nested slot before the entry may render it: a
+   * `renderSlot(key)` from an entry whose `children` omits `key` throws
+   * `SlotOwnershipError` instead of falling back. The host's own registration
+   * carries these declarations, so a wrapper that wins the cell by `priority`
+   * must re-declare them or the delegated host view blows up inside the
+   * entry's error boundary — and the message renders without its actions row.
+   *
+   * Exactly what the host declares, no more: `conversation.chat.user.before`
+   * is the chain `UserStyleBubble` renders above the bubble. The text/content
+   * seats are *factory* slots (`conversation.chat.user.content`,
+   * `conversation.user.text`) whose ownership lives on the factory definition,
+   * so declaring them here would be a false claim about this entry.
+   */
+  const HOST_BUBBLE_CHILDREN = {
+    'conversation.chat.user.before': { kind: 'chain', scope: 'session' },
+  } as const
+
   function UserNode(props: UserMessageDisplayProps) {
     return <UserMessageDisplay {...props} hostNodeOf={() => hostNodeOf('user', UserNode)} />
   }
@@ -632,6 +693,7 @@ export function apply(ctx: Context): void {
           // The delegated host view needs its own translator for the copy
           // tooltip; the chat namespace is the one it is written against.
           locale: 'chat',
+          children: HOST_BUBBLE_CHILDREN,
         },
         View,
       )

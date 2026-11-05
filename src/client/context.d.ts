@@ -36,6 +36,13 @@ export interface SlotRegistration {
   locale?: string
   /** Props this entry contributes at render time; the Host merges them in. */
   inject?: () => Record<string, unknown>
+  /**
+   * Nested slots this entry owns. The slot core asserts ownership: a
+   * `renderSlot(key)` from inside the entry throws `SlotOwnershipError` unless
+   * `key` appears here, so a wrapper that wins a cell by `priority` must
+   * re-declare whatever the entry it shadows declared.
+   */
+  children?: Record<string, { kind: 'single' | 'keyed' | 'list' | 'chain'; scope: string }>
 }
 
 /** One selectable language. */
@@ -152,6 +159,31 @@ declare module '@deepseek-ai/cordis' {
       entries(key: string): ReadonlyArray<SlotEntryInspection>
     }
     locale: LocaleRuntime
+    /**
+     * Conversation services (`@deepseek-ai/dsh-client-ui-conversation`, dsh
+     * 0.2.2+). Optional on purpose: a 0.2.1 host renders the user bubble itself
+     * and has no rule registry, so every read is feature-detected.
+     */
+    uiConversation: {
+      /**
+       * Pure text rules that split a durable user message into inline nodes.
+       * Duplicate ids throw, and the reserved id `text` is rejected — the
+       * plugin's rule id is its own namespace.
+       */
+      userText: {
+        register(rule: {
+          id: string
+          order: number
+          match(
+            text: string,
+            from: number,
+            context: { read(key: string): unknown },
+          ): { id: string; start: number; end: number; data: unknown } | undefined
+        }): () => void
+        getSnapshot(): number
+        subscribe(listener: () => void): () => void
+      }
+    }
     configForms: {
       /** Host config form keyed by the Loader row id, not the package name. */
       get(entryId: string): ConfigFormController

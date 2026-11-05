@@ -303,6 +303,16 @@ function checkUserChrome(code) {
   if (!code.includes('isSubmitKey')) {
     problems.push('composer send intercept does not use isSubmitKey — modified Enter gestures skip the fold')
   }
+  // dsh 0.2.2 asserts slot ownership: an entry that wins `conversation.chat.node`
+  // must itself declare the nested slots the host bubble renders, or the
+  // delegated view throws SlotOwnershipError inside the entry boundary and the
+  // message loses its actions row. Only `before` is an entry-owned chain; the
+  // text/content seats are factory-owned and must NOT be claimed here.
+  if (!code.includes('conversation.chat.user.before')) {
+    problems.push(
+      'the user node registration does not declare conversation.chat.user.before — the delegated host bubble throws SlotOwnershipError and loses its time/copy row',
+    )
+  }
   if (!/addEventListener\(["']storage["']/.test(code)) {
     problems.push('annotation store has no storage listener — another tab can overwrite newer state')
   }
@@ -516,6 +526,158 @@ function packedFiles() {
  * its draft. Plain Enter, Ctrl+Enter and Meta+Enter submit; Shift+Enter,
  * Alt/AltGraph, the two modifiers together, and IME are not submits.
  */
+/**
+ * Draft writes must not clear the document on a Lexical host.
+ *
+ * dsh 0.2.2's `setDraft` is `root.clear()` + rebuild, which drops the host's
+ * own `QuoteNode` — a quote the user took before annotating. The plugin has to
+ * write through `captureInsertion()`/`insertText()` whenever the host offers it.
+ * Replay both host generations here.
+ */
+async function checkDraftWrite() {
+  const problems = []
+  const { writeDraft, appendDraftText } = await import(
+    new URL('../src/client/composer/draft-write.ts', import.meta.url).href
+  )
+
+  // Lexical host: in-place edit, never `setDraft`.
+  let draft = '用户草稿'
+  let rev = 1
+  const lexical = {
+    setDraftCalls: 0,
+    inserted: [],
+    setDraft(text) {
+      this.setDraftCalls += 1
+      draft = text
+      rev += 1
+    },
+    captureInsertion: () => ({ start: 0, end: draft.length, draftRev: rev }),
+    insertText(text, span) {
+      if (span.draftRev !== rev) return false
+      this.inserted.push(text)
+      draft = text
+      rev += 1
+      return true
+    },
+  }
+  writeDraft(lexical, '新草稿', '用户草稿')
+  if (lexical.setDraftCalls !== 0) {
+    problems.push('a Lexical host was rewritten through setDraft — this clears the draft and its quote nodes')
+  }
+  if (lexical.inserted.length !== 1) {
+    problems.push(`the in-place verb was used ${lexical.inserted.length} times, want 1`)
+  }
+
+  // Append path: collapsed caret only.
+  let appendDraft = ''
+  let appendRev = 5
+  const appendHost = {
+    setDraft(text) {
+      appendDraft = text
+      appendRev += 1
+    },
+    captureInsertion: () => ({ start: appendDraft.length, end: appendDraft.length, draftRev: appendRev }),
+    insertText(text, span) {
+      if (span.draftRev !== appendRev) return false
+      appendDraft = text
+      return true
+    },
+  }
+  if (!appendDraftText(appendHost, '\u200B')) {
+    problems.push('appending the invisible marker was refused at a collapsed caret')
+  }
+
+  // Older host: must still write through setDraft.
+  const written = []
+  const legacy = { setDraft: (text) => written.push(text) }
+  writeDraft(legacy, '旧宿主', '')
+  if (written.length !== 1) problems.push('an older host without the in-place verb was never written')
+
+  return problems
+}
+
+/**
+ * Every class the plugin exports must have a rule in the shipped CSS.
+ *
+ * `styles.ts` exports a class name per component surface. A name with no
+ * matching rule renders as an unstyled element that inherits the surrounding
+ * flex context — the delete-confirm button shipped without its grow rules once
+ * and collapsed into one character per line inside the 148px summary stack.
+ */
+function checkClassCoverage(code) {
+  const problems = []
+  const exported = [
+    ...new Set([...code.matchAll(/(\w+): "(dsq_[A-Za-z0-9_]+)"/g)].map((match) => match[2])),
+  ]
+  for (const name of exported) {
+    // A rule must mention the class; the string alone (in the export map) does
+    // not count, so require the leading dot.
+    if (!code.includes(`.${name}`)) problems.push(`class "${name}" is exported with no CSS rule`)
+  }
+  if (exported.length === 0) problems.push('no dsq_* classes were found in the bundle')
+  return problems
+}
+
+/** Specificity tuple of one selector (attribute selectors count as classes). */
+function cssSpecificity(selector) {
+  const plain = selector.replace(/\[[^\]]*\]/g, ' X')
+  const ids = (plain.match(/#[A-Za-z]/g) ?? []).length
+  const classes = (plain.match(/\.[A-Za-z]| X/g) ?? []).length
+  const types = (plain.match(/(?:^|[\s>+~])[a-z]/g) ?? []).length
+  return [ids, classes, types]
+}
+
+function compareSpecificity(left, right) {
+  for (let i = 0; i < 3; i += 1) {
+    if (left[i] !== right[i]) return left[i] - right[i]
+  }
+  return 0
+}
+
+/**
+ * A later layer must not silently override an earlier one on equal specificity.
+ *
+ * Layer order is source order (`components/index.ts`), so the last module wins
+ * every tie. The delete-confirm geometry lived in `annotations.ts` while the
+ * shared look lived in `preview.ts` — same [0,3,0], preview later — so the fix
+ * looked correct in the source and did nothing in the browser. Guard the pair
+ * explicitly: the summary's own confirm rules must outrank the shared ones.
+ */
+function checkCascadePrecedence(code) {
+  const problems = []
+  /** Prefix of every rule this module owns for the summary's confirm step. */
+  const OUR_LABEL = '.dsq_summaryItemActions .dsq_deleteConfirm'
+  // Comments quote these selectors; strip them first or a match spans the
+  // prose and glues two unrelated rules together.
+  const css = code.replace(/\/\*[\s\S]*?\*\//g, '')
+  const shared = [...css.matchAll(/(^|})\s*([^{}]*\.dsq_deleteConfirm\[data-confirming='true'\][^{]*)\{/g)]
+    .map((match) => match[2].trim())
+    .filter((selector) => !selector.includes('.dsq_summaryItemActions'))
+  for (const selector of shared) {
+    const theirs = cssSpecificity(selector)
+    for (const ours of [
+      `${OUR_LABEL} .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
+      `${OUR_LABEL}[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
+    ]) {
+      const mine = cssSpecificity(ours)
+      if (compareSpecificity(mine, theirs) <= 0) {
+        problems.push(`${ours} (${mine.join(',')}) does not outrank the shared ${selector} (${theirs.join(',')})`)
+      }
+    }
+  }
+  // Our own geometry must actually be shipped, not merely outrank on paper:
+  // without these, preview.ts's in-flow rule takes over and the label collapses
+  // to one character per line inside the 148px summary card.
+  for (const ours of [
+    `${OUR_LABEL} .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
+    `${OUR_LABEL}[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
+  ]) {
+    if (!css.includes(ours)) problems.push(`${ours} is missing — the summary confirm step falls back to the shared in-flow rule`)
+  }
+  if (shared.length === 0) problems.push('the shared delete-confirm rule was not found — cascade check is stale')
+  return problems
+}
+
 async function checkSendKey() {
   const problems = []
   const { isSubmitKey } = await import(
@@ -1222,6 +1384,20 @@ function mockContext(record, options = {}) {
   }
   if (options.configForms !== undefined) ctx.configForms = options.configForms
   if (options.shortcuts !== undefined) ctx.shortcuts = options.shortcuts
+  if (options.userText !== undefined) {
+    // dsh 0.2.2 splits user-bubble text through these rules; a message whose
+    // protocol block no rule claims paints its JSON literally.
+    ctx.uiConversation = {
+      userText: {
+        register(rule) {
+          record.push({ kind: 'userText.register', label: rule.id, rule })
+          return () => {}
+        },
+        getSnapshot: () => 0,
+        subscribe: () => () => {},
+      },
+    }
+  }
   ctx.slots = {
     inject(key, callback) {
       record.push({ kind: 'slots.inject', label: key })
@@ -1975,6 +2151,7 @@ const shortcutsFixture = fakeShortcuts(record)
 const { ctx, dicts } = mockContext(record, {
   configForms: configFixture.service,
   shortcuts: shortcutsFixture.service,
+  userText: true,
 })
 const outcome = module.apply(ctx)
 if (outcome !== undefined) throw new Error('apply() must not return a value')
@@ -2101,6 +2278,59 @@ if (hostRegistrations.length !== wantRegistrations) {
 const missing = EXPECTED.filter(
   (expected) => !record.some((entry) => entry.kind === expected.kind && entry.label === expected.label),
 )
+
+// dsh 0.2.2 renders user-bubble text by running `uiConversation.userText`
+// rules; text no rule claims paints literally, so the annotation block would
+// show its whole JSON. Replay the contract the host enforces.
+const userTextProblems = []
+const rules = record.filter((entry) => entry.kind === 'userText.register')
+if (rules.length !== 1) {
+  userTextProblems.push(`registered ${rules.length} user-text rules, want exactly 1`)
+} else {
+  const rule = rules[0].rule
+  if (rule.id === 'text') userTextProblems.push('the rule took the reserved "text" id')
+  if (!Number.isFinite(rule.order)) userTextProblems.push('the rule order is not finite')
+
+  const header = [
+    '# Response annotations:',
+    'Each item contains text selected from an earlier message.',
+  ].join('\n')
+  const message = `${header}\n\n<response-annotations>\n[{"text":"原文","annotation":"评论"}]\n</response-annotations>\n\n用户自己的话`
+  const nodes = []
+  let cursor = 0
+  while (cursor < message.length) {
+    const node = rule.match(message, cursor, { read: () => undefined })
+    if (node === undefined) {
+      nodes.push({ id: 'text', start: cursor, end: message.length, data: { text: message.slice(cursor) } })
+      break
+    }
+    nodes.push(node)
+    cursor = node.end
+  }
+  for (const node of nodes) {
+    if (!Number.isInteger(node.start) || node.start < 0 || node.end <= node.start || node.end > message.length) {
+      userTextProblems.push(`rule produced an invalid range [${node.start}, ${node.end})`)
+      break
+    }
+    if (node.id !== rule.id && node.id !== 'text') {
+      userTextProblems.push(`rule produced a foreign node id "${node.id}"`)
+    }
+    // The host rejects a `text` node whose payload is not its own slice.
+    if (node.id === 'text' && node.data.text !== message.slice(node.start, node.end)) {
+      userTextProblems.push('a text node does not preserve its own substring')
+    }
+  }
+  const rendered = nodes
+    .map((node) => (node.id === 'text' ? node.data.display ?? node.data.text : message.slice(node.start, node.end)))
+    .join('')
+  if (/<response-annotations>|Response annotations:/.test(rendered)) {
+    userTextProblems.push(`the protocol block still renders: ${JSON.stringify(rendered)}`)
+  }
+  if (rendered.trim() !== '用户自己的话') {
+    userTextProblems.push(`the bubble kept ${JSON.stringify(rendered)}, want only the user's own words`)
+  }
+}
+
 const broken = record.filter((entry) => entry.kind === 'slots.register' && typeof entry.component !== 'function')
 const dictionaryProblems = checkDictionaries(dicts)
 const datasetProblems = checkDatasetKeys(code)
@@ -2126,6 +2356,9 @@ const linkProblems = await checkSelectionUrl()
 const metaProblems = checkPackageMeta()
 const userChromeProblems = [...checkUserChrome(code), ...(await checkHostNode())]
 const sendKeyProblems = await checkSendKey()
+const classCoverageProblems = checkClassCoverage(code)
+const cascadeProblems = checkCascadePrecedence(code)
+const draftWriteProblems = await checkDraftWrite()
 const composedDraftProblems = await checkComposedDraft()
 const rewindProblems = checkRewindRestore(code)
 const surfaceProblems = [...checkTranscriptSurfaces(code), ...(await checkEchoStrip())]
@@ -2146,6 +2379,9 @@ if (
   metaProblems.length > 0 ||
   userChromeProblems.length > 0 ||
   sendKeyProblems.length > 0 ||
+  classCoverageProblems.length > 0 ||
+  cascadeProblems.length > 0 ||
+  draftWriteProblems.length > 0 ||
   composedDraftProblems.length > 0 ||
   rewindProblems.length > 0 ||
   configFixtureProblems.length > 0 ||
@@ -2160,6 +2396,7 @@ if (
   shortcutProblems.length > 0 ||
   hostConfigProblems.length > 0 ||
   patchIdentityProblems.length > 0 ||
+  userTextProblems.length > 0 ||
   surfaceProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
@@ -2175,6 +2412,9 @@ if (
   for (const problem of metaProblems) console.error(`PACKAGE META: ${problem}`)
   for (const problem of userChromeProblems) console.error(`USER CHROME: ${problem}`)
   for (const problem of sendKeyProblems) console.error(`SEND KEY: ${problem}`)
+  for (const problem of classCoverageProblems) console.error(`CLASS CSS: ${problem}`)
+  for (const problem of cascadeProblems) console.error(`CASCADE: ${problem}`)
+  for (const problem of draftWriteProblems) console.error(`DRAFT WRITE: ${problem}`)
   for (const problem of composedDraftProblems) console.error(`COMPOSED DRAFT: ${problem}`)
   for (const problem of rewindProblems) console.error(`REWIND RESTORE: ${problem}`)
   for (const problem of configFixtureProblems) console.error(`CONFIG FIXTURE: ${problem}`)
@@ -2190,14 +2430,16 @@ if (
   for (const problem of hostConfigProblems) console.error(`HOST CONFIG: ${problem}`)
   for (const problem of patchIdentityProblems) console.error(`ROW IDENTITY: ${problem}`)
   for (const problem of surfaceProblems) console.error(`TRANSCRIPT SURFACE: ${problem}`)
+  for (const problem of userTextProblems) console.error(`USER TEXT RULE: ${problem}`)
   process.exit(1)
 }
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
     `copy complete for ${[...languages].sort().join('/')}, annotation persistence + cross-tab sync replayed, link detection replayed, ` +
-    `host view resolution replayed, send gestures replayed, composed annotation blocks read back, ` +
+    `host view resolution replayed, send gestures replayed, draft writes stay in place on a Lexical host, composed annotation blocks read back, ` +
     `echo strip replayed, transcript summary single-block, mark preview wired, ` +
     `host config + bundle settings section wired (defaults, live update, invalid-value fallback, no-service fallback), ` +
     `right-click ownership + shortcut commands replayed (two actions, defaults, selection gating, live registration, catalog mirror), ` +
+    `user-text rule hides the annotation block (0.2.2 bubble pipeline), ` +
     `package metadata (locale + icon) resolved and packed`,
 )

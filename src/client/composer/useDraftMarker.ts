@@ -32,3 +32,14 @@ export function clearDraftMarker(draft: string, setDraft: (text: string) => void
   if (!draft.includes(DRAFT_MARKER)) return
   setDraft(stripDraftMarker(draft))
 }
+
+/**
+ * True when the draft is nothing but the invisible send marker.
+ *
+ * `setDraft('')` on a Lexical host clears the whole document, so an empty
+ * marker-only draft must be *emptied*, not rewritten with the marker removed:
+ * a rewrite that clears and rebuilds would also drop the user's quote nodes.
+ */
+export function isMarkerOnly(draft: string): boolean {
+  return draft.includes(DRAFT_MARKER) && stripDraftMarker(draft).trim() === ''
+}

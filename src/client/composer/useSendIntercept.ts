@@ -2,11 +2,15 @@ import { useEffect, type MutableRefObject } from 'react'
 import { composerCardOf, isSubmitKey, willSubmit } from '../dom/composer-host.ts'
 import { composeAnnotatedMessage } from '../protocol/annotation-protocol.ts'
 import { clearAnnotations, getAnnotations } from '../state/annotation-store.ts'
+import { writeDraft, type InputActionsFace } from './draft-write.ts'
 
 export interface SendInterceptDeps {
   readonly itemCount: number
   readonly draftRef: MutableRefObject<string>
-  readonly setDraft: (text: string) => void
+  /** Rewrites the draft in place where the host supports it (see `draft-write`). */
+  readonly actionsRef: MutableRefObject<InputActionsFace>
+  /** Stamps the fold as a self-write so it is not read back as a rewind. */
+  readonly onSelfWrite: () => void
   readonly onFolded: () => void
   /**
    * Set while the composed draft may still be in the editor. The composer
@@ -23,7 +27,8 @@ export interface SendInterceptDeps {
 export function useSendIntercept({
   itemCount,
   draftRef,
-  setDraft,
+  actionsRef,
+  onSelfWrite,
   onFolded,
   foldingRef,
 }: SendInterceptDeps): void {
@@ -34,7 +39,14 @@ export function useSendIntercept({
       const current = getAnnotations()
       if (current.length === 0) return
       if (foldingRef !== undefined) foldingRef.current = true
-      setDraft(composeAnnotatedMessage(draftRef.current, current))
+      onSelfWrite()
+      // In-place rewrite keeps the user's own quote nodes; the folded text is
+      // read by the composer's own submit path immediately after this.
+      writeDraft(
+        actionsRef.current,
+        composeAnnotatedMessage(draftRef.current, current),
+        draftRef.current,
+      )
       // Cross-session records stay (state becomes `sent`) while the target
       // list clears; a plain clear would delete the source's arrow mark.
       clearAnnotations(undefined, 'sent')
@@ -69,5 +81,5 @@ export function useSendIntercept({
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onClick, true)
     }
-  }, [itemCount, draftRef, setDraft, onFolded, foldingRef])
+  }, [itemCount, draftRef, actionsRef, onSelfWrite, onFolded, foldingRef])
 }

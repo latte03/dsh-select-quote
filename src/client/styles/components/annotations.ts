@@ -184,9 +184,13 @@ export const ANNOTATIONS_CSS = `
 }
 
 .dsq_summaryItem {
+  position: relative;
   display: block;
   padding: 8px 10px;
   border-radius: 8px;
+  /* The confirm pill overlays the row; clip it to the card so a very narrow
+     summary can never push content outside the visible surface. */
+  overflow: hidden;
   transition: background-color 0.12s;
 }
 
@@ -195,10 +199,13 @@ export const ANNOTATIONS_CSS = `
 }
 
 .dsq_summaryItemHead {
+  position: relative;
   gap: 6px;
   /* Normal mode's action buttons set the row height; keep it in edit mode too
      so the badge and the label never move when the actions disappear. */
   min-height: 26px;
+  /* The confirm pill and the row label both clip here, never squeeze the row. */
+  min-width: 0;
 }
 
 .dsq_summaryItemBadge {
@@ -234,6 +241,109 @@ export const ANNOTATIONS_CSS = `
 .dsq_summaryItemAction:hover {
   background: var(--dsq-fill-hover);
   color: var(--dsq-label);
+}
+
+/* Second step of a remove: the same button grows a "确认移除" label.
+ *
+ * Layout here is load-bearing. The summary card is 20% wide (min 148px) and the
+ * head row is a flex line that already holds the ordinal badge and the
+ * "选中文本" label. Growing a label *inside* that row cannot work: whatever the
+ * button asks for, the flex line only has the leftover width, and a shrinkable
+ * flex item ends up a few pixels wide with the label wrapping one character per
+ * line — the collapse this rule exists to prevent.
+ *
+ * So the confirm step leaves the flow entirely: the button keeps its 26px
+ * square footprint (nothing shifts), and the "确认移除" pill is an absolutely
+ * positioned overlay measured against that square, so the badge and the row's
+ * label can never squeeze it. */
+.dsq_summaryItemActions {
+  position: relative;
+  min-width: 0;
+}
+
+/* Confirming: same square, the pill floats beside it.
+ *
+ * A grid + place-items:center centres the inner box; the box itself stays in
+ * flow at its natural size, which is what lets the label inside it anchor to
+ * the *button* (right: 100%) instead of to a full-bleed box. */
+.dsq_summaryItemActions .dsq_deleteConfirm {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  gap: 0;
+  background: transparent;
+  color: var(--dsq-danger);
+  overflow: visible;
+}
+
+/* Icon + label wrapper; sized to the icon so the square never grows. */
+.dsq_summaryItemActions .dsq_deleteConfirmInner {
+  display: grid;
+  place-items: center;
+  white-space: nowrap;
+}
+
+/* The pill itself: anchored to the square, growing *inward* (to the left) and
+   always on one line.
+ *
+ * It must stay inside the card: .dsq_summaryList scrolls (overflow-y:auto
+ * also clips horizontally), so anything hung outside the list box would be cut
+ * off. max-width therefore yields to the list's own width, with the text
+ * ellipsised rather than wrapped — a truncated "确认移…" still reads, a
+ * one-character-per-line column does not. */
+/* Specificity note: preview.ts ships
+ *   .dsq_deleteConfirm[data-confirming='true'] .dsq_deleteConfirmLabel
+ * which is also [0,3,0] and is concatenated AFTER this module, so it wins every
+ * tie. The extra .dsq_summaryItemActions level here is what keeps the summary's
+ * own confirm geometry authoritative instead of silently reverting to the
+ * shared 140px label. */
+.dsq_summaryItemActions .dsq_deleteConfirm .dsq_deleteConfirmInner .dsq_deleteConfirmLabel {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  /* A span needs a block box for ellipsis to apply. */
+  display: block;
+  margin-right: 6px;
+  margin-left: 0;
+  max-width: 92px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--dsq-danger-bg);
+  color: var(--dsq-danger);
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  /* Collapsed state: invisible and inert, but always laid out so the first
+     press can fade it in without measuring anything. */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+/* Confirm state. Declared at [0,4,0] so it outranks preview.ts's
+   [0,3,0] shorthand, which would otherwise restore max-width:140px and the
+   in-flow behaviour this module replaced. */
+.dsq_summaryItemActions .dsq_deleteConfirm[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel {
+  max-width: 92px;
+  margin-left: 0;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The row's own label yields to the confirm step rather than competing with it. */
+.dsq_summaryItemHead .dsq_summaryItemLabel {
+  min-width: 0;
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dsq_summaryItemMain {

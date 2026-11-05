@@ -35,14 +35,13 @@ import {
   withDraftMarker,
 } from '../protocol/quote-protocol.ts'
 import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
-import { clearDraftMarker, useDraftMarker } from './useDraftMarker.ts'
+import { clearDraftMarker, isMarkerOnly, useDraftMarker } from './useDraftMarker.ts'
+import { writeDraft, type InputActionsFace } from './draft-write.ts'
 import { useSendIntercept } from './useSendIntercept.ts'
 
 export interface AnnotationPanelProps {
   useInput: <T>(selector: (state: { draft: string; draftRev: number }) => T) => T
-  inputActions: {
-    setDraft(text: string): void
-  }
+  inputActions: InputActionsFace
   sessionId?: string
 }
 
@@ -87,7 +86,7 @@ export function AnnotationPanel({
   sessionId,
 }: AnnotationPanelProps): ReactNode {
   const draft = useInput((state) => state.draft)
-  const [items, setItems] = useState<readonly SelectionAnnotation[]>(EMPTY)
+  const [items, setItems] =   useState<readonly SelectionAnnotation[]>(EMPTY)
   const stackRef = useRef<HTMLDivElement | null>(null)
   const draftRef = useRef(draft)
   const actionsRef = useRef(inputActions)
@@ -99,8 +98,27 @@ export function AnnotationPanel({
   sessionRef.current = sessionId
 
   const setDraft = useCallback((text: string) => {
-    actionsRef.current.setDraft(text)
+    // Never a blind `setDraft`: on dsh 0.2.2 the composer is a Lexical editor
+    // whose `setDraft` clears the document, which would drop a quote the user
+    // put in first. The draft we were handed is the current one; the helper
+    // rewrites it in place whenever the host offers an append-only verb.
+    selfWrites.current += 1
+    writeDraft(actionsRef.current, text, draftRef.current)
   }, [])
+
+  /**
+   * Bumped whenever this component rewrites the draft itself.
+   *
+   * The rewind path below treats *any* draft carrying a complete protocol
+   * block as a withdrawn message and lifts its annotations back into the
+   * pending list. The host publishes every programmatic write as a normal
+   * draft change, so without this counter the plugin's own write would be read
+   * back as a rewind. The restore records the stamp it ran at and bails when
+   * the draft it is looking at was produced by a later self-write.
+   */
+  const selfWrites = useRef(0)
+  /** Stamp of the newest self-write the rewind path has already accounted for. */
+  const seenSelfWrite = useRef(0)
 
   const sync = useCallback(() => {
     setItems(getAnnotations())
@@ -140,7 +158,10 @@ export function AnnotationPanel({
   useSendIntercept({
     itemCount: items.length,
     draftRef,
-    setDraft,
+    actionsRef,
+    onSelfWrite: () => {
+      selfWrites.current += 1
+    },
     onFolded: () => setItems(EMPTY),
     foldingRef,
   })
@@ -161,9 +182,14 @@ export function AnnotationPanel({
       return
     }
     if (foldingRef.current || composing.current) return
+    // A draft this component produced (marker reconcile, send fold) is never a
+    // rewind — reading it back is what resurrected a card the user had just
+    // deleted.
+    if (seenSelfWrite.current === selfWrites.current) return
     const restored = readComposedDraft(draft)
     if (restored === null) return
     foldingRef.current = true
+    seenSelfWrite.current = selfWrites.current
     restoreAnnotations(sessionId, restored.annotations)
     setDraft(restored.rest)
   }, [draft, sessionId, setDraft, composing])
@@ -181,7 +207,12 @@ export function AnnotationPanel({
   useEffect(() => {
     if (composing.current) return
     if (items.length === 0) {
-      if (draft.includes(DRAFT_MARKER)) setDraft(stripDraftMarker(draft))
+      if (draft.includes(DRAFT_MARKER)) {
+        // Marker-only draft: empty it outright. Stripping the marker and
+        // rewriting the same empty text still makes the host clear and rebuild
+        // the document, which is what dropped the user's own quote node.
+        setDraft(isMarkerOnly(draft) ? '' : stripDraftMarker(draft))
+      }
       return
     }
     if (!draft.includes(DRAFT_MARKER) && draft.trim() === '') setDraft(withDraftMarker(draft))
