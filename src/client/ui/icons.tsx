@@ -35,6 +35,7 @@ export type IconName =
   | 'check'
   | 'arrow-up-right'
   | 'circle-alert'
+  | 'bot'
 
 const SHAPES: Record<IconName, string> = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
@@ -56,6 +57,7 @@ const SHAPES: Record<IconName, string> = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   'arrow-up-right': '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
   'circle-alert': '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+  bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
 }
 
 /** Markup form for plain-DOM call sites; `insertAdjacentHTML('afterbegin', …)`. */

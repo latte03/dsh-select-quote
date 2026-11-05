@@ -56,11 +56,16 @@ export const HANDOFF_CSS = `
   cursor: pointer;
 }
 
-/* Side-question mark: same badge slot, a bot glyph instead of the ordinal.
-   Declared after the ordinal rule so it wins on equal specificity. */
+/* Side-question mark: same badge slot, the lucide bot glyph instead of the
+   ordinal. Declared after the ordinal rule so it wins on equal specificity.
+   The glyph is a data-URI because ::after cannot hold an element; it is drawn
+   in white, matching the ordinal badge's ink on the accent fill. */
 .dsq_annMark[data-dsq-ann-robot]::after {
-  content: "🤖";
-  font-size: 9px;
+  content: "";
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 11px 11px;
 }
 
 /* Arrow badge for a selection sent to another conversation. One glyph, so the
