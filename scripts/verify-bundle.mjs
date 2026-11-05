@@ -659,7 +659,7 @@ function checkCascadePrecedence(code) {
   if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*position:\s*absolute/.test(css)) {
     problems.push(".dsq_summary > .dsq_deleteConfirm lost its absolute corner anchor — the chip would reflow the card")
   }
-  if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*width:\s*88px/.test(css)) {
+  if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*width:\s*80px/.test(css)) {
     problems.push(".dsq_summary > .dsq_deleteConfirm lost its fixed width — a shrink-to-fit chip jitters between states")
   }
   if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*right:\s*4px/.test(css)) {

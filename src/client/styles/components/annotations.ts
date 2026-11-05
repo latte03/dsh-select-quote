@@ -309,7 +309,7 @@ export const ANNOTATIONS_CSS = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 88px;
+  width: 80px;
   height: 26px;
   padding: 0;
   gap: 0;
