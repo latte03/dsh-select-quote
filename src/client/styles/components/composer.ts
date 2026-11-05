@@ -94,9 +94,9 @@ export const COMPOSER_CSS = `
 
 .dsq_translateClose {
   flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   color: var(--dsq-label-3);
 }
 
