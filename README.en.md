@@ -10,7 +10,7 @@ A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/q
 [![npm monthly downloads](https://img.shields.io/npm/dm/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
 [![license](https://img.shields.io/npm/l/dsh-select-quote)](LICENSE)
 [![awesome-dsh-plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/)
-[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.1--rc.2-blue)](package.json)
+[![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.1-blue)](package.json)
 
 ![dsh-select-quote](https://raw.githubusercontent.com/latte03/dsh-select-quote/main/assets/hero.png)
 
@@ -54,7 +54,7 @@ Open `http://127.0.0.1:3080` to try it. `dev.patch.yml` is a local, untracked fi
 2. Hover (or tap on touch) the summary above the composer to expand the list: edit, delete, or jump back to the text. Click a mark in the text to preview its annotation
 3. Send as usual: annotations go to the model with the message, the summary disappears, the marks stay; model references render as chips
 4. **Ask in sidebar** opens the composer first; the subagent is created and shown in the right sidebar only after you press send. The directory names it "Ask in sidebar · question summary"
-5. **Translate** opens the translation popover and starts streaming right away: switch languages in the header, **Stop** cancels; **Copy translation** when done; Esc or an outside click closes it
+5. **Translate** opens the translation popover and starts streaming right away: switch languages in the header, **Stop** cancels; use the copy icon at the bottom right when done; Esc or an outside click closes it
 6. **Send to session** picks a target: **Send** stays on the current page, **Send and open** opens the target. Entries in the target composer carry "From"; click one to return to the source
 
 There are three ways to open the menu after selecting text: auto (default), right-click on the selection, or a shortcut. Touch always uses the bottom action bar.
@@ -85,7 +85,7 @@ The UI follows dsh's language setting; the plugin UI, its page title, and its de
 
 - **Annotations persist per session**: after a refresh or restart, unsent annotations come back (last 20 sessions, 7 days); sending clears them, and forked sessions do not inherit them
 - **Send-to-session depends on the current dsh version**: it needs the host's workspace and `openSession` APIs; older versions hide the entry. Unsent handoffs are pruned in pairs after 20 sessions / 7 days; once the target sends, the source mark stays forever. Jumping back from the target only guarantees history that is loaded; a miss shows a notice
-- **Takes over user bubbles**: mounts on the built-in `user` / `steering` nodes at `priority: -10`, then delegates rendering to the host's view. Another plugin must use a priority lower than `-10` to win
+- **Leaves the user bubble alone**: the card mounts on the `conversation.chat.user.before` decoration seat, so the bubble, attachments and time/copy row stay the host's; the protocol block is stripped by a `uiConversation.userText` rule. Requires dsh ≥ 0.2.2-rc.1
 - **Selection works in the conversation only**: it does not touch editors or terminals; keyboard users need caret browsing or assistive technology to create a selection
 - **Sidebar questions must be sent**: the host does not allow creating a subagent in an empty session; reuse mode has no model entry
 - **Translation sends only the selection**: the request carries no conversation context and does not write an annotation; copy the translation if the model needs it. One request is capped at about 6,000 characters and times out after 90 seconds; failures show an error summary in the popover, with details in the console
@@ -96,7 +96,7 @@ The UI follows dsh's language setting; the plugin UI, its page title, and its de
 ```bash
 pnpm run check          # typecheck + test + build + verify; run before committing
 pnpm run watch          # incremental rebuild
-pnpm run sync:desktop   # push to the installed desktop client (500ms hot reload)
+pnpm run sync:web       # push to the installed web client (desktop: sync:desktop)
 pnpm run release        # check → CHANGELOG → version + tag
 ```
 
