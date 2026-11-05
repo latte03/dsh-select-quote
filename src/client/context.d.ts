@@ -9,6 +9,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ModelDirectoryFace } from './model/types.ts'
+import type {
+  SessionListSnapshot,
+  WorkspaceListSnapshot,
+} from './selection/session-targets.ts'
 
 /** One live slot entry as exposed by the registry inspection surface. */
 export interface SlotEntryInspection {
@@ -183,13 +187,31 @@ declare module '@deepseek-ai/cordis' {
     sidebarRight: {
       openResource(address: string, options?: { kind?: string }): void
     }
-    /** Client session controller (`@deepseek-ai/dsh-client-ui-session`). */
+    /**
+     * Client session controller (`@deepseek-ai/dsh-client-ui-session`).
+     *
+     * `create()` mints a session and publishes a catalog row without
+     * navigating, which is what makes "put into a new session" possible
+     * without leaving the source page. Older hosts may lack it; callers feature
+     * detect and hide the handoff entry when it is absent.
+     */
     sessions: {
       list: {
-        getSnapshot(): {
-          byId: Record<string, { origin?: string } | undefined>
-        }
+        getSnapshot(): SessionListSnapshot
+        subscribe?(listener: () => void): () => void
       }
+      create(request: { workspaceId?: string; cwd?: string; sessionId?: string }): Promise<string>
+    }
+    /** Workspace catalog (`@deepseek-ai/dsh-client-ui-workspace`). */
+    workspaces: {
+      list: {
+        getSnapshot(): WorkspaceListSnapshot
+        subscribe?(listener: () => void): () => void
+      }
+    }
+    /** Main-view navigation (`@deepseek-ai/dsh-client-ui-workspace`). */
+    uiWorkspace: {
+      openSession(sessionId: string): void
     }
     /**
      * Model catalog controller (`@deepseek-ai/dsh-client-ui-model-selection`).

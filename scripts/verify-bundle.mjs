@@ -174,8 +174,11 @@ async function checkBinding(problems) {
         ? [{ id: 'ann_bound', text: 'bound text', sources: [{ text: 'bound text' }] }]
         : []
     },
-    save: () => {},
+    save: () => true,
+    loadOutbound: () => [],
+    saveOutbound: () => true,
     clear: () => {},
+    listSessions: () => [],
     prune: () => [],
   }
   const store = await freshStore()
@@ -953,6 +956,178 @@ async function checkCrossTab(problems) {
   if (tabA.getAnnotations().length !== 0) {
     problems.push('cross-tab: localStorage.clear() left a stale partition')
   }
+}
+
+/**
+ * Cross-session handoff: v2 payload, the pair written on both sides, sent
+ * permanence, paired eviction, and a v1 payload read as "no outbound".
+ */
+async function checkHandoff() {
+  const problems = []
+  const { createStoragePersistence, keyForSession, pruneSessions } = await import(
+    new URL('../src/client/state/annotation-persistence.ts', import.meta.url).href
+  )
+  const storage = memoryStorage()
+  const source = { text: '跨会话的原文', messageId: 'flow-9', startOffset: 2, endOffset: 8 }
+  const write = (store, target) =>
+    store.saveHandoff('session-source', {
+      text: source.text,
+      comment: '评论',
+      sources: [source],
+      origin: { sessionId: 'session-source', title: 'Source' },
+      destination: { sessionId: target, kind: 'existing', title: target },
+    })
+
+  const before = await freshStore()
+  before.setAnnotationPersistence(createStoragePersistence(storage))
+  const result = write(before, 'session-target')
+  const raw = storage.getItem(keyForSession('session-source'))
+  if (raw === null) problems.push('handoff: the source record did not reach storage')
+  const payload = raw === null ? null : JSON.parse(raw)
+  if (payload?.v !== 2) problems.push(`handoff: payload version is ${payload?.v}, want 2`)
+  if (!Array.isArray(payload?.outbound) || payload.outbound[0]?.state !== 'pending') {
+    problems.push('handoff: the pending outbound record is missing')
+  }
+
+  const after = await freshStore()
+  after.setAnnotationPersistence(createStoragePersistence(storage))
+  after.adoptPersistedAnnotations('session-source')
+  after.adoptPersistedAnnotations('session-target')
+  if (after.getOutbound('session-source').length !== 1) {
+    problems.push('handoff: reload lost the source outbound record')
+  }
+  const item = after.getAnnotations('session-target')[0]
+  if (!item || item.origin?.handoffId !== result.outbound.id) {
+    problems.push('handoff: reload lost the target item or its handoff id')
+  }
+  if (after.reconcileHandoffs()) problems.push('handoff: a complete pair was reported as one-sided')
+
+  // Send: the source record survives as sent; the target list empties.
+  after.clearAnnotations('session-target', 'sent')
+  if (after.getAnnotations('session-target').length !== 0) {
+    problems.push('handoff: sending did not clear the target list')
+  }
+  if (after.getOutbound('session-source')[0]?.state !== 'sent') {
+    problems.push('handoff: sending did not mark the source record sent')
+  }
+  if (after.reconcileHandoffs()) problems.push('handoff: a sent pair was reconciled away')
+
+  // A sent source key is permanent regardless of age.
+  pruneSessions(storage, Date.now() + 30 * 24 * 60 * 60 * 1000)
+  if (storage.getItem(keyForSession('session-source')) === null) {
+    problems.push('handoff: retention dropped a key holding a sent record')
+  }
+
+  // A pending pair evicts together, by the handoff's own timestamp.
+  const pendingStorage = memoryStorage()
+  const pending = await freshStore()
+  pending.setAnnotationPersistence(createStoragePersistence(pendingStorage))
+  write(pending, 'session-target-2')
+  const stale = Date.now() - 30 * 24 * 60 * 60 * 1000
+  const pendingRaw = JSON.parse(pendingStorage.getItem(keyForSession('session-source')))
+  pendingRaw.outbound[0].updatedAt = stale
+  pendingRaw.outbound[0].createdAt = stale
+  pendingStorage.setItem(keyForSession('session-source'), JSON.stringify(pendingRaw))
+  pruneSessions(pendingStorage, Date.now())
+  if (pendingStorage.getItem(keyForSession('session-source')) !== null) {
+    problems.push('handoff: retention kept an expired pending record')
+  }
+  const targetRaw = pendingStorage.getItem(keyForSession('session-target-2'))
+  if (targetRaw !== null && JSON.parse(targetRaw).items.length !== 0) {
+    problems.push('handoff: retention removed only the source half of a pending pair')
+  }
+
+  // v1 payload: items survive, outbound reads as empty.
+  const legacy = memoryStorage()
+  legacy.setItem(
+    keyForSession('session-legacy'),
+    JSON.stringify({ v: 1, updatedAt: Date.now(), items: [{ id: 'ann_old', text: '旧', sources: [{ text: '旧' }] }] }),
+  )
+  const legacyStore = await freshStore()
+  legacyStore.setAnnotationPersistence(createStoragePersistence(legacy))
+  legacyStore.adoptPersistedAnnotations('session-legacy')
+  if (legacyStore.getAnnotations('session-legacy').length !== 1) {
+    problems.push('handoff: a v1 payload lost its items')
+  }
+  if (legacyStore.getOutbound('session-legacy').length !== 0) {
+    problems.push('handoff: a v1 payload grew outbound records')
+  }
+  return problems
+}
+
+/** The target directory is pure; replay the grouping contract headlessly. */
+async function checkTargetDirectory() {
+  const problems = []
+  const { buildTargetDirectory, reusableBlankSession } = await import(
+    new URL('../src/client/selection/session-targets.ts', import.meta.url).href
+  )
+  const now = Date.now()
+  const sessions = {
+    ids: ['source', 'recent', 'older', 'child', 'archived', 'blank', 'away', 'loose'],
+    byId: {
+      source: { displayTitle: 'Source', updatedAt: now },
+      recent: { displayTitle: 'Recent', updatedAt: now - 1000 },
+      older: { displayTitle: 'Older', updatedAt: now - 2000 },
+      child: { displayTitle: 'Child', origin: 'subagent', updatedAt: now },
+      archived: { displayTitle: 'Archived', updatedAt: now },
+      blank: { displayTitle: 'Blank', blank: true, cwd: '/a', updatedAt: now },
+      away: { displayTitle: 'Away', updatedAt: now - 3000 },
+      loose: { displayTitle: 'Loose', updatedAt: now - 4000 },
+    },
+  }
+  const workspaces = {
+    items: [
+      { workspaceId: 'w1', title: 'W1', path: '/a', sessionIds: ['source', 'recent', 'older', 'child', 'archived', 'blank'] },
+      { workspaceId: 'w2', title: 'W2', path: '/b', sessionIds: ['away'] },
+    ],
+    archivedSessionIds: ['archived'],
+  }
+  const directory = buildTargetDirectory({ currentSessionId: 'source', sessions, workspaces })
+  if (directory.current.map((row) => row.sessionId).join(',') !== 'recent,older') {
+    problems.push(`handoff target order is [${directory.current.map((row) => row.sessionId).join(', ')}]`)
+  }
+  if (directory.other.length !== 1 || directory.ungrouped.length !== 1) {
+    problems.push('handoff target grouping is wrong for other/ungrouped workspaces')
+  }
+  if (directory.defaultTarget?.sessionId !== 'recent') {
+    problems.push('handoff default target is not the newest session of the source workspace')
+  }
+  if (reusableBlankSession({ sessions, workspaces }, workspaces.items[0], '/a') !== 'blank') {
+    problems.push('handoff blank-session reuse does not match the host rule')
+  }
+  const empty = buildTargetDirectory({
+    currentSessionId: 'source',
+    sessions: { ids: ['source'], byId: { source: { updatedAt: now } } },
+    workspaces: { items: [], archivedSessionIds: [] },
+  })
+  if (empty.canHandoff || empty.newSession !== null) {
+    problems.push('handoff entry is not hidden when the source has no workspace and no cwd')
+  }
+  return problems
+}
+
+/**
+ * Static wiring: the handoff ride on services that older hosts may lack, so it
+ * must be feature-detected; the picker must stay body-level and marked as our
+ * own menu so selection outside-press handling does not dismiss it.
+ */
+function checkHandoffWiring(code) {
+  const problems = []
+  for (const token of ['uiWorkspace', 'workspaces', 'sessions.create', 'syncHandoffMarks']) {
+    if (!code.includes(token)) problems.push(`built client never wires ${token}`)
+  }
+  if (!code.includes('data-dsq-target-picker') || !code.includes('data-dsq-menu')) {
+    problems.push('the target picker is not a body-level data-dsq-menu surface')
+  }
+  if (!code.includes('data-dsq-ann-arrow')) {
+    problems.push('outbound selections have no arrow mark')
+  }
+  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  const inject = manifest.dsh?.client?.inject ?? []
+  if (!inject.includes('@deepseek-ai/dsh-client-ui-workspace')) {
+    problems.push('dsh.client.inject does not list the workspace client package')
+  }
+  return problems
 }
 
 /** Map-backed `KeyValueStorage`: the port the backend runs on. */
@@ -1944,6 +2119,9 @@ const languages = new Set()
 for (const perLocale of dicts.values()) for (const locale of perLocale.keys()) languages.add(locale)
 
 const persistenceProblems = await checkPersistence()
+const handoffProblems = await checkHandoff()
+const targetProblems = await checkTargetDirectory()
+const handoffWiringProblems = checkHandoffWiring(code)
 const linkProblems = await checkSelectionUrl()
 const metaProblems = checkPackageMeta()
 const userChromeProblems = [...checkUserChrome(code), ...(await checkHostNode())]
@@ -1961,6 +2139,9 @@ if (
   datasetProblems.length > 0 ||
   observerProblems.length > 0 ||
   persistenceProblems.length > 0 ||
+  handoffProblems.length > 0 ||
+  targetProblems.length > 0 ||
+  handoffWiringProblems.length > 0 ||
   linkProblems.length > 0 ||
   metaProblems.length > 0 ||
   userChromeProblems.length > 0 ||
@@ -1987,6 +2168,9 @@ if (
   for (const problem of datasetProblems) console.error(`DATASET KEY: ${problem}`)
   for (const problem of observerProblems) console.error(`DIRECTIVE OBSERVER: ${problem}`)
   for (const problem of persistenceProblems) console.error(`PERSISTENCE: ${problem}`)
+  for (const problem of handoffProblems) console.error(`HANDOFF: ${problem}`)
+  for (const problem of targetProblems) console.error(`HANDOFF TARGETS: ${problem}`)
+  for (const problem of handoffWiringProblems) console.error(`HANDOFF WIRING: ${problem}`)
   for (const problem of linkProblems) console.error(`LINK: ${problem}`)
   for (const problem of metaProblems) console.error(`PACKAGE META: ${problem}`)
   for (const problem of userChromeProblems) console.error(`USER CHROME: ${problem}`)

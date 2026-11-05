@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { upsertAnnotationJobs } from '../dom/annotate-text.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
+import { t } from '../i18n.ts'
+import {
+  isSessionArchived,
+  openSourceAndLocate,
+  sessionTitleOf,
+} from '../selection/navigation.ts'
+import { showToast } from '../ui/toast.ts'
 import { ensureToolbarStyles, styles } from '../styles.ts'
+import { handoffMarkIdOf } from '../state/handoff.ts'
 import type { ParsedAnnotation } from '../protocol/annotation-protocol.ts'
 import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
 import { registerMessageQuotes } from './quote-registry.ts'
@@ -32,18 +40,25 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
 
   // Mark the annotated text inside the source messages. The mark id embeds
   // this message's own flow key so quotes from different turns never collide.
+  //
+  // Quotes with `origin` were selected in another conversation: their offsets
+  // cannot resolve here, and searching by text would paint an unrelated
+  // paragraph. They keep their card row and chip index but draw no mark.
   useEffect(() => {
     if (quotes.length === 0) return
     const ownerKey = stackRef.current?.closest('[data-chat-flow-key]')?.getAttribute('data-chat-flow-key')
     upsertAnnotationJobs(
-      quotes.map((quote, index) => ({
-        markId: ownerKey ? `dqsm_${ownerKey}_${index}` : `dqsm_q${index}`,
-        messageId: quote.messageId ?? '',
-        index: index + 1,
-        text: quote.text,
-        startOffset: quote.startOffset,
-        endOffset: quote.endOffset,
-      })),
+      quotes
+        .map((quote, index) => ({ quote, index }))
+        .filter(({ quote }) => quote.origin === undefined)
+        .map(({ quote, index }) => ({
+          markId: ownerKey ? `dqsm_${ownerKey}_${index}` : `dqsm_q${index}`,
+          messageId: quote.messageId ?? '',
+          index: index + 1,
+          text: quote.text,
+          startOffset: quote.startOffset,
+          endOffset: quote.endOffset,
+        })),
     )
   }, [quotes])
 
@@ -65,6 +80,33 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
     (index: number, _item: AnnotationSummaryItem) => {
       const quote = quotes[index]
       if (quote === undefined) return
+      if (quote.origin) {
+        const live = sessionTitleOf(quote.origin.sessionId, quote.origin.title)
+        if (isSessionArchived(quote.origin.sessionId)) {
+          showToast(t('handoff.archived', { title: live }))
+          return
+        }
+        openSourceAndLocate({
+          sessionId: quote.origin.sessionId,
+          text: quote.text,
+          ...(quote.origin.handoffId
+            ? { markId: handoffMarkIdOf(quote.origin.handoffId) }
+            : {}),
+          ...(quote.messageId
+            ? {
+                sources: [
+                  {
+                    text: quote.text,
+                    messageId: quote.messageId,
+                    startOffset: quote.startOffset,
+                    endOffset: quote.endOffset,
+                  },
+                ],
+              }
+            : {}),
+        })
+        return
+      }
       scrollToAnnotation(index + 1, quote.text, markIdOf(index))
     },
     [markIdOf, quotes],
@@ -81,6 +123,15 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
           title: quote.title,
           text: quote.text,
           ...(quote.comment ? { comment: quote.comment } : {}),
+          ...(quote.origin
+            ? {
+                origin: {
+                  sessionId: quote.origin.sessionId,
+                  title: sessionTitleOf(quote.origin.sessionId, quote.origin.title),
+                  archived: isSessionArchived(quote.origin.sessionId),
+                },
+              }
+            : {}),
         }))}
         onItemSelect={onSelect}
       />

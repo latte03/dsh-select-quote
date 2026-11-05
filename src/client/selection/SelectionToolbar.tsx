@@ -17,6 +17,7 @@ import {
   copyText,
   readSelectionSnapshot,
   selectionFirstLineRect,
+  toolbarShiftWithin,
   type SelectionSnapshot,
 } from '../dom/selection.ts'
 import { focusComposer } from '../dom/composer-host.ts'
@@ -47,10 +48,25 @@ import { useLocale } from '../useLocale.ts'
 import {
   bindAnnotationSession,
   saveAnnotation,
+  subscribeAnnotations,
   updateAnnotationComment,
 } from '../state/annotation-store.ts'
 import { ensureToolbarStyles } from '../styles.ts'
+import { showToast } from '../ui/toast.ts'
 import { useCoarsePointer, useVisualViewport } from '../ui/touch.ts'
+import { putHandoff } from './handoff-actions.ts'
+import { openConversation, sessionTitleOf } from './navigation.ts'
+import { SessionTargetPicker } from './SessionTargetPicker.tsx'
+import {
+  buildTargetDirectory,
+  liveTitle,
+  targetId,
+  type SessionListSnapshot,
+  type TargetDirectory,
+  type TargetSession,
+  type WorkspaceListSnapshot,
+} from './session-targets.ts'
+import { subscribeHandoffHost } from '../runtime.ts'
 
 export interface SelectionToolbarProps {
   sessionId?: string
@@ -68,6 +84,39 @@ interface MenuState {
 /** Cap for the auto-growing comment box; beyond this it scrolls internally. */
 const COMMENT_MAX_HEIGHT = 220
 
+const EMPTY_SESSIONS: SessionListSnapshot = { ids: [], byId: {} }
+const EMPTY_WORKSPACES: WorkspaceListSnapshot = { items: [] }
+const NO_SUBSCRIBE = (): (() => void) => () => {}
+
+function sessionsSnapshot(): SessionListSnapshot {
+  try {
+    return runtime.handoffHost?.sessionsSnapshot() ?? EMPTY_SESSIONS
+  } catch {
+    return EMPTY_SESSIONS
+  }
+}
+
+function workspacesSnapshot(): WorkspaceListSnapshot {
+  try {
+    return runtime.handoffHost?.workspacesSnapshot() ?? EMPTY_WORKSPACES
+  } catch {
+    return EMPTY_WORKSPACES
+  }
+}
+
+/** Target display name; "new session" has no live title of its own. */
+function targetName(target: TargetSession): string {
+  return target.kind === 'new' ? t('handoff.newSession') : target.title
+}
+
+interface PickerState {
+  readonly snapshot: SelectionSnapshot
+  readonly x: number
+  readonly y: number
+  readonly directory: TargetDirectory
+  readonly selectedId?: string
+}
+
 export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNode {
   useLocale()
   const toolbarRef = useRef<HTMLDivElement | null>(null)
@@ -83,6 +132,15 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  /** Latched target picker; its directory is frozen while it is open. */
+  const [picker, setPicker] = useState<PickerState | null>(null)
+  const [handoffTarget, setHandoffTarget] = useState<TargetSession | null>(null)
+  const [handoffBusy, setHandoffBusy] = useState(false)
+  const [handoffError, setHandoffError] = useState<string | null>(null)
+  /** Comment typed for a handoff survives a cancel until it is committed. */
+  const lastHandoffRef = useRef<{ text: string; comment: string } | null>(null)
+  const handoffTargetRef = useRef<TargetSession | null>(null)
+  handoffTargetRef.current = handoffTarget
   const [translation, setTranslation] = useState<TranslationState | null>(null)
   const [translateTarget, setTranslateTarget] = useState<TranslateLanguage>('en')
   const [translateCopied, setTranslateCopied] = useState(false)
@@ -102,6 +160,50 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const touch = useCoarsePointer()
   const viewport = useVisualViewport(touch)
   const config = useSyncExternalStore(subscribeConfig, getConfig, getConfig)
+  // The handoff host is published asynchronously by the workspace injection;
+  // re-read it (and its snapshots) when it appears or a session changes.
+  const handoffHost = useSyncExternalStore(
+    subscribeHandoffHost,
+    () => runtime.handoffHost,
+    () => undefined,
+  )
+  const sessions = useSyncExternalStore(
+    handoffHost ? handoffHost.subscribeSessions : NO_SUBSCRIBE,
+    sessionsSnapshot,
+    () => EMPTY_SESSIONS,
+  )
+  const workspaces = useSyncExternalStore(
+    handoffHost ? handoffHost.subscribeWorkspaces : NO_SUBSCRIBE,
+    workspacesSnapshot,
+    () => EMPTY_WORKSPACES,
+  )
+  // `bindAnnotationSession` publishes on every rebind; subscribe so the source
+  // session id (and its workspace) resolves even when the prop is absent.
+  const activeSessionId = useSyncExternalStore(
+    subscribeAnnotations,
+    () => sessionId ?? runtime.sessionId,
+    () => sessionId,
+  )
+  const handoffDirectory = useMemo(
+    () =>
+      buildTargetDirectory({
+        currentSessionId: activeSessionId,
+        sessions: handoffHost ? sessions : undefined,
+        workspaces: handoffHost ? workspaces : undefined,
+      }),
+    [activeSessionId, handoffHost, sessions, workspaces],
+  )
+  const handoffOptions = useMemo(() => {
+    const target = handoffDirectory.defaultTarget
+    return {
+      available: handoffHost !== undefined && handoffDirectory.canHandoff,
+      label: target
+        ? t('toolbar.handoffTo', { target: targetName(target) })
+        : t('toolbar.handoff'),
+      ...(target ? { targetName: targetName(target) } : {}),
+      menuLabel: t('handoff.menu'),
+    }
+  }, [handoffDirectory, handoffHost])
 
   // Only the side composer offers a model override, so the session directory
   // is resolved when that phase opens instead of for every selection. Reuse
@@ -144,6 +246,10 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     setActive(null)
     setPhase('idle')
     setComment('')
+    setPicker(null)
+    setHandoffTarget(null)
+    setHandoffBusy(false)
+    setHandoffError(null)
     setSideText('')
     setSideModel(null)
     setSending(false)
@@ -198,6 +304,127 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       setStatus(null)
     },
     [dismissMenu, saveSelection],
+  )
+
+  /**
+   * Cross-session handoff: nothing is written until 放入 is pressed. Unlike
+   * "add annotation", opening this panel must not create the target entry —
+   * Escape or an outside press would otherwise leave a stray pending card.
+   */
+  const beginHandoff = useCallback(
+    (snapshot: SelectionSnapshot, target: TargetSession | null) => {
+      if (!target) return
+      setStatus(null)
+      setActive(snapshot)
+      dismissMenu()
+      setHandoffTarget(target)
+      setHandoffBusy(false)
+      setHandoffError(null)
+      const kept = lastHandoffRef.current
+      setComment(kept && kept.text === snapshot.text ? kept.comment : '')
+      setPhase('handoff')
+    },
+    [dismissMenu],
+  )
+
+  /**
+   * Freeze the target directory for the lifetime of the picker.
+   *
+   * The picker is `position: fixed`, so it must receive viewport coordinates.
+   * The snapshot anchor is in content coordinates (it scrolls with the text);
+   * a scrolled conversation would otherwise place the panel far off-screen.
+   */
+  const openPicker = useCallback(
+    (snapshot: SelectionSnapshot, at?: { x: number; y: number }) => {
+      const directory = buildTargetDirectory({
+        currentSessionId: activeSessionId,
+        sessions: handoffHost ? sessionsSnapshot() : undefined,
+        workspaces: handoffHost ? workspacesSnapshot() : undefined,
+      })
+      const fromContent = snapshot.layer.fromContent(snapshot.left, snapshot.top)
+      const point = at ?? { x: fromContent.left, y: fromContent.top }
+      const current = handoffTargetRef.current
+      setPicker({
+        snapshot,
+        x: point.x,
+        y: point.y,
+        directory,
+        selectedId: current
+          ? targetId(current)
+          : directory.defaultTarget
+            ? targetId(directory.defaultTarget)
+            : undefined,
+      })
+    },
+    [activeSessionId, handoffHost],
+  )
+
+  const cancelHandoff = useCallback(() => {
+    const snapshot = activeRef.current
+    lastHandoffRef.current = snapshot ? { text: snapshot.text, comment } : null
+    hide()
+  }, [comment, hide])
+
+  /** Resolve one target and write both sides; navigation only for 并前往. */
+  const commitHandoff = useCallback(
+    (go: boolean) => {
+      const snapshot = activeRef.current
+      const target = handoffTargetRef.current
+      const sourceId = activeSessionId
+      if (!snapshot || !target || !sourceId || handoffBusy) return
+      setHandoffBusy(true)
+      setHandoffError(null)
+      void putHandoff({
+        sourceSessionId: sourceId,
+        sourceTitle: sessionTitleOf(sourceId, liveTitle(sessions.byId[sourceId], sourceId)),
+        snapshot,
+        target,
+        directory: handoffDirectory,
+        comment,
+      }).then(
+        (outcome) => {
+          setHandoffBusy(false)
+          if (!outcome.ok || !outcome.targetId) {
+            setHandoffError(outcome.error ?? t('handoff.failed'))
+            return
+          }
+          const name = targetName(target)
+          showToast(
+            outcome.persisted === false
+              ? `${t('handoff.doneNamed', { target: name })} · ${t('handoff.memoryOnly')}`
+              : t('handoff.doneNamed', { target: name }),
+          )
+          lastHandoffRef.current = null
+          setHandoffTarget(null)
+          setComment('')
+          clearNativeSelection()
+          hide()
+          if (go && !openConversation(outcome.targetId)) {
+            showToast(t('handoff.openFailed'))
+          }
+        },
+        (error) => {
+          setHandoffBusy(false)
+          console.error('dsh-select-quote: handoff failed', error)
+          setHandoffError(error instanceof Error ? error.message : String(error))
+        },
+      )
+    },
+    [activeSessionId, comment, handoffBusy, handoffDirectory, hide, sessions],
+  )
+
+  const pickHandoffTarget = useCallback(
+    (target: TargetSession) => {
+      setPicker(null)
+      if (phaseRef.current === 'handoff') {
+        setHandoffTarget(target)
+        setHandoffError(null)
+        return
+      }
+      const latched = activeRef.current
+      if (latched) beginHandoff(latched, target)
+    },
+    [beginHandoff],
   )
 
   /**
@@ -380,7 +607,9 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const layer = active?.layer
   useLayoutEffect(() => {
     if (!layer || touch) return
-    layer.setAboveComposer(phase === 'comment' || phase === 'side' || phase === 'translate')
+    layer.setAboveComposer(
+      phase === 'comment' || phase === 'handoff' || phase === 'side' || phase === 'translate',
+    )
     return () => layer.setAboveComposer(false)
   }, [layer, phase, touch])
 
@@ -389,7 +618,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   // soft keyboard the moment it appears.
   useEffect(() => {
     if (touch) return
-    if (phase === 'comment') commentRef.current?.focus()
+    if (phase === 'comment' || phase === 'handoff') commentRef.current?.focus()
     else if (phase === 'side') sideRef.current?.focus()
   }, [phase, touch])
 
@@ -424,7 +653,8 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   // a taller box still flips and clamps correctly.
   useLayoutEffect(() => {
     if (phase === 'idle') return
-    const area = phase === 'comment' ? commentRef.current : sideRef.current
+    const area =
+      phase === 'comment' || phase === 'handoff' ? commentRef.current : sideRef.current
     if (!area) return
     area.style.height = 'auto'
     area.style.height = `${Math.min(area.scrollHeight, COMMENT_MAX_HEIGHT)}px`
@@ -720,7 +950,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
 
   /** Dispatch a shared action against the range the calling surface latched. */
   const runAction = useCallback(
-    (key: SelectionActionKey, snapshot: SelectionSnapshot) => {
+    (key: SelectionActionKey, snapshot: SelectionSnapshot, surface: 'toolbar' | 'menu' = 'toolbar') => {
       switch (key) {
         case 'open':
           openLinkSnapshot(snapshot)
@@ -731,6 +961,18 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         case 'add':
           beginComment(snapshot)
           return
+        case 'handoff': {
+          const defaultTarget = handoffDirectory.defaultTarget
+          if (surface === 'menu') {
+            const menu = menuRef.current
+            openPicker(snapshot, menu ? { x: menu.x, y: menu.y } : undefined)
+          } else if (defaultTarget) {
+            beginHandoff(snapshot, defaultTarget)
+          } else {
+            openPicker(snapshot)
+          }
+          return
+        }
         case 'translate':
           beginTranslate(snapshot)
           return
@@ -738,7 +980,16 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           openSide(snapshot)
       }
     },
-    [beginComment, beginTranslate, copySnapshot, openLinkSnapshot, openSide],
+    [
+      beginComment,
+      beginHandoff,
+      beginTranslate,
+      copySnapshot,
+      handoffDirectory,
+      openLinkSnapshot,
+      openPicker,
+      openSide,
+    ],
   )
 
   /** Close the optional comment step; the annotation stays saved either way. */
@@ -765,6 +1016,10 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === 'Escape') {
         event.preventDefault()
+        if (phase === 'handoff') {
+          cancelHandoff()
+          return
+        }
         // Explicit cancel discards the optional comment text;
         // the annotation itself stays saved.
         pendingIdRef.current = null
@@ -778,16 +1033,44 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       const gesture = popoverEnter(event.nativeEvent)
       if (gesture === 'submit') {
         event.preventDefault()
-        if (comment.trim()) finishComment(true)
+        if (phase === 'handoff') {
+          if (!handoffBusy) commitHandoff(false)
+        } else if (comment.trim()) {
+          finishComment(true)
+        }
       }
     },
-    [comment, finishComment, hide],
+    [comment, commitHandoff, finishComment, handoffBusy, hide, phase],
   )
+
+  /**
+   * The toolbar is centered on the selection, so near either edge of the
+   * transcript half of it lands outside the clipped scroller. Measure it after
+   * mount (and whenever its width changes) and shift it back inside the band.
+   * A layout effect runs before paint, so the clamped position is the first
+   * visible one; the custom property is read by the toolbar transform and its
+   * entrance keyframes.
+   */
+  useLayoutEffect(() => {
+    if (touch || phase !== 'idle') return
+    const el = toolbarRef.current
+    if (!el || !active) return
+    const clamp = (): void => {
+      // Measure unshifted: the rect must reflect the centered position.
+      el.style.setProperty('--dsq-toolbar-shift', '0px')
+      const shift = toolbarShiftWithin(el.getBoundingClientRect(), active.layer.bounds())
+      el.style.setProperty('--dsq-toolbar-shift', `${Math.round(shift)}px`)
+    }
+    clamp()
+    const observer = new ResizeObserver(clamp)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [active, phase, touch])
 
   if (!active) return null
 
   const toolbarStyle: CSSProperties = { left: active.left, top: active.top }
-  const actions: SelectionActionEntry[] = selectionActions(active).map((action) => ({
+  const actions: SelectionActionEntry[] = selectionActions(active, handoffOptions).map((action) => ({
     ...action,
     onClick: () => runAction(action.key, active),
   }))
@@ -828,6 +1111,24 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         onSideKeyDown={handleSideKeyDown}
         onSendSide={sendSide}
         onCancelSide={hide}
+        onHandoffPick={() => {
+          const menu = menuRef.current
+          openPicker(active, menu ? { x: menu.x, y: menu.y } : undefined)
+        }}
+        handoff={
+          phase === 'handoff'
+            ? {
+                targetName: handoffTarget ? targetName(handoffTarget) : '',
+                targetMeta: handoffTarget?.workspaceTitle ?? '',
+                busy: handoffBusy,
+                error: handoffError,
+                onChangeTarget: () => openPicker(active),
+                onPut: () => commitHandoff(false),
+                onPutAndOpen: () => commitHandoff(true),
+                onCancel: cancelHandoff,
+              }
+            : null
+        }
         translate={
           phase === 'translate'
             ? {
@@ -843,11 +1144,23 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
             : null
         }
       />
+      {picker ? (
+        <SessionTargetPicker
+          directory={picker.directory}
+          selectedId={picker.selectedId}
+          x={picker.x}
+          y={picker.y}
+          touch={touch}
+          onPick={pickHandoffTarget}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
       {menu ? (
         <SelectionMenu
-          entries={selectionActions(menu.snapshot).map((action) => ({
+          entries={selectionActions(menu.snapshot, handoffOptions).map((action) => ({
             ...action,
-            onClick: () => runAction(action.key, menu.snapshot),
+            label: action.key === 'handoff' ? (action.menuLabel ?? action.label) : action.label,
+            onClick: () => runAction(action.key, menu.snapshot, 'menu'),
           }))}
           x={menu.x}
           y={menu.y}

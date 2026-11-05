@@ -12,7 +12,7 @@ pnpm run watch       # 增量重建
 pnpm run sync:desktop        # 把 lib/ 推给桌面客户端已安装的副本（热更新）
 pnpm run sync:desktop -- --watch
 pnpm run dev:desktop         # 上面两个一起开：增量重建 + 推送（scripts/dev-desktop.mjs 拉起两个子进程）
-pnpm run verify      # 无头执行 lib/client.js：10 项贡献都注册上，三种语言词典键与占位符齐备，外加包展示元信息（locale + icon）按宿主规则解析、打包
+pnpm run verify      # 无头执行 lib/client.js：全部贡献都注册上，八语言词典键与占位符齐备，外加包展示元信息（locale + icon）按宿主规则解析、打包
 pnpm run check       # typecheck + test + build + verify（提交前跑这个；CI 同款）
 pnpm run release     # check → 追加 CHANGELOG.md → 提升版本号并打 tag
 ```
@@ -42,7 +42,7 @@ Each item contains text selected from an earlier message ...
 
 - 读取：`scanAnnotatedMessage()` 剥掉整块，气泡只剩用户正文。展示层只认完整的开闭标记对：JSON 非法或不是数组时不产出批注，但块照样剥掉，协议原文永不出现在对话里；
 - 回填：`readComposedDraft()` 是 `composeAnnotatedMessage()` 的逆。dsh-rewind 撤回时把它读到的持久文本原样写回输入框（`messageTextAt` → `setComposerText`），协议块也会跟着进编辑器；`AnnotationPanel` 检测到完整块后把批注重新挂回待发摘要、草稿还原成用户正文（见关键机制 1）。回填比展示保守：只认完整、JSON 合法且非空数组的块，被截断或手改过的块不碰；
-- 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成 chip。chip 的 hover / focus / click 都打开预览浮层（触屏点按同样只开预览），原文和评论由 `transcript/quote-registry.ts` 按用户消息 flow key 暂存，chip 通过前一条 mark 的 flow key 取回；跳转由浮层标题栏右侧的小按钮「原文」触发，点 chip 本身不再直接跳。取不到 registry 时退回 mark 文本并隐藏评论区。浮层在 `dom/chipPreview.ts`，body 级 fixed（消息表面的 contain: layout 会劫持 fixed 定位），复用 `placePopover` 做翻转/钳位（默认在上方），内容层用和批注卡列表相同的 `dsq-rise-in`（只动 transform），退场用反向的 `dsq-rise-out`、120ms 后才摘节点；滚动和缩放时重排，chip 被流式重渲染替换时自动关闭；mark 不可见或已被移除时按「批注摘要卡 → 批注所属用户消息 → quote.messageId 来源消息」逐级回退并闪烁，不再点了没反应；正文 mark 复用同一浮层：最后一个片段（带角标）有 `role=button` / `tabIndex=0` 和本地化 aria-label，点击或 Enter/Space 打开预览，待发批注按 store id 取原文/评论，历史批注按 `dqsm_` id 走 quote-registry，预览里不出现「原文」按钮；**待发批注的预览标题栏带编辑/删除**：编辑把正文换成评论输入框（取消/保存；Enter / ⌘/Ctrl+Enter 保存，Shift+Enter 换行，手势复用 `popoverEnter`，与评论泡一致），保存写回 store 后回到阅读态，编辑期间浮层像摘要列表一样钉住、外部点击不关闭；删除直接移除该条，正文角标与输入框摘要同步消失。历史批注属于已发送消息的引用，没有这两个按钮；绑定用 document 级委托，宿主重渲染替换 mark 不会泄漏监听；
+- 回指：协议头要求模型对它处理过的每条批注内联 `:dsh-annotation{index="N"}`，客户端 `decorateAnnotationDirectives.ts` 把这些指令渲染成 chip。chip 的 hover / focus / click 都打开预览浮层（触屏点按同样只开预览），原文和评论由 `transcript/quote-registry.ts` 按用户消息 flow key 暂存，chip 通过前一条 mark 的 flow key 取回；跳转由浮层标题栏右侧的箭头图标按钮触发（仅图标、带本地化名称，和编辑/前往/删除同一组样式），点 chip 本身不再直接跳。取不到 registry 时退回 mark 文本并隐藏评论区。浮层在 `dom/chipPreview.ts`，body 级 fixed（消息表面的 contain: layout 会劫持 fixed 定位），复用 `placePopover` 做翻转/钳位（默认在上方），内容层用和批注卡列表相同的 `dsq-rise-in`（只动 transform），退场用反向的 `dsq-rise-out`、120ms 后才摘节点；滚动和缩放时重排，chip 被流式重渲染替换时自动关闭；mark 不可见或已被移除时按「批注摘要卡 → 批注所属用户消息 → quote.messageId 来源消息」逐级回退并闪烁，全都没有才保留预览并提示；正文 mark 复用同一浮层：最后一个片段（带角标）有 `role=button` / `tabIndex=0` 和本地化 aria-label，点击或 Enter/Space 打开预览，待发批注按 store id 取原文/评论，历史批注按 `dqsm_` id 走 quote-registry，预览里不出现「原文」按钮；**待发批注的预览标题栏带编辑/删除**：编辑把正文换成评论输入框（取消/保存；Enter / ⌘/Ctrl+Enter 保存，Shift+Enter 换行，手势复用 `popoverEnter`，与评论泡一致），保存写回 store 后回到阅读态，编辑期间浮层像摘要列表一样钉住、外部点击不关闭；删除走全插件统一的内联两步确认（第一次点击长成「图标 + 确认移除」，再点才删），正文角标与输入框摘要同步消失。历史批注属于已发送消息的引用，没有这两个按钮；绑定用 document 级委托，宿主重渲染替换 mark 不会泄漏监听；
 - **改格式要一起改**：`composeAnnotatedMessage()`（写）、`scanAnnotatedMessage()`（读）、`readComposedDraft()`（撤回回填）、`ANNOTATION_DIRECTIVE_RE`（chip）、`scripts/verify-bundle.mjs`。
 
 **「打开链接」为什么用 `window.open`**：宿主自己的外链处理（`dsh-client-ui-chat` 的 `openExternalLink`）在用户把「链接打开方式」设成侧边栏时，会把 http(s) 链接塞进应用内的浏览器标签——那里加载任意 URL 就是客户端被搞崩的路径。工具条的「打开链接」因此直接 `window.open(url, '_blank', 'noopener,noreferrer')`：桌面主进程的 `setWindowOpenHandler` 只认 http/https，命中就转交 `shell.openExternal`（真·系统默认浏览器），其余协议一律 deny。所以按钮**只对 http(s) 亮起**（`selection-url.ts`），`chrome-extension://` 这类点了也不会有反应——要让它们也进系统浏览器，得宿主改那个白名单，是上游的事。检测逻辑无 DOM 依赖，`verify-bundle` 直接 import 跑用例（含全角括号/尾随标点/大小写/非 http  scheme）。
@@ -62,7 +62,8 @@ Each item contains text selected from an earlier message ...
 | `conversation.chat.node` | keyed slot | `user`（`priority: -10`）：替换内置用户气泡，剥掉协议块并渲染批注摘要块 |
 | `plugins.bundle.config` | keyed slot | 按包名 `dsh-select-quote`：插件页**外层**（描述与行列表之间）直接渲染的分段控件、快捷键开关，以及开关下方从宿主 catalog 读取的当前键位；注册包在 `ctx.configForms.whileServed(['select-quote'], …)` 里，表单控制器经 slot `inject` 传入 |
 | `ctx.shortcuts` | 命令 | `select-quote.openMenu` / `select-quote.addToTask`：`shortcut` 开启时一起注册；无选区返回 `blocked`，评论步骤未完成时也返回 `blocked`，命中时经 `runtime.selection` 打开菜单 / 保存批注并开评论框；设置区订阅 `ctx.shortcuts.catalog` 显示当前键位；缺该服务时插件照常工作（见机制 15） |
-| `ctx.sessions` | 客户端服务 | 读会话摘要的 `origin`，让侧边子代理会话不接管主会话绑定（见机制 16） |
+| `ctx.sessions` | 客户端服务 | 读会话摘要的 `origin`，让侧边子代理会话不接管主会话绑定（见机制 16）；跨会话批注另读标题 / `updatedAt` / `cwd` / `blank`，并用 `create()` 静默新建空白会话（见机制 18） |
+| `ctx.workspaces` / `ctx.uiWorkspace` | 客户端服务（可选） | 读工作区分组与 `archivedSessionIds`，用 `openSession()` 在会话间跳转；三者（含 `sessions.create`）缺任一项时隐藏「放入会话」入口，插件照常激活（见机制 18） |
 | `ctx.modelDirectories` | 客户端服务（可选） | 读主会话的模型目录快照，给侧边提问的模型 chip 提供分组、搜索与推理等级；只读，不调用 `select()`（见机制 16） |
 | `remote.selectQuoteSideTask` / `remote.selectQuoteTranslate` | Typert Remote | Host 服务 `SelectQuoteSideTask` / `SelectQuoteTranslate` 经 `exports["./typert"]` 清单自动注册；客户端一次 `ctx.remote.$mount` 得到两个命名空间：`create(agentId, { prompt, label })` 返回 `childId`（机制 16），`translate(agentId, { text, target, prompt })` 是 `mode: 'stream'` 的可取消流，逐帧产出 thinking / text / done（机制 17） |
 | `ctx.locale` | 语言服务 | 宿主缺 `ja/es/fr/de/ru/pt` 时先 `addLanguage`，再 `register('select-quote', {zh,en})` + 六种语言包各一次三参 `register` + `bind('select-quote')`，见下面第 10 节 |
@@ -181,12 +182,12 @@ Each item contains text selected from an earlier message ...
 | `state/annotation-storage.ts` | 环境探测：有 localStorage 就用纯 localStorage 后端，没有就退内存。单独放一份是为了让纯逻辑模块不碰 `globalThis` |
 | `state/annotation-store.ts` | 内存 Map + 持久化钩子；`bindAnnotationSession()` 绑定会话并在微任务里 adopt；`adoptStorageAnnotations()` 处理其它标签的 storage 变更 |
 
-- **键**：`dsh.select-quote.annotations.<sessionId>`，载荷 `{v, updatedAt, items}`。和草稿同一个形状，所以刷新、切会话、重启的行为与草稿一致。
-- **写时机**：每次增删改之后立刻写（没有防抖，和草稿一样）。`clearAnnotations()` 连键一起删——发送即清，失败不回滚。
+- **键**：`dsh.select-quote.annotations.<sessionId>`，载荷 `{v: 2, updatedAt, items, outbound}`（`outbound` 见机制 18；读到 `v: 1` 时视为 `outbound = []`，零迁移）。和草稿同一个形状，所以刷新、切会话、重启的行为与草稿一致。
+- **写时机**：每次增删改之后立刻写（没有防抖，和草稿一样）。`clearAnnotations(sessionId, reason)` 的 `'discarded'`（移除全部 / 目标删除）连键一起删；`'sent'`（发送）先清 `items`，再把对应的源 `outbound` 标成 `sent` 永久保留。失败不回滚。
 - **恢复时机**：会话 id 绑定时（composer 挂载 / 切会话）。`bindAnnotationSession` 在渲染期被调用，所以 adopt 走 `queueMicrotask`，避免在别人的 render 里 `setState`。内存里已有的条目按 id 覆盖恢复值（只可能是更新的），绑定前落在 `pending` 桶里的也会一起搬过去。**重绑定本身也是一次发布**：新会话没有任何可恢复条目时（分叉出的全新会话），`adoptPersistedAnnotations` 什么都不改、返回 false，`bindAnnotationSession` 仍在微任务里补一次 `notify()`——「待发批注 → 正文 mark」的 job 同步（`syncPendingAnnotationJobs`）据此按**新分区**重读，旧会话的 job 被丢弃、正文 mark 被摘除；否则分叉会话里会出现「划词还在、批注卡没了」的错位（卡读新分区已经消失，mark 是全局注册表重渲染又画回来的）。原会话分区原样停在 `bySession` 与存储里，切回去时卡与 mark 一起恢复，无数据丢失。同一 tick 内连续绑定两次时只有最后一次算数：被覆盖的那次在微任务里发现活动会话已变，直接跳过 adopt——不发布、不搬 `pending` 桶；它的存储原样保留，等下次绑回该会话再恢复。
 - **跨标签**：`apply()` 的持久化 effect 监听 `window.storage`，按 `dsh.select-quote.annotations.<sessionId>` 重新加载并**替换**本地分区（last-write-wins）。本地每次变更都同步写存储，所以收到事件时内存只会比存储旧；替换而不是合并，才不会把另一个标签已经发送清空的批注复活。`key === null`（`localStorage.clear()`）时重读本标签持有的全部分区。非活动且未缓存的分区忽略，绑定会话时自然会读存储。
 - **mark 为什么还对得上**：待发批注的 mark id 就是批注自己的 `id`（`ann_<时间戳>_<随机>`），随载荷一起存，刷新后重新装饰得到同一个 mark；历史侧由 `TranscriptQuoteCard` 生成 `dqsm_<消息flowKey>_<序号>`，同一条消息内稳定。`index` 取列表下标，摘要条目点回去照样能找到；删除前面的批注时，`applyAnnotationMarks` 会同步已有 mark 的 `data-dsq-ann-index`，不重新包裹文本，摘要与正文角标始终一致。
-- **保留**：最近 20 个会话 + 7 天，双条件，`apply()` 时扫一遍自己前缀。宿主自己不回收 per-session 键（本机实测留着 9 个会话的 `dsh.sidebar-right.v1.*`），所以这活儿归插件。
+- **保留**：本地 pending 最近 20 个会话 + 7 天，双条件；未发送 handoff 按 `outbound.updatedAt` 与目标 pending 成对淘汰；`sent` 永久保留，并让所在会话 key 免于会话级淘汰。`apply()` 时扫一遍自己前缀。宿主自己不回收 per-session 键（本机实测留着 9 个会话的 `dsh.sidebar-right.v1.*`），所以这活儿归插件。
 - **为什么不用宿主的 client-store**：新版插件规范明确**不要 require Harness Client 包**（原话：它们随时会变、纯 JS 无类型检查、抛错会把你整个 slot 条目清掉），而我们的后端选择发生在 `apply()` 的 effect 里——`defineStore().create()` 只要因为宿主改 API 而抛，就是 issue #7 那类"启动健康检查未激活 → 无错误信息的硬失败"。况且宿主的持久化底层本来就是 localStorage（构造时整值读入、每次变更整值写回、键 `${persist}.${scopeKey}`），与直接后端**同键同形**，换过来零迁移、零数据丢失；
 - **对账**：挂载时双向对齐 marker 与批注列表（批注空 + 草稿有 marker → 抹掉；有批注 + marker 缺 → 补上），两边都幂等，和 `useDraftMarker` 的那次写入不冲突。**合成期间一律不写草稿**：宿主 store 的 draft 在 `compositionstart` 后会瞬态变空（候选串还没进 store），此时补写 marker 会让编辑器内容被整体替换，拼音第一个字符直接消失。`useComposing()` 在 document 捕获段听 composition 事件，对账 effect 见到就跳过；等 `compositionend`、候选文本作为一次 draft 变更落地，effect 自然会重跑。
 - **不做的**：没有 sessionId 就只在内存（宿主能在打字前就 mint 好会话，这条是"不该发生"的退路）；hero 换工作区宿主只搬 draft + 附件，批注留在原会话 id 的分区里、不跟着搬，切回原会话时按上面的重绑定语义恢复（宿主若换发新 id 则不会回来）；fork 会话宿主发全新 id，批注不继承——但重绑定必发布（见上），分叉会话里划词与批注卡同进同退，不会只剩划词一边。跨标签只做 last-write-wins，不做字段级合并（跨页同时编辑同一条时后写覆盖）。
@@ -257,6 +258,15 @@ Each item contains text selected from an earlier message ...
 - **内存缓存**：完成的译文按「会话 + 原文 + 目标语言 + provider/model + 解析后的提示词」做 key 存进模块级 LRU（`src/client/translate-cache.ts`，上限 20 条，读到即刷新最近使用）。命中就不发请求，直接以 `done` 显示整段译文；只写流里真正 `done` 的结果，失败、停止、部分帧都不入缓存。key 覆盖所有会改变输出的输入，设置一改自然失效；缓存不落盘，刷新页面即清空。
 - **两半怎么连上**：`src/shared/plugin-remote.ts` 同时描述 `selectQuoteSideTask/create`（unary）与 `selectQuoteTranslate/translate`（`mode: 'stream'` + `cancellation: {parameter: 'signal'}`），`src/typert.ts` 导出同一份清单，客户端 `$mount` 一次得到两个命名空间；`runtime.translate` 只在命名空间存在时发布，否则面板显示「翻译暂不可用」。设置页的翻译模型选择器读宿主的全局目录 `remote.session.modelCatalog()`（没有会话也能列模型），不可用时回退到当前会话的 `modelDirectories`。
 
+**18. 跨会话批注（handoff）**
+
+- **两份状态**：源会话的 `outbound` 与目标会话的待发 `items` 必须分开。`outbound` 只画正文箭头 mark、做预览和跳转，**不进入** `getAnnotations()` / `useSendIntercept()`；否则源会话下一次发送会把它一起折进消息，U+200B 也会按它计数。目标侧条目就是普通待发批注，额外带 `origin: {sessionId, title, handoffId}`，`handoffId` 指回源 outbound 记录，编辑 / 删除 / 撤回靠它双向同步。
+- **写入与同步**：先写目标 pending，再写源 outbound；内存两侧一起落地，持久化失败仍算成功但提示「只保留到本次刷新」。目标发送时先把源记录标 `sent` 再清目标 pending（`clearAnnotations(id, 'sent')`）；目标删除 / 清空用 `'discarded'`，连同源记录一起删。顺序反了会被兜底对账误判成过期。
+- **保留**：载荷升 `v: 2`（`{v, updatedAt, items, outbound}`），读 `v: 1` 时 `outbound = []`。本地 pending 仍按 20 会话 / 7 天；未发送 handoff 按 outbound 自身的 `updatedAt` 与目标 pending 成对淘汰；`state = sent` 永久保留，含 sent 记录的会话 key 不参与会话级淘汰，带 `origin` 的条目也不因目标 key 老化被删。`reconcileHandoffs()` 只在会话绑定、启动、`storage` 事件和 prune 后修复单边异常，不做定时轮询；用户操作本身走即时事件同步。
+- **mark**：源侧按 `selectionKey`（`text` + `messageId` + 起止偏移）分组，同组只画一个 `out_<hash>` 箭头角标（`data-dsq-ann-arrow`，固定 15px，`↗`），预览按目标分行；目标侧历史条目**不注册 mark job**——它的 `source` 偏移属于另一个会话，按文本搜索会标错段落。目标待发卡的「来自」与历史卡条目都不调用 `scrollToAnnotation`，统一 `openSession(sourceId)` 后按 mark id 每 100ms 重试、最长 8 秒（冷会话与长历史首屏加载需要数秒；用户中途切走则静默停止）；mark id 优先从 `origin.handoffId` 还原（`handoffMarkIdOf`），不用目标侧文本/偏移重算，避免目标侧 `source` 漂移后 hash 对不上。超时仍找不到只提示，不用全文搜索兜底。角标预览单目标时把编辑 / 前往 / 删除图标放在标题栏右侧（多目标时下放到各自行右侧），编辑只在 `pending` 时出现、评论同时写回源 outbound 与目标 pending（`updateHandoffComment`）；删除是图标按钮，第一次点击就地展开成「图标 + 确认移除」（`deleteConfirm`，0.16s 过渡），再点才执行。目标行的弱化行统一为「会话名 · 工作区 · 状态」（会话名与工作区相同时不重复，状态为待发送 / 已发送）；同一套删除确认也用于输入框摘要的单条删除、清空全部与普通待发预览。
+- **导航与入口**：`ctx.uiWorkspace.openSession()` 只切主视图；新会话目标由 `ctx.sessions.create({workspaceId|cwd})` 静默创建（复用当前工作区空白会话，不导航）。宿主缺 `sessions.create` / `workspaces` / `uiWorkspace` 任一项时 `runtime.handoffHost` 不发布，工具条与右键菜单自动隐藏该动作（同一份 `actions.ts` 清单）。归档会话不自动取消归档：跳转禁用 + tooltip + toast。
+- **协议**：wire item 增加 `origin`，协议头声明「来自另一个会话，`source` 偏移无法在当前对话解析」。`composeAnnotatedMessage()` / `scanAnnotatedMessage()` / `readComposedDraft()` 三处同步；`restoreAnnotations()` 的去重键带上 `origin.sessionId + handoffId`，撤回还原必须保留 origin 并把源记录翻回 `pending`。
+
 ## 浮层名词与层带
 
 改样式/层级前先认名字（z-index 一栏是**各自层叠上下文内**的值，不能横向直接比大小）：
@@ -303,7 +313,11 @@ src/client/selection/ToolbarView.tsx # 纯视图：桌面工具条/评论泡、�
 src/client/selection/translation-view.ts # 翻译相位交给视图的状态（含流式文字、思考态、错误摘要）与回调类型
 src/client/selection/LanguageMenu.tsx # 翻译语言下拉（浮层与设置页共用；body portal + data-dsq-menu）
 src/client/selection/SelectionMenu.tsx # 右键/快捷键菜单（渲染 actions.ts 的同一份条目；body portal、键盘导航、外部关闭）
-src/client/selection/actions.ts    # 工具条与右键菜单共用的动作清单（顺序、标签、图标、链接判定）
+src/client/selection/actions.ts    # 工具条与右键菜单共用的动作清单（顺序、标签、图标、链接判定、放入入口）
+src/client/selection/SessionTargetPicker.tsx # 放入目标选择器（工作区分组、搜索、键盘；body portal + data-dsq-menu）
+src/client/selection/session-targets.ts # 目标目录纯逻辑：分组/排序/排除/默认目标/空白会话复用（可单测）
+src/client/selection/handoff-actions.ts # 放入写入：先解析新会话目标，再按“目标 pending → 源 outbound”落库
+src/client/selection/navigation.ts # 跨会话导航与源 mark 定位（openSession + 8 秒重试，不做全文搜索）
 src/client/selection/popover-keys.ts # 评论泡/侧边输入的 Enter 手势（复用宿主 isSubmitKey：Enter/⌘/Ctrl+Enter 提交，Shift+Enter 换行）
 src/client/shortcut-menu.ts        # 宿主快捷键命令 openMenu / addToTask（按设置注册/注销；镜像 catalog 供设置页）
 src/client/dom/menu-trigger.ts     # 右键接管纯判定：触发矩阵 + 点落选区矩形
@@ -329,7 +343,8 @@ src/client/dom/chipPreview.ts      # chip 的 hover/focus/click 预览 + 正文 
 src/client/dom/popoverPlacement.ts # 浮层定位（翻转 + 视口夹取）
 src/client/dom/comment-placement.ts # 评论泡/提示条的纯几何（上下翻转 + 夹取，可单测）
 src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 等）
-src/client/state/annotation-store.ts # 每会话待发批注状态（内存 Map + 持久化钩子）
+src/client/state/annotation-store.ts # 每会话待发批注 + 源 outbound 状态（内存 Map + 持久化钩子 + 跨会话同步/兜底对账）
+src/client/state/handoff.ts        # 跨会话记录的纯逻辑：selectionKey、稳定 hash、mark 分组、保留判定
 src/client/state/annotation-persistence.ts # 持久化纯逻辑：载荷、保留策略
 src/client/state/annotation-storage.ts     # 环境探测（localStorage / 空），不碰 require
 src/client/protocol/annotation-protocol.ts # 批注 wire 格式（含 source 定位）
@@ -339,7 +354,8 @@ src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注摘要�
 src/client/transcript/quote-registry.ts # 用户消息 flow key → 解析后的 quotes（chip 预览取原文/评论）
 src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡：委托宿主 UserMessageNodeView，只改文本块并前置摘要块
 src/client/ui/AnnotationCardView.tsx  # 摘要块与悬停列表面板（portal 到 body、内联编辑）
-src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus / languages）
+src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus / languages / arrow-up-right）
+src/client/ui/toast.ts                # body 级瞬时提示（归档目标、放入成功、定位失败）
 src/client/i18n.ts                   # 八份词典（zh/en + ja/es/fr/de/ru/pt）、语言包清单、复数形式挑选、把 t() 转给宿主 bind 结果
 src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
 src/client/styles.ts               # 全部 CSS，四层：token / 原子 / 组件 / 宿主（模板字符串注入）

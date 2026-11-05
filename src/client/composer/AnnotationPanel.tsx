@@ -9,6 +9,9 @@ import {
 } from 'react'
 import { composerCardOf } from '../dom/composer-host.ts'
 import { scrollToAnnotation } from '../dom/scrollToAnnotation.ts'
+import { t } from '../i18n.ts'
+import { isSessionArchived, openSourceAndLocate, sessionTitleOf } from '../selection/navigation.ts'
+import { showToast } from '../ui/toast.ts'
 import {
   annotationTitle,
   bindAnnotationSession,
@@ -21,6 +24,7 @@ import {
   type SelectionAnnotation,
 } from '../state/annotation-store.ts'
 import { ensureToolbarStyles, A, cx, styles } from '../styles.ts'
+import { handoffMarkIdOf } from '../state/handoff.ts'
 import {
   ANNOTATIONS_BLOCK_OPEN,
   readComposedDraft,
@@ -184,7 +188,7 @@ export function AnnotationPanel({
   }, [items, draft, setDraft, composing])
 
   const onRemoveAll = useCallback(() => {
-    clearAnnotations()
+    clearAnnotations(undefined, 'discarded')
     setItems(EMPTY)
     clearDraftMarker(draftRef.current, setDraft)
   }, [setDraft])
@@ -217,6 +221,29 @@ export function AnnotationPanel({
     sync()
   }, [sync])
 
+  /**
+   * "From: <source>" opens the source conversation and flashes its arrow mark.
+   * A cross-session item has no mark in THIS transcript by design, so this is
+   * the only jump; nothing is searched by text here.
+   */
+  const onItemOrigin = useCallback((_index: number, item: AnnotationSummaryItem) => {
+    const origin = item.origin
+    if (!origin) return
+    const live = sessionTitleOf(origin.sessionId, origin.title)
+    if (isSessionArchived(origin.sessionId)) {
+      showToast(t('handoff.archived', { title: live }))
+      return
+    }
+    const entry = getAnnotations().find((candidate) => candidate.id === item.id)
+    const handoffId = origin.handoffId ?? entry?.origin?.handoffId
+    openSourceAndLocate({
+      sessionId: origin.sessionId,
+      text: entry?.text ?? item.text,
+      ...(entry ? { sources: entry.sources } : {}),
+      ...(handoffId ? { markId: handoffMarkIdOf(handoffId) } : {}),
+    })
+  }, [])
+
   if (!sessionId || items.length === 0) return null
 
   return (
@@ -228,11 +255,22 @@ export function AnnotationPanel({
           title: annotationTitle(item),
           text: item.text,
           comment: item.comment,
+          ...(item.origin
+            ? {
+                origin: {
+                  sessionId: item.origin.sessionId,
+                  title: sessionTitleOf(item.origin.sessionId, item.origin.title),
+                  archived: isSessionArchived(item.origin.sessionId),
+                  ...(item.origin.handoffId ? { handoffId: item.origin.handoffId } : {}),
+                },
+              }
+            : {}),
         }))}
         onRemoveAll={onRemoveAll}
         onItemSelect={onItemSelect}
         onItemRemove={onItemRemove}
         onItemEdit={onItemEdit}
+        onItemOrigin={onItemOrigin}
       />
     </div>
   )

@@ -5,16 +5,19 @@
 
 import { findAnnotationMark, flashAnnotationMark } from './annotate-text.ts'
 
-export function scrollToAnnotation(index: number, text: string, markId?: string): void {
+/** Scrolls to the mark (or its text) and reports whether anything was found. */
+export function scrollToAnnotation(index: number, text: string, markId?: string): boolean {
   const mark = findAnnotationMark(index, text, markId)
   if (mark) {
     flashAnnotationMark(mark)
-    return
+    return true
   }
   const byText = findElementByText(text)
   if (byText) {
     byText.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    return true
   }
+  return false
 }
 
 function findElementByText(text: string): HTMLElement | null {

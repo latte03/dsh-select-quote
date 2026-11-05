@@ -12,6 +12,10 @@ import { t } from '../i18n.ts'
 import { styles } from '../styles.ts'
 import type { SelectionAnnotation } from '../state/annotation-store.ts'
 import {
+  groupHandoffs,
+  type OutboundAnnotation,
+} from '../state/handoff.ts'
+import {
   BADGE_BOTTOM,
   BADGE_HEIGHT,
   BADGE_MARGIN,
@@ -22,6 +26,7 @@ import { cleanTextOf, cleanTextRange, overlappingEntries } from './message-text.
 
 const MARK_ATTR = 'data-dsq-ann-mark'
 const INDEX_ATTR = 'data-dsq-ann-index'
+const ARROW_ATTR = 'data-dsq-ann-arrow'
 const FLASH_MS = 1500
 
 export interface AnnotationJob {
@@ -29,15 +34,23 @@ export interface AnnotationJob {
   readonly markId: string
   /** `data-chat-flow-key` of the message that owns the annotated text. */
   readonly messageId: string
-  /** One-based annotation number shown in the badge. */
+  /** One-based annotation number shown in the badge; 0 for an arrow mark. */
   readonly index: number
   readonly text: string
   readonly startOffset?: number
   readonly endOffset?: number
+  /**
+   * `badge` (default) is the ordinal superscript; `arrow` is the single `↗`
+   * marker left by a selection sent to another conversation.
+   */
+  readonly variant?: 'badge' | 'arrow'
+  /** Localized target names for the arrow mark's aria-label. */
+  readonly targetLabel?: string
 }
 
 const jobs = new Map<string, AnnotationJob>()
 let pendingIds = new Set<string>()
+let handoffIds = new Set<string>()
 
 function attrValue(value: string): string {
   return value.replace(/["\\]/g, '\\$&')
@@ -141,10 +154,19 @@ function sameText(a: string, b: string): boolean {
   return norm(a) === norm(b)
 }
 
-function isMarked(pieces: readonly { entry: { node: Text } }[]): boolean {
-  const first = pieces[0]
-  if (!first) return false
-  return first.entry.node.parentElement?.closest(`[${MARK_ATTR}]`) != null
+/**
+ * Already decorated by THIS job. A different job may wrap the same span (a
+ * local pending annotation and the outbound arrow of the same selection are
+ * separate marks), so the check must be by mark id, not by any mark.
+ */
+function isMarked(
+  pieces: readonly { entry: { node: Text } }[],
+  markId: string,
+): boolean {
+  return pieces.some(
+    (piece) =>
+      piece.entry.node.parentElement?.closest(`[${MARK_ATTR}="${attrValue(markId)}"]`) != null,
+  )
 }
 
 function markLabel(index: number): string {
@@ -160,10 +182,27 @@ function makeBadgeInteractive(mark: HTMLElement, index: number): void {
   if (mark.getAttribute('aria-label') !== label) mark.setAttribute('aria-label', label)
 }
 
+/** The arrow badge opens the outbound preview (targets, status, removal). */
+function makeArrowInteractive(mark: HTMLElement, targetLabel?: string): void {
+  mark.tabIndex = 0
+  mark.setAttribute('role', 'button')
+  mark.setAttribute('aria-haspopup', 'dialog')
+  const label = t('handoff.markAria', { target: targetLabel ?? '' })
+  if (mark.getAttribute('aria-label') !== label) mark.setAttribute('aria-label', label)
+}
+
 function createMark(job: AnnotationJob, withIndex: boolean): HTMLSpanElement {
   const mark = document.createElement('span')
   mark.className = styles.annMark
   mark.setAttribute(MARK_ATTR, job.markId)
+  if (job.variant === 'arrow') {
+    // Every fragment identifies the same mark; the badge rides the last one.
+    if (withIndex) {
+      mark.setAttribute(ARROW_ATTR, 'true')
+      makeArrowInteractive(mark, job.targetLabel)
+    }
+    return mark
+  }
   // Only the last fragment carries the ordinal, so the corner badge shows once.
   if (withIndex) {
     mark.setAttribute(INDEX_ATTR, String(job.index))
@@ -210,7 +249,7 @@ function decorateAtOffsets(item: HTMLElement, job: AnnotationJob): boolean {
   if (!located) return false
   if (!sameText(cleanTextOf(item).slice(located.from, located.to), job.text)) return false
   const pieces = overlappingEntries(located.entries, located.from, located.to)
-  if (pieces.length === 0 || isMarked(pieces)) return false
+  if (pieces.length === 0 || isMarked(pieces, job.markId)) return false
   return wrapRange(item, job, located.from, located.to)
 }
 
@@ -233,7 +272,11 @@ function decorateBySearch(item: HTMLElement, job: AnnotationJob): boolean {
       const located = cleanTextRange(item, at, at + length)
       if (located) {
         const pieces = overlappingEntries(located.entries, located.from, located.to)
-        if (pieces.length > 0 && !isMarked(pieces) && wrapRange(item, job, located.from, located.to)) {
+        if (
+          pieces.length > 0 &&
+          !isMarked(pieces, job.markId) &&
+          wrapRange(item, job, located.from, located.to)
+        ) {
           return true
         }
       }
@@ -262,6 +305,11 @@ function refreshMarkIndex(item: HTMLElement, job: AnnotationJob): boolean {
   )
   if (marks.length === 0) return false
   const last = marks[marks.length - 1]
+  if (job.variant === 'arrow') {
+    if (!last.hasAttribute(ARROW_ATTR)) last.setAttribute(ARROW_ATTR, 'true')
+    makeArrowInteractive(last, job.targetLabel)
+    return true
+  }
   const next = String(job.index)
   if (last.getAttribute(INDEX_ATTR) !== next) last.setAttribute(INDEX_ATTR, next)
   makeBadgeInteractive(last, job.index)
@@ -275,6 +323,10 @@ export function refreshAnnotationMarkLabels(): void {
     const index = Number(mark.getAttribute(INDEX_ATTR) ?? 0)
     if (index > 0) makeBadgeInteractive(mark, index)
   }
+  for (const mark of document.querySelectorAll<HTMLElement>(`[${ARROW_ATTR}]`)) {
+    const markId = mark.getAttribute(MARK_ATTR) ?? ''
+    makeArrowInteractive(mark, jobs.get(markId)?.targetLabel)
+  }
 }
 
 /**
@@ -286,7 +338,9 @@ export function refreshAnnotationMarkLabels(): void {
  * message block, and a stack may not climb into the message above.
  */
 function layoutBadges(scope: ParentNode): void {
-  const marks = Array.from(scope.querySelectorAll<HTMLElement>(`[${INDEX_ATTR}]`))
+  const marks = Array.from(
+    scope.querySelectorAll<HTMLElement>(`[${INDEX_ATTR}], [${ARROW_ATTR}]`),
+  )
   for (const mark of marks) {
     mark.style.removeProperty('--dsq-ann-badge-x')
     mark.style.removeProperty('--dsq-ann-badge-y')
@@ -317,12 +371,13 @@ function layoutBadges(scope: ParentNode): void {
     const anchors = group
       .map((mark) => {
         const rect = mark.getBoundingClientRect()
+        const arrow = mark.hasAttribute(ARROW_ATTR)
         return {
           mark,
           index: Number(mark.getAttribute(INDEX_ATTR) ?? 0),
           x: rect.right + BADGE_MARGIN,
           y: rect.bottom - BADGE_BOTTOM - BADGE_HEIGHT,
-          width: BADGE_WIDTH,
+          width: arrow ? 15 : BADGE_WIDTH,
           height: BADGE_HEIGHT,
           visible: rect.width > 0 && rect.height > 0,
         }
@@ -403,7 +458,9 @@ export function upsertAnnotationJobs(next: readonly AnnotationJob[]): void {
       prev.index === job.index &&
       prev.text === job.text &&
       prev.startOffset === job.startOffset &&
-      prev.endOffset === job.endOffset
+      prev.endOffset === job.endOffset &&
+      prev.variant === job.variant &&
+      prev.targetLabel === job.targetLabel
     ) {
       continue
     }
@@ -436,20 +493,58 @@ export function dropAnnotationJobs(ids: readonly string[]): void {
   if (changed) applyAnnotationMarks()
 }
 
-/** Diff the pending store into jobs; call on every annotation-store change. */
+/**
+ * Diff the pending store into jobs; call on every annotation-store change.
+ *
+ * Items with `origin` were selected in another conversation: their offsets do
+ * not resolve here, so they must not draw a body mark in this transcript. They
+ * still occupy their ordinal in the summary list, which is why the index is
+ * the full-list position.
+ */
 export function syncPendingAnnotationJobs(annotations: readonly SelectionAnnotation[]): void {
-  const next = new Set(annotations.map((item) => item.id))
+  const next = new Set(annotations.filter((item) => item.origin === undefined).map((item) => item.id))
   const removed = [...pendingIds].filter((id) => !next.has(id))
   pendingIds = next
   if (removed.length > 0) dropAnnotationJobs(removed)
   upsertAnnotationJobs(
-    annotations.map((item, i) => ({
-      markId: item.id,
-      messageId: item.sources[0]?.messageId ?? '',
-      index: i + 1,
-      text: item.text,
-      startOffset: item.sources[0]?.startOffset,
-      endOffset: item.sources[0]?.endOffset,
+    annotations
+      .map((item, i) => ({ item, index: i + 1 }))
+      .filter(({ item }) => item.origin === undefined)
+      .map(({ item, index }) => ({
+        markId: item.id,
+        messageId: item.sources[0]?.messageId ?? '',
+        index,
+        text: item.text,
+        startOffset: item.sources[0]?.startOffset,
+        endOffset: item.sources[0]?.endOffset,
+      })),
+  )
+}
+
+/**
+ * Diff source-side handoff records into arrow marks. One job per selection key,
+ * so sending the same passage to several conversations leaves one `↗` and
+ * deleting one destination never re-wraps the text.
+ */
+export function syncHandoffMarks(records: readonly OutboundAnnotation[]): void {
+  const groups = groupHandoffs(records)
+  const next = new Set(groups.map((group) => group.markId))
+  const removed = [...handoffIds].filter((id) => !next.has(id))
+  handoffIds = next
+  if (removed.length > 0) dropAnnotationJobs(removed)
+  upsertAnnotationJobs(
+    groups.map((group) => ({
+      markId: group.markId,
+      messageId: group.messageId,
+      index: 0,
+      variant: 'arrow' as const,
+      text: group.text,
+      startOffset: group.startOffset,
+      endOffset: group.endOffset,
+      targetLabel: group.records
+        .map((record) => record.destination.title.trim())
+        .filter((title, index, all) => title !== '' && all.indexOf(title) === index)
+        .join(', '),
     })),
   )
 }
@@ -502,6 +597,12 @@ export function watchAnnotationMarks(root?: ParentNode): () => void {
     window.removeEventListener('resize', onResize)
     if (frame !== 0) window.cancelAnimationFrame(frame)
   }
+}
+
+/** Mark element of one registered job (pending item or outbound arrow). */
+export function findMark(markId: string): HTMLElement | null {
+  const mark = document.querySelector(`[${MARK_ATTR}="${attrValue(markId)}"]`)
+  return mark instanceof HTMLElement ? mark : null
 }
 
 /** Mark for an annotation number, optionally restricted to `markId`. */

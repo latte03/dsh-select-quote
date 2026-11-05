@@ -29,6 +29,7 @@ export type IconName =
   | 'chevron-down'
   | 'chevron-right'
   | 'check'
+  | 'arrow-up-right'
 
 const SHAPES: Record<IconName, ReactNode> = {
   copy: (
@@ -107,6 +108,12 @@ const SHAPES: Record<IconName, ReactNode> = {
   check: (
     <g>
       <path d="M20 6 9 17l-5-5" />
+    </g>
+  ),
+  'arrow-up-right': (
+    <g>
+      <path d="M7 7h10v10" />
+      <path d="M7 17 17 7" />
     </g>
   ),
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SelectionSnapshot } from '../dom/selection.ts'
-import { selectionActions } from './actions.ts'
+import { selectionActions, splitLabelAt } from './actions.ts'
 
 function snapshot(anchorHref?: string): SelectionSnapshot {
   return {
@@ -38,5 +38,23 @@ describe('selection actions', () => {
     expect(
       selectionActions(snapshot('javascript:alert(1)')).map((action) => action.key),
     ).toEqual(['copy', 'translate', 'add', 'side'])
+  })
+})
+
+describe('splitLabelAt', () => {
+  it('marks only the target name, keeping the translated word order', () => {
+    expect(splitLabelAt('放入 修复登录', '修复登录')).toEqual([
+      { text: '放入 ' },
+      { text: '修复登录', accent: true },
+    ])
+    expect(splitLabelAt('Put into Fix login', 'Fix login')).toEqual([
+      { text: 'Put into ' },
+      { text: 'Fix login', accent: true },
+    ])
+  })
+
+  it('leaves the label whole when there is no name or no match', () => {
+    expect(splitLabelAt('放入会话…', undefined)).toEqual([{ text: '放入会话…' }])
+    expect(splitLabelAt('放入会话…', '别名')).toEqual([{ text: '放入会话…' }])
   })
 })

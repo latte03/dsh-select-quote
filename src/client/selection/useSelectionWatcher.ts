@@ -12,7 +12,7 @@ import { isInsideTranscript } from '../dom/message-text.ts'
 import { pointInRects, shouldOpenSelectionMenu } from '../dom/menu-trigger.ts'
 import { readSelectionSnapshot, type SelectionSnapshot } from '../dom/selection.ts'
 
-export type SelectionPhase = 'idle' | 'comment' | 'side' | 'translate'
+export type SelectionPhase = 'idle' | 'comment' | 'handoff' | 'side' | 'translate'
 
 /** The menu's own chrome; a press inside it must not dismiss the selection. */
 const MENU_SELECTOR = '[data-dsq-menu]'
@@ -73,6 +73,10 @@ export function useSelectionWatcher({
       // Any outside press may start a new selection drag.
       dragging = true
 
+      // The handoff panel is pinned: an outside press may be the start of a new
+      // selection or a mis-click, and nothing has been written yet. Escape and
+      // the explicit 取消 button own dismissal (they keep the typed comment).
+      if (phaseRef.current === 'handoff') return
       // Outside click ends the optional comment step, never the annotation:
       // it was saved the moment "add annotation" was pressed. Keep what was typed
       // too — only an explicit skip / Escape discards the comment text.

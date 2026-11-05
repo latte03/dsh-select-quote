@@ -35,7 +35,9 @@ export function useSendIntercept({
       if (current.length === 0) return
       if (foldingRef !== undefined) foldingRef.current = true
       setDraft(composeAnnotatedMessage(draftRef.current, current))
-      clearAnnotations()
+      // Cross-session records stay (state becomes `sent`) while the target
+      // list clears; a plain clear would delete the source's arrow mark.
+      clearAnnotations(undefined, 'sent')
       onFolded()
     }
 

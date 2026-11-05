@@ -22,7 +22,7 @@ import { LANGUAGE_LABELS, TRANSLATE_LANGUAGES } from '../translate.ts'
 import { LucideIcon } from '../ui/icons.tsx'
 import { Kbd } from '../ui/Kbd.tsx'
 import type { VisualViewportMetrics } from '../ui/touch.ts'
-import type { SelectionActionEntry } from './actions.ts'
+import type { SelectionAction, SelectionActionEntry } from './actions.ts'
 import { LanguageMenu } from './LanguageMenu.tsx'
 import type { TranslationActions } from './translation-view.ts'
 import type { SelectionPhase } from './useSelectionWatcher.ts'
@@ -31,6 +31,18 @@ const LANGUAGE_OPTIONS = TRANSLATE_LANGUAGES.map((code) => ({
   value: code,
   label: LANGUAGE_LABELS[code],
 }))
+
+/** Controller state for the cross-session handoff panel (no writes yet). */
+export interface HandoffPanelActions {
+  readonly targetName: string
+  readonly targetMeta: string
+  readonly busy: boolean
+  readonly error: string | null
+  onChangeTarget(): void
+  onPut(): void
+  onPutAndOpen(): void
+  onCancel(): void
+}
 
 export interface ToolbarViewProps {
   readonly touch: boolean
@@ -61,34 +73,167 @@ export interface ToolbarViewProps {
   readonly onSideKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
   readonly onSendSide: () => void
   readonly onCancelSide: () => void
+  /** Opens the target picker from the handoff button's chevron. */
+  readonly onHandoffPick?: () => void
+  /** Present only while the handoff phase owns the surface. */
+  readonly handoff?: HandoffPanelActions | null
   /** Present only while the translate phase owns the surface. */
   readonly translate?: TranslationActions | null
+}
+
+/** Label text with the handoff target name painted in the accent color. */
+function ActionLabel({ action }: { action: SelectionAction }): ReactNode {
+  if (!action.labelParts) return action.label
+  return action.labelParts.map((part, index) =>
+    part.accent ? (
+      <span key={index} className={styles.handoffTargetName}>
+        {part.text}
+      </span>
+    ) : (
+      <Fragment key={index}>{part.text}</Fragment>
+    ),
+  )
 }
 
 function ActionRow({
   actions,
   stacked,
+  onHandoffPick,
 }: {
   actions: readonly SelectionActionEntry[]
   stacked: boolean
+  onHandoffPick?: () => void
 }): ReactNode {
-  return actions.map((action, index) => (
-    <Fragment key={action.key}>
-      {!stacked && index > 0 ? <span className={styles.divider} aria-hidden="true" /> : null}
-      <button
-        type="button"
-        className={cx(
-          A.plain,
-          stacked ? A.col : A.inlineRow,
-          stacked ? styles.touchAction : styles.button,
-        )}
-        onClick={action.onClick}
-      >
-        <LucideIcon name={action.icon} size={stacked ? 18 : 14} />
-        {stacked ? <span>{action.label}</span> : action.label}
-      </button>
-    </Fragment>
-  ))
+  return actions.map((action, index) => {
+    const handoff = action.key === 'handoff' && onHandoffPick !== undefined
+    return (
+      <Fragment key={action.key}>
+        {!stacked && index > 0 ? <span className={styles.divider} aria-hidden="true" /> : null}
+        <button
+          type="button"
+          className={cx(
+            A.plain,
+            stacked ? A.col : A.inlineRow,
+            stacked ? styles.touchAction : styles.button,
+          )}
+          aria-haspopup={handoff ? 'dialog' : undefined}
+          data-dsq-handoff-trigger={handoff ? 'true' : undefined}
+          onClick={action.onClick}
+        >
+          <LucideIcon name={action.icon} size={stacked ? 18 : 14} />
+          {stacked ? (
+            <span>
+              <ActionLabel action={action} />
+            </span>
+          ) : (
+            <ActionLabel action={action} />
+          )}
+        </button>
+        {handoff ? (
+          <button
+            type="button"
+            className={cx(
+              A.plain,
+              stacked ? cx(A.inlineRow, styles.touchAction) : cx(A.gridMid, styles.handoffChevron),
+            )}
+            aria-haspopup="dialog"
+            aria-label={t('handoff.dialogAria')}
+            title={t('handoff.dialogAria')}
+            data-dsq-handoff-picker="true"
+            onClick={(event) => {
+              event.stopPropagation()
+              onHandoffPick()
+            }}
+          >
+            {stacked ? (
+              <>
+                <LucideIcon name="chevron-down" size={18} />
+                <span>{t('handoff.menu')}</span>
+              </>
+            ) : (
+              <LucideIcon name="chevron-down" size={12} />
+            )}
+          </button>
+        ) : null}
+      </Fragment>
+    )
+  })
+}
+
+/** Handoff phase: target chip, optional comment, 放入 / 放入并前往. */
+function HandoffPanel({
+  handoff,
+  comment,
+  touch,
+  commentRef,
+  onChange,
+  onKeyDown,
+}: {
+  handoff: HandoffPanelActions
+  comment: string
+  touch: boolean
+  commentRef: MutableRefObject<HTMLTextAreaElement | null>
+  onChange: (value: string) => void
+  onKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
+}): ReactNode {
+  const { busy } = handoff
+  return (
+    <>
+      <div className={styles.handoffChip}>
+        <span className={styles.handoffChipLabel}>{t('handoff.targetLabel')}</span>
+        <span className={styles.handoffChipTitle} title={handoff.targetName}>
+          {handoff.targetName}
+        </span>
+        <button
+          type="button"
+          className={styles.handoffChange}
+          onClick={handoff.onChangeTarget}
+          disabled={busy}
+        >
+          {t('handoff.change')}
+        </button>
+      </div>
+      <div className={styles.handoffHint}>{t('handoff.hint')}</div>
+      <CommentField
+        comment={comment}
+        touch={touch}
+        commentRef={commentRef}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+      />
+      {handoff.error ? (
+        <div className={styles.handoffError} role="alert">
+          {handoff.error}
+        </div>
+      ) : null}
+      <div className={cx(A.row, styles.commentActions, touch && styles.touchActions)}>
+        <button
+          type="button"
+          className={cx(A.plain, A.inlineRow, styles.button, touch && styles.touchSecondary)}
+          disabled={busy}
+          onClick={handoff.onCancel}
+        >
+          {t('common.cancel')}
+        </button>
+        <button
+          type="button"
+          className={cx(A.plain, A.inlineRow, styles.button)}
+          disabled={busy}
+          onClick={handoff.onPut}
+        >
+          {busy ? t('handoff.putting') : t('handoff.put')}
+        </button>
+        <button
+          type="button"
+          className={cx(A.plain, A.inlineRow, styles.button, styles.buttonAddComment)}
+          disabled={busy}
+          onClick={handoff.onPutAndOpen}
+        >
+          {busy ? t('handoff.putting') : t('handoff.putAndOpen')}
+        </button>
+      </div>
+    </>
+  )
 }
 
 function CommentField({
@@ -429,6 +574,8 @@ export function ToolbarView({
   onSideKeyDown,
   onSendSide,
   onCancelSide,
+  onHandoffPick,
+  handoff,
   translate,
 }: ToolbarViewProps): ReactNode {
   const commentField = (
@@ -463,7 +610,7 @@ export function ToolbarView({
             data-touch="true"
             onPointerDown={onToolbarPointerDown}
           >
-            <ActionRow actions={actions} stacked />
+            <ActionRow actions={actions} stacked onHandoffPick={onHandoffPick} />
           </div>
         ) : null}
         {phase !== 'idle' ? (
@@ -480,18 +627,22 @@ export function ToolbarView({
               aria-label={
                 phase === 'comment'
                   ? t('toolbar.commentDialogAria')
-                  : phase === 'translate'
-                    ? t('translate.title')
-                    : t('sideTask.title')
+                  : phase === 'handoff'
+                    ? t('handoff.dialogAria')
+                    : phase === 'translate'
+                      ? t('translate.title')
+                      : t('sideTask.title')
               }
             >
               <div className={cx(A.row, styles.touchSheetHead)}>
                 <span className={styles.touchSheetTitle}>
                   {phase === 'comment'
                     ? t('toolbar.commentHint')
-                    : phase === 'translate'
-                      ? t('translate.title')
-                      : t('sideTask.title')}
+                    : phase === 'handoff'
+                      ? t('handoff.commentTitle')
+                      : phase === 'translate'
+                        ? t('translate.title')
+                        : t('sideTask.title')}
                 </span>
                 <button
                   type="button"
@@ -512,6 +663,15 @@ export function ToolbarView({
                   {commentField}
                   {commentActions}
                 </>
+              ) : phase === 'handoff' && handoff ? (
+                <HandoffPanel
+                  handoff={handoff}
+                  comment={comment}
+                  touch={touch}
+                  commentRef={commentRef}
+                  onChange={onCommentChange}
+                  onKeyDown={onCommentKeyDown}
+                />
               ) : phase === 'translate' && translate ? (
                 <TranslatePanel
                   translate={translate}
@@ -566,7 +726,7 @@ export function ToolbarView({
           onPointerDown={onToolbarPointerDown}
         >
           <div className={cx(A.inlineRow, styles.toolbarInner)}>
-            <ActionRow actions={actions} stacked={false} />
+            <ActionRow actions={actions} stacked={false} onHandoffPick={onHandoffPick} />
           </div>
         </div>
       ) : (
@@ -585,9 +745,11 @@ export function ToolbarView({
             >
               {phase === 'comment'
                 ? t('toolbar.commentHint')
-                : phase === 'translate'
-                  ? t('translate.title')
-                  : t('sideTask.title')}
+                : phase === 'handoff'
+                  ? t('handoff.commentTitle')
+                  : phase === 'translate'
+                    ? t('translate.title')
+                    : t('sideTask.title')}
             </span>
           </div>
         </div>
@@ -605,9 +767,11 @@ export function ToolbarView({
           aria-label={
             phase === 'comment'
               ? t('toolbar.commentDialogAria')
-              : phase === 'translate'
-                ? t('translate.title')
-                : t('sideTask.title')
+              : phase === 'handoff'
+                ? t('handoff.dialogAria')
+                : phase === 'translate'
+                  ? t('translate.title')
+                  : t('sideTask.title')
           }
           onPointerDown={onToolbarPointerDown}
         >
@@ -616,6 +780,15 @@ export function ToolbarView({
               {commentField}
               {commentActions}
             </>
+          ) : phase === 'handoff' && handoff ? (
+            <HandoffPanel
+              handoff={handoff}
+              comment={comment}
+              touch={touch}
+              commentRef={commentRef}
+              onChange={onCommentChange}
+              onKeyDown={onCommentKeyDown}
+            />
           ) : phase === 'translate' && translate ? (
             <TranslatePanel
               translate={translate}

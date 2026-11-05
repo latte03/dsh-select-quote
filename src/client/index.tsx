@@ -11,6 +11,7 @@ import {
 } from './dom/decorateAnnotationDirectives.ts'
 import {
   refreshAnnotationMarkLabels,
+  syncHandoffMarks,
   syncPendingAnnotationJobs,
   watchAnnotationMarks,
 } from './dom/annotate-text.ts'
@@ -31,7 +32,7 @@ import type { TranslateStreamEvent } from '../shared/plugin-remote.ts'
 import { ensureToolbarStyles } from './styles.ts'
 import type { SelectionSnapshot } from './dom/selection.ts'
 import type { ModelChoice, ModelGroup } from './model/types.ts'
-import { runtime } from './runtime.ts'
+import { runtime, setHandoffHost } from './runtime.ts'
 import {
   MAX_TRANSLATE_CHARS,
   resolveTranslatePrompt,
@@ -47,6 +48,8 @@ import {
   adoptStorageAnnotations,
   bindAnnotationSession,
   getAnnotations,
+  getOutbound,
+  reconcileHandoffs,
   setAnnotationPersistence,
   subscribeAnnotations,
 } from './state/annotation-store.ts'
@@ -247,6 +250,39 @@ export function apply(ctx: Context): void {
         delete runtime.isSubagentSession
       },
       'dsh-select-quote: subagent session guard',
+    )
+  })
+
+  // Cross-session handoff. All three services must exist: navigation
+  // (`uiWorkspace.openSession`), the workspace catalog (grouping + archived
+  // state) and `sessions.create` (the "new session" target). A host without
+  // them simply never publishes the bridge, and the toolbar hides the action —
+  // the plugin still activates, which is the whole point of feature detection.
+  ctx.inject(['sessions', 'workspaces', 'uiWorkspace'], (scope) => {
+    const can =
+      typeof scope.sessions.create === 'function' &&
+      typeof scope.sessions.list?.getSnapshot === 'function' &&
+      typeof scope.sessions.list.subscribe === 'function' &&
+      typeof scope.workspaces.list?.getSnapshot === 'function' &&
+      typeof scope.workspaces.list.subscribe === 'function' &&
+      typeof scope.uiWorkspace.openSession === 'function'
+    if (!can) return
+    const host = {
+      sessionsSnapshot: () => scope.sessions.list.getSnapshot(),
+      subscribeSessions: (listener: () => void) => scope.sessions.list.subscribe?.(listener) ?? (() => {}),
+      workspacesSnapshot: () => scope.workspaces.list.getSnapshot(),
+      subscribeWorkspaces: (listener: () => void) =>
+        scope.workspaces.list.subscribe?.(listener) ?? (() => {}),
+      openSession: (sessionId: string) => scope.uiWorkspace.openSession(sessionId),
+      createSession: async (request: { workspaceId?: string; cwd?: string }) =>
+        scope.sessions.create(request),
+    }
+    setHandoffHost(host)
+    scope.effect(
+      () => () => {
+        if (runtime.handoffHost === host) setHandoffHost(undefined)
+      },
+      'dsh-select-quote: handoff host',
     )
   })
 
@@ -478,10 +514,15 @@ export function apply(ctx: Context): void {
   ctx.effect(() => bindAnnotationMarkPreview(), 'dsh-select-quote: mark preview')
   // The optimistic send echo paints the composer draft, protocol block included.
   ctx.effect(() => watchSubmissionEcho(), 'dsh-select-quote: submission echo')
-  // Pending annotations mark their source text the moment they are added.
+  // Pending annotations mark their source text the moment they are added, and
+  // outbound handoff records draw the single arrow mark of their selection.
   ctx.effect(() => {
-    syncPendingAnnotationJobs(getAnnotations())
-    return subscribeAnnotations(() => syncPendingAnnotationJobs(getAnnotations()))
+    const sync = (): void => {
+      syncPendingAnnotationJobs(getAnnotations())
+      syncHandoffMarks(getOutbound())
+    }
+    sync()
+    return subscribeAnnotations(sync)
   }, 'dsh-select-quote: pending annotation marks')
 
   // Pending annotations survive a refresh the way the draft does: both live in
@@ -492,14 +533,20 @@ export function apply(ctx: Context): void {
     const port = createAnnotationPersistence()
     setAnnotationPersistence(port)
     port.prune()
+    // Startup is one of the reconciliation points: a previous page may have
+    // been closed between writing the target item and the source record.
+    reconcileHandoffs()
     const onStorage = (event: StorageEvent): void => {
       if (event.storageArea !== null && event.storageArea !== window.localStorage) return
       if (event.key === null) {
         adoptStorageAnnotations(null)
-        return
+      } else {
+        const sessionId = sessionIdOfKey(event.key)
+        if (sessionId !== null) adoptStorageAnnotations(sessionId)
       }
-      const sessionId = sessionIdOfKey(event.key)
-      if (sessionId !== null) adoptStorageAnnotations(sessionId)
+      // `adoptStorageAnnotations` reconciles the sessions it holds; a key for
+      // an uncached partition still needs the global pair check.
+      reconcileHandoffs()
     }
     window.addEventListener('storage', onStorage)
     return () => {

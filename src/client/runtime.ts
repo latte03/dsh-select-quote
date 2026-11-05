@@ -12,6 +12,10 @@ import type { SelectionSnapshot } from './dom/selection.ts'
 import type { ModelChoice, ModelDirectoryFace, ModelGroup } from './model/types.ts'
 import type { TranslateLanguage } from './translate.ts'
 import type { TranslateStreamEvent } from '../shared/plugin-remote.ts'
+import type {
+  SessionListSnapshot,
+  WorkspaceListSnapshot,
+} from './selection/session-targets.ts'
 
 export type SelectionBridgeState = 'ready' | 'no-selection' | 'busy'
 
@@ -24,8 +28,38 @@ export interface SelectionBridge {
   add(): void
 }
 
+/**
+ * Host faces the cross-session handoff needs. Published only when the shell
+ * provides all three services, so an older host simply hides the entry point.
+ */
+export interface HandoffHost {
+  sessionsSnapshot(): SessionListSnapshot
+  subscribeSessions(listener: () => void): () => void
+  workspacesSnapshot(): WorkspaceListSnapshot
+  subscribeWorkspaces(listener: () => void): () => void
+  /** Switches the main view; throws when the target cannot be opened. */
+  openSession(sessionId: string): void
+  /** Mints (or reuses) a session without navigating; resolves its id. */
+  createSession(request: { workspaceId?: string; cwd?: string }): Promise<string>
+}
+
+const handoffHostListeners = new Set<() => void>()
+
+export function setHandoffHost(host: HandoffHost | undefined): void {
+  runtime.handoffHost = host
+  for (const listener of [...handoffHostListeners]) listener()
+}
+
+export function subscribeHandoffHost(listener: () => void): () => void {
+  handoffHostListeners.add(listener)
+  return () => {
+    handoffHostListeners.delete(listener)
+  }
+}
+
 export const runtime: {
   sessionId?: string
+  handoffHost?: HandoffHost
   selection?: SelectionBridge
   /**
    * Opens a fork-backed side task for one latched selection and question.

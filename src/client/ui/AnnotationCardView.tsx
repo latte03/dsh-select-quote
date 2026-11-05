@@ -24,6 +24,14 @@ export interface AnnotationSummaryItem {
   readonly title: string
   readonly text: string
   readonly comment?: string
+  /** Present when this pending item was selected in another conversation. */
+  readonly origin?: {
+    readonly sessionId: string
+    readonly title: string
+    readonly archived: boolean
+    /** Source outbound record id; the jump derives its arrow mark from it. */
+    readonly handoffId?: string
+  }
 }
 
 export interface AnnotationSummaryProps {
@@ -35,6 +43,8 @@ export interface AnnotationSummaryProps {
   readonly onItemRemove?: (index: number, item: AnnotationSummaryItem) => void
   /** Composer only: persist one pending annotation's new comment. */
   readonly onItemEdit?: (index: number, item: AnnotationSummaryItem, comment: string) => void
+  /** Composer only: open the source conversation of a cross-session item. */
+  readonly onItemOrigin?: (index: number, item: AnnotationSummaryItem) => void
 }
 
 /** Short grace for crossing the 12px bridge; the exit starts right after it. */
@@ -69,6 +79,7 @@ export function AnnotationSummary({
   onItemSelect,
   onItemRemove,
   onItemEdit,
+  onItemOrigin,
 }: AnnotationSummaryProps): ReactNode {
   useLocale()
   const touch = useCoarsePointer()
@@ -89,6 +100,13 @@ export function AnnotationSummary({
   const exitTimerRef = useRef<number | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
+  /** Item key (or 'all') waiting for the second press of its delete button. */
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+
+  // A closed panel forgets the half-finished destructive step.
+  useEffect(() => {
+    if (!open) setConfirmRemove(null)
+  }, [open])
 
   const place = useCallback(() => {
     const root = rootRef.current
@@ -416,6 +434,7 @@ export function AnnotationSummary({
   const startEdit = useCallback((index: number) => {
     const item = items[index]
     if (!item) return
+    setConfirmRemove(null)
     setEditing(editKeyOf(item, index))
     setEditDraft(item.comment ?? '')
   }, [items])
@@ -450,6 +469,7 @@ export function AnnotationSummary({
           {items.map((item, i) => {
             const itemKey = editKeyOf(item, i)
             const isEditing = editing === itemKey
+            const confirmingRemove = confirmRemove === itemKey
             return (
               <div key={item.id ?? `${i}`} className={styles.summaryItem}>
                 <div className={cx(A.row, styles.summaryItemHead)}>
@@ -475,11 +495,37 @@ export function AnnotationSummary({
                       {onItemRemove ? (
                         <button
                           type="button"
-                          className={cx(A.plain, A.gridMid, styles.summaryItemAction)}
-                          aria-label={t('summary.remove', { index: i + 1 })}
-                          onClick={() => onItemRemove(i, item)}
+                          className={cx(
+                            A.plain,
+                            confirmingRemove ? A.inlineRow : A.gridMid,
+                            confirmingRemove ? styles.deleteConfirm : styles.summaryItemAction,
+                          )}
+                          data-confirming={confirmingRemove ? 'true' : undefined}
+                          aria-label={
+                            confirmingRemove
+                              ? t('handoff.confirmRemove')
+                              : t('summary.remove', { index: i + 1 })
+                          }
+                          title={
+                            confirmingRemove
+                              ? t('handoff.confirmRemove')
+                              : t('summary.remove', { index: i + 1 })
+                          }
+                          onClick={() => {
+                            if (!confirmingRemove) {
+                              setConfirmRemove(itemKey)
+                              return
+                            }
+                            setConfirmRemove(null)
+                            onItemRemove(i, item)
+                          }}
                         >
-                          <LucideIcon name="trash-2" />
+                          <span className={styles.deleteConfirmInner}>
+                            <LucideIcon name="trash-2" />
+                            <span className={styles.deleteConfirmLabel}>
+                              {t('handoff.confirmRemove')}
+                            </span>
+                          </span>
                         </button>
                       ) : null}
                     </div>
@@ -553,6 +599,23 @@ export function AnnotationSummary({
                         {item.comment || t('summary.noComment')}
                       </div>
                     </button>
+                    {item.origin ? (
+                      <button
+                        type="button"
+                        className={cx(A.plain, A.inlineRow, styles.originLink)}
+                        disabled={item.origin.archived}
+                        title={
+                          item.origin.archived
+                            ? t('handoff.archived', { title: item.origin.title })
+                            : t('handoff.fromAria', { title: item.origin.title })
+                        }
+                        aria-label={t('handoff.fromAria', { title: item.origin.title })}
+                        onClick={() => onItemOrigin?.(i, item)}
+                      >
+                        <LucideIcon name="arrow-up-right" size={12} />
+                        <span>{t('handoff.from', { title: item.origin.title })}</span>
+                      </button>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -595,11 +658,29 @@ export function AnnotationSummary({
       {onRemoveAll ? (
         <button
           type="button"
-          className={cx(A.plain, A.gridMid, styles.cardClose)}
-          aria-label={t('summary.removeAll')}
-          onClick={onRemoveAll}
+          className={cx(
+            A.plain,
+            confirmRemove === 'all' ? A.inlineRow : A.gridMid,
+            confirmRemove === 'all' ? styles.deleteConfirm : styles.cardClose,
+          )}
+          data-confirming={confirmRemove === 'all' ? 'true' : undefined}
+          aria-label={
+            confirmRemove === 'all' ? t('handoff.confirmRemove') : t('summary.removeAll')
+          }
+          title={confirmRemove === 'all' ? t('handoff.confirmRemove') : t('summary.removeAll')}
+          onClick={() => {
+            if (confirmRemove !== 'all') {
+              setConfirmRemove('all')
+              return
+            }
+            setConfirmRemove(null)
+            onRemoveAll()
+          }}
         >
-          <LucideIcon name="x" size={13} />
+          <span className={styles.deleteConfirmInner}>
+            <LucideIcon name="x" size={13} />
+            <span className={styles.deleteConfirmLabel}>{t('handoff.confirmRemove')}</span>
+          </span>
         </button>
       ) : null}
       {panel !== null && typeof document !== 'undefined' ? createPortal(panel, document.body) : null}

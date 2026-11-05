@@ -99,6 +99,32 @@ function anchorX(rect: DOMRect, bounds: DOMRect): number {
 }
 
 /**
+ * Horizontal correction for a toolbar centered on the selection.
+ *
+ * Centering alone keeps the anchor point inside the band, but the toolbar has
+ * width: near either edge half of it lands outside the clipped scroller. After
+ * mount (when the width is measurable), shift the whole bar back inside the
+ * visible band. A bar wider than the band is centered instead, since neither
+ * edge can be satisfied then.
+ */
+export function toolbarShiftWithin(
+  box: { readonly left: number; readonly right: number; readonly width: number },
+  bounds: { readonly left: number; readonly right: number },
+  margin: number = VIEWPORT_MARGIN,
+): number {
+  const bandLeft = bounds.left + margin
+  const bandRight = bounds.right - margin
+  const bandWidth = bandRight - bandLeft
+  if (bandWidth <= 0) return 0
+  if (box.width >= bandWidth) {
+    return (bandLeft + bandRight) / 2 - (box.left + box.width / 2)
+  }
+  if (box.left < bandLeft) return bandLeft - box.left
+  if (box.right > bandRight) return bandRight - box.right
+  return 0
+}
+
+/**
  * True when the selection's first line still touches the viewport.
  *
  * The toolbar anchors to that line, so once it has scrolled fully out of

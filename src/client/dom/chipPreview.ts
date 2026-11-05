@@ -10,6 +10,7 @@
  */
 
 import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.ts'
+import { runtime } from '../runtime.ts'
 import { badgeContainsPoint, badgeHitBox } from './badge-layout.ts'
 import { placePopover } from './popoverPlacement.ts'
 import { scrollToAnnotation } from './scrollToAnnotation.ts'
@@ -17,13 +18,31 @@ import { popoverEnter } from '../selection/popover-keys.ts'
 import { t } from '../i18n.ts'
 import {
   getAnnotations,
+  getOutbound,
   removeAnnotation,
+  removeOutboundRecord,
   updateAnnotationComment,
+  updateHandoffComment,
 } from '../state/annotation-store.ts'
+import {
+  groupHandoffs,
+  handoffMarkIdOf,
+  type HandoffGroup,
+  type OutboundAnnotation,
+} from '../state/handoff.ts'
 import { A, cx, styles } from '../styles.ts'
 import { messageQuotes } from '../transcript/quote-registry.ts'
 import { createKbd } from '../ui/Kbd.tsx'
 import { isCoarsePointer } from '../ui/touch.ts'
+import { showToast } from '../ui/toast.ts'
+import {
+  isSessionArchived,
+  openConversation,
+  openSourceAndLocate,
+  sessionTitleOf,
+  workspaceTitleOf,
+} from '../selection/navigation.ts'
+import type { AnnotationOrigin } from '../protocol/annotation-protocol.ts'
 
 const HOVER_DELAY = 250
 /** Just enough for the pointer to cross the 8px gap into the preview. */
@@ -31,8 +50,9 @@ const CLOSE_DELAY = 40
 const GAP = 8
 /** Matches the leaving keyframe; the node is detached after it finishes. */
 const EXIT_MS = 120
-const JUMP_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>'
+/** Lucide arrow-up-right at the icon-button size (edit/trash also 14px). */
+const GO_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>'
 const EDIT_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>'
 const REMOVE_ICON =
@@ -46,6 +66,10 @@ let activeOwnerKey: string | null = null
 let activeMessageId: string | null = null
 let activeText = ''
 let activeIndex = 0
+/** Set when a chip resolves to a cross-session quote: the jump opens the source. */
+let activeOrigin: AnnotationOrigin | null = null
+let activeStart: number | undefined
+let activeEnd: number | undefined
 let pinned = false
 /** An open inline comment editor pins the preview the way the summary does. */
 let editingPreview = false
@@ -213,6 +237,36 @@ function appendText(parent: HTMLElement, className: string, text: string): void 
 }
 
 function jumpToMark(event: MouseEvent): void {
+  if (activeOrigin) {
+    // Never close on a destination that cannot be opened: the preview is the
+    // only place the archived state is explained.
+    if (isSessionArchived(activeOrigin.sessionId)) {
+      showToast(
+        t('handoff.archived', {
+          title: sessionTitleOf(activeOrigin.sessionId, activeOrigin.title),
+        }),
+      )
+      return
+    }
+    const origin = activeOrigin
+    const text = activeText
+    const messageId = activeMessageId ?? undefined
+    closeChipPreview(false)
+    openSourceAndLocate({
+      sessionId: origin.sessionId,
+      text,
+      ...(origin.handoffId ? { markId: handoffMarkIdOf(origin.handoffId) } : {}),
+      sources: [
+        {
+          text,
+          ...(messageId ? { messageId } : {}),
+          ...(activeStart === undefined ? {} : { startOffset: activeStart }),
+          ...(activeEnd === undefined ? {} : { endOffset: activeEnd }),
+        },
+      ],
+    })
+    return
+  }
   const ownerKey = activeOwnerKey
   const messageId = activeMessageId
   const text = activeText
@@ -223,9 +277,9 @@ function jumpToMark(event: MouseEvent): void {
   const card = ownerKey ? quoteCardFor(ownerKey) : null
   const ownerItem = ownerKey ? flowItem(ownerKey) : null
   const sourceItem = messageId ? flowItem(messageId) : null
-  closeChipPreview(false)
 
   if (isVisible(mark)) {
+    closeChipPreview(false)
     mark.tabIndex = -1
     flashAnnotationMark(mark)
     // Focus after the smooth scroll instead of interrupting it.
@@ -237,10 +291,11 @@ function jumpToMark(event: MouseEvent): void {
     return
   }
 
-  // No visible mark (removed, folded, or no longer rendered): go to the
-  // nearest thing that still exists, and make the landing visible.
-  const fallback = isVisible(card) ? card : ownerItem ?? sourceItem
+  // No visible mark (folded/collapsed): still land on the owning message even
+  // when it currently measures zero, instead of giving up on the first test.
+  const fallback = card?.isConnected ? card : ownerItem?.isConnected ? ownerItem : sourceItem?.isConnected ? sourceItem : null
   if (fallback) {
+    closeChipPreview(false)
     fallback.scrollIntoView({ block: 'center', behavior: 'smooth' })
     flashMessage(fallback)
     if (keyboard) {
@@ -253,7 +308,16 @@ function jumpToMark(event: MouseEvent): void {
     }
     return
   }
-  if (text) scrollToAnnotation(index, text)
+
+  // Last resort: the annotation's own text somewhere in the loaded transcript.
+  if (text && scrollToAnnotation(index, text)) {
+    closeChipPreview(false)
+    return
+  }
+
+  // Nothing to jump to (the source turn is outside the loaded history). Keep
+  // the preview open and say so; closing silently reads as a broken button.
+  showToast(t('chip.jumpMissing'))
 }
 
 function buildPreview(
@@ -262,6 +326,7 @@ function buildPreview(
   comment: string | null,
   withJump = true,
   pendingId?: string,
+  origin?: AnnotationOrigin,
 ): HTMLDivElement {
   const box = document.createElement('div')
   box.className = cx(A.col, styles.chipPreview)
@@ -297,15 +362,22 @@ function buildPreview(
     if (withJump) {
       jumpButton = document.createElement('button')
       jumpButton.type = 'button'
-      jumpButton.className = cx(A.plain, A.inlineRow, styles.chipPreviewJump)
+      // Same icon-button skin as edit/remove, so the title row reads as one row.
+      jumpButton.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
       jumpButton.setAttribute('data-dsq-chip-jump', 'true')
       jumpButton.setAttribute('aria-label', t('chip.jumpAria'))
       jumpButton.title = t('chip.jumpAria')
-      jumpButton.insertAdjacentHTML('afterbegin', JUMP_ICON)
-      const jumpLabel = document.createElement('span')
-      jumpLabel.textContent = t('chip.jump')
-      jumpButton.append(jumpLabel)
-      jumpButton.addEventListener('click', jumpToMark)
+      jumpButton.insertAdjacentHTML('afterbegin', GO_ICON)
+      if (origin !== undefined && isSessionArchived(origin.sessionId)) {
+        const archived = t('handoff.archived', {
+          title: sessionTitleOf(origin.sessionId, origin.title),
+        })
+        jumpButton.disabled = true
+        jumpButton.title = archived
+        jumpButton.setAttribute('aria-label', archived)
+      } else {
+        jumpButton.addEventListener('click', jumpToMark)
+      }
       actions.append(jumpButton)
     }
     // Only the composer's pending annotations can be changed here: a durable
@@ -325,8 +397,24 @@ function buildPreview(
       remove.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
       remove.setAttribute('aria-label', t('summary.remove', { index }))
       remove.title = t('summary.remove', { index })
-      remove.insertAdjacentHTML('afterbegin', REMOVE_ICON)
+      const inner = document.createElement('span')
+      inner.className = styles.deleteConfirmInner
+      inner.insertAdjacentHTML('afterbegin', REMOVE_ICON)
+      const removeLabel = document.createElement('span')
+      removeLabel.className = styles.deleteConfirmLabel
+      removeLabel.textContent = t('handoff.confirmRemove')
+      inner.append(removeLabel)
+      remove.append(inner)
       remove.addEventListener('click', () => {
+        // Same two-step contract as the handoff preview: the label is already
+        // in the DOM, so flipping the attribute animates it open in place.
+        if (remove.dataset.confirming !== 'true') {
+          remove.dataset.confirming = 'true'
+          remove.className = cx(A.plain, A.inlineRow, styles.deleteConfirm)
+          remove.setAttribute('aria-label', t('handoff.confirmRemove'))
+          remove.title = t('handoff.confirmRemove')
+          return
+        }
         removeAnnotation(undefined, pendingId)
         closeChipPreview(false)
       })
@@ -534,9 +622,22 @@ function showChipPreview(chip: HTMLElement, index: number, nextPinned: boolean):
   activeMessageId = quote?.messageId ?? null
   activeText = text
   activeIndex = index
+  activeOrigin = quote?.origin ?? null
+  activeStart = quote?.startOffset
+  activeEnd = quote?.endOffset
+  if (activeOrigin && isSessionArchived(activeOrigin.sessionId)) {
+    showToast(t('handoff.archived', { title: sessionTitleOf(activeOrigin.sessionId, activeOrigin.title) }))
+  }
   pinned = nextPinned
 
-  const box = buildPreview(index, text, quote ? (quote.comment ?? '').trim() : null)
+  const box = buildPreview(
+    index,
+    text,
+    quote ? (quote.comment ?? '').trim() : null,
+    true,
+    undefined,
+    activeOrigin ?? undefined,
+  )
   mountPreview(box, chip.getBoundingClientRect())
 }
 
@@ -588,6 +689,298 @@ function annotationOfMark(mark: HTMLElement): MarkAnnotation | null {
     : null
 }
 
+function buildHandoffPreview(group: HandoffGroup): HTMLDivElement {
+  const box = document.createElement('div')
+  box.className = cx(A.col, styles.chipPreview)
+  box.setAttribute('data-dsq-chip-preview', 'true')
+  box.setAttribute('data-dsq-handoff-preview', 'true')
+  box.setAttribute('role', 'dialog')
+  box.setAttribute('aria-label', t('handoff.previewTitle'))
+  box.tabIndex = -1
+
+  const body = document.createElement('div')
+  body.className = styles.chipPreviewBody
+  body.style.animation = 'none'
+
+  let editingId: string | null = null
+
+  /** Re-read the store: edits and removals may have landed in another surface. */
+  const currentGroup = (): HandoffGroup =>
+    groupHandoffs(getOutbound()).find((entry) => entry.markId === group.markId) ?? group
+
+  const closeAfterRemoval = (): void => {
+    const mark = activeChip
+    closeChipPreview(false)
+    // Rebuild the group; when the last target went, no preview returns.
+    if (mark) window.setTimeout(() => showHandoffPreview(mark, false), 0)
+  }
+
+  const removeRecord = (record: OutboundAnnotation): void => {
+    const sourceId = runtime.sessionId
+    const paired = sourceId ? removeOutboundRecord(sourceId, record.id) : false
+    if (!paired) showToast(t('handoff.targetGone'))
+    showToast(t('handoff.removed'))
+    closeAfterRemoval()
+  }
+
+  /** Icon actions shared by the header (single target) and each row. */
+  const actionButtons = (record: OutboundAnnotation): HTMLButtonElement[] => {
+    const name = sessionTitleOf(record.destination.sessionId, record.destination.title)
+    const archived = isSessionArchived(record.destination.sessionId)
+    const buttons: HTMLButtonElement[] = []
+
+    if (record.state === 'pending') {
+      const edit = document.createElement('button')
+      edit.type = 'button'
+      edit.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
+      edit.setAttribute('aria-label', t('handoff.edit'))
+      edit.title = t('handoff.edit')
+      edit.insertAdjacentHTML('afterbegin', EDIT_ICON)
+      edit.addEventListener('click', () => {
+        editingId = record.id
+        editingPreview = true
+        render()
+      })
+      buttons.push(edit)
+    }
+
+    const go = document.createElement('button')
+    go.type = 'button'
+    go.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
+    go.insertAdjacentHTML('afterbegin', GO_ICON)
+    go.setAttribute('aria-label', t('handoff.go'))
+    go.title = t('handoff.go')
+    if (archived) {
+      const archivedText = t('handoff.archived', { title: name })
+      go.disabled = true
+      go.title = archivedText
+      go.setAttribute('aria-label', archivedText)
+    } else {
+      go.addEventListener('click', () => openConversation(record.destination.sessionId))
+    }
+    buttons.push(go)
+
+    if (record.state === 'pending') {
+      const remove = document.createElement('button')
+      remove.type = 'button'
+      remove.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
+      remove.setAttribute('aria-label', t('handoff.cancelPut'))
+      remove.title = t('handoff.cancelPut')
+      const inner = document.createElement('span')
+      inner.className = styles.deleteConfirmInner
+      inner.insertAdjacentHTML('afterbegin', REMOVE_ICON)
+      const label = document.createElement('span')
+      label.className = styles.deleteConfirmLabel
+      label.textContent = t('handoff.confirmRemove')
+      inner.append(label)
+      remove.append(inner)
+      remove.addEventListener('click', () => {
+        // First press grows the label in place; the second removes. No re-render,
+        // so the width/opacity transition actually runs.
+        if (remove.dataset.confirming !== 'true') {
+          remove.dataset.confirming = 'true'
+          remove.className = cx(A.plain, A.inlineRow, styles.deleteConfirm)
+          remove.setAttribute('aria-label', t('handoff.confirmRemove'))
+          remove.title = t('handoff.confirmRemove')
+          return
+        }
+        removeRecord(record)
+      })
+      buttons.push(remove)
+    }
+    return buttons
+  }
+
+  const actionRow = (record: OutboundAnnotation): HTMLElement => {
+    const actions = document.createElement('div')
+    actions.className = cx(A.row, styles.chipPreviewActions)
+    actions.append(...actionButtons(record))
+    return actions
+  }
+
+  const renderHead = (current: HandoffGroup): HTMLElement => {
+    const head = document.createElement('div')
+    head.className = cx(A.row, styles.chipPreviewHead)
+    const title = document.createElement('span')
+    title.className = styles.chipPreviewTitle
+    title.textContent = t('handoff.previewTitle')
+    head.append(title)
+    // A single target owns the top-right corner; with several targets each row
+    // carries its own actions instead.
+    if (!editingId && current.records.length === 1) {
+      const record = current.records[0]
+      if (record) head.append(actionRow(record))
+    }
+    return head
+  }
+
+  const renderEdit = (record: OutboundAnnotation): void => {
+    appendText(body, styles.chipPreviewQuote, record.text)
+    appendLabel(body, t('summary.userComment'))
+
+    const area = document.createElement('textarea')
+    area.className = cx(A.box, styles.annEditInput)
+    area.placeholder = t('common.commentPlaceholder')
+    area.value = record.comment ?? ''
+    area.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        cancelEdit()
+        return
+      }
+      if (popoverEnter(event) !== 'submit') return
+      event.preventDefault()
+      event.stopPropagation()
+      commitEdit(record, area.value)
+    })
+    body.append(area)
+
+    const actions = document.createElement('div')
+    actions.className = cx(A.row, styles.annEditActions)
+    const cancel = document.createElement('button')
+    cancel.type = 'button'
+    cancel.className = cx(A.plain, styles.annEditCancel)
+    cancel.textContent = t('common.cancel')
+    cancel.addEventListener('click', cancelEdit)
+    const save = document.createElement('button')
+    save.type = 'button'
+    save.className = cx(A.plain, A.inlineRow, styles.annEditSave)
+    save.setAttribute('aria-keyshortcuts', 'Enter')
+    save.textContent = t('common.save')
+    if (!isCoarsePointer()) {
+      save.style.gap = '5px'
+      save.append(createKbd())
+    }
+    save.addEventListener('click', () => commitEdit(record, area.value))
+    actions.append(cancel, save)
+    body.append(actions)
+
+    scheduleReposition()
+    window.setTimeout(() => area.focus({ preventScroll: true }), 0)
+  }
+
+  function cancelEdit(): void {
+    editingId = null
+    editingPreview = false
+    render()
+  }
+
+  function commitEdit(record: OutboundAnnotation, value: string): void {
+    const sourceId = runtime.sessionId
+    if (sourceId) updateHandoffComment(sourceId, record.id, value)
+    editingId = null
+    editingPreview = false
+    render()
+  }
+
+  const renderRow = (record: OutboundAnnotation, withActions: boolean): HTMLElement => {
+    const row = document.createElement('div')
+    row.className = styles.handoffRow
+    if (withActions) {
+      const rowHead = document.createElement('div')
+      rowHead.className = styles.handoffRowHead
+      rowHead.append(actionRow(record))
+      row.append(rowHead)
+    }
+    // Destination, workspace and status share one subdued line. The workspace
+    // is dropped when it duplicates the session title (auto-titled sessions
+    // often carry the project name), so the line never repeats itself.
+    const name = sessionTitleOf(record.destination.sessionId, record.destination.title)
+    const workspace = workspaceTitleOf(record.destination.workspaceId)
+    const meta = [
+      name,
+      workspace === name ? '' : workspace,
+      record.state === 'sent' ? t('handoff.sent') : t('handoff.pending'),
+    ].filter((part) => part !== '')
+    appendLabel(row, meta.join(' · '))
+    appendText(
+      row,
+      cx(styles.chipPreviewComment, record.comment ? undefined : styles.chipPreviewCommentEmpty),
+      record.comment || t('summary.noComment'),
+    )
+    return row
+  }
+
+  function render(): void {
+    const current = currentGroup()
+    if (editingId !== null && !current.records.some((entry) => entry.id === editingId)) {
+      editingId = null
+      editingPreview = false
+    }
+    body.replaceChildren()
+    body.append(renderHead(current))
+    const editing = current.records.find((entry) => entry.id === editingId)
+    if (editing) {
+      renderEdit(editing)
+      return
+    }
+    appendLabel(body, t('common.selectedText'))
+    appendText(body, styles.chipPreviewQuote, current.text)
+    const single = current.records.length === 1
+    for (const record of current.records) body.append(renderRow(record, !single))
+    scheduleReposition()
+  }
+
+  render()
+  box.append(body)
+
+  box.addEventListener('pointerenter', cancelClose)
+  box.addEventListener('pointerleave', (event) => {
+    if (event.pointerType === 'touch') return
+    scheduleClose()
+  })
+  box.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    if (editingId !== null) {
+      cancelEdit()
+      return
+    }
+    closeChipPreview(true)
+  })
+  return box
+}
+
+/** Arrow mark preview: every destination of one selection, status and actions. */
+function showHandoffPreview(mark: HTMLElement, focus: boolean): void {
+  if (!mark.isConnected) return
+  const markId = mark.getAttribute('data-dsq-ann-mark') ?? ''
+  const group = groupHandoffs(getOutbound()).find((entry) => entry.markId === markId)
+  if (!group) return
+  // One notice per opening when a destination went to the archive: the rows
+  // stay (records are kept) but 前往 is disabled with a tooltip.
+  const archived = group.records.find((record) => isSessionArchived(record.destination.sessionId))
+  if (archived) {
+    showToast(
+      t('handoff.archived', {
+        title: sessionTitleOf(archived.destination.sessionId, archived.destination.title),
+      }),
+    )
+  }
+  if (activeChip === mark && preview) {
+    pinned = true
+    return
+  }
+  cancelTimers()
+  closeChipPreview(false)
+  flushLeavingPreview()
+  activeChip = mark
+  activeMark = mark
+  activeOwnerKey = null
+  activeMessageId = group.messageId || null
+  activeText = group.text
+  activeIndex = 0
+  activeOrigin = null
+  activeStart = group.startOffset
+  activeEnd = group.endOffset
+  pinned = true
+  const box = buildHandoffPreview(group)
+  mountPreview(box, mark.getBoundingClientRect())
+  if (focus) box.focus({ preventScroll: true })
+}
+
 function showMarkPreview(mark: HTMLElement, focus: boolean): void {
   if (!mark.isConnected) return
   const index = Number(mark.getAttribute('data-dsq-ann-index') ?? 0)
@@ -607,6 +1000,7 @@ function showMarkPreview(mark: HTMLElement, focus: boolean): void {
   activeMessageId = data.messageId
   activeText = data.text
   activeIndex = index
+  activeOrigin = null
   pinned = true
   // The mark is already in view, so the preview has nothing to jump to.
   const box = buildPreview(index, data.text, data.comment, false, data.pendingId ?? undefined)
@@ -629,8 +1023,9 @@ export function bindAnnotationMarkPreview(): () => void {
   const onClick = (event: MouseEvent): void => {
     const mark = markOf(event.target)
     if (!mark) return
+    const arrow = mark.hasAttribute('data-dsq-ann-arrow')
     const index = Number(mark.getAttribute('data-dsq-ann-index'))
-    if (!Number.isFinite(index) || index <= 0) return
+    if (!arrow && (!Number.isFinite(index) || index <= 0)) return
     // The badge is the only click target; the marked prose stays selectable.
     // Keyboard/AT activation reports detail 0 and no usable coordinates.
     if (event.detail !== 0) {
@@ -638,12 +1033,13 @@ export function bindAnnotationMarkPreview(): () => void {
         dx: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-x')) || 0,
         dy: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-y')) || 0,
       }
-      const box = badgeHitBox(mark.getBoundingClientRect(), index, offset)
+      const box = badgeHitBox(mark.getBoundingClientRect(), arrow ? 0 : index, offset)
       if (!badgeContainsPoint(box, event.clientX, event.clientY)) return
     }
     const selection = window.getSelection()
     if (selection && !selection.isCollapsed) return
-    showMarkPreview(mark, false)
+    if (arrow) showHandoffPreview(mark, false)
+    else showMarkPreview(mark, false)
   }
   const onKeyDown = (event: KeyboardEvent): void => {
     const mark = markOf(event.target)
@@ -653,9 +1049,13 @@ export function bindAnnotationMarkPreview(): () => void {
       closeChipPreview(true)
       return
     }
-    if ((event.key === 'Enter' || event.key === ' ') && mark.hasAttribute('data-dsq-ann-index')) {
+    if (
+      (event.key === 'Enter' || event.key === ' ') &&
+      (mark.hasAttribute('data-dsq-ann-index') || mark.hasAttribute('data-dsq-ann-arrow'))
+    ) {
       event.preventDefault()
-      showMarkPreview(mark, true)
+      if (mark.hasAttribute('data-dsq-ann-arrow')) showHandoffPreview(mark, true)
+      else showMarkPreview(mark, true)
     }
   }
   document.addEventListener('click', onClick)
@@ -706,6 +1106,9 @@ export function closeChipPreview(restoreFocus: boolean): void {
   activeMessageId = null
   activeText = ''
   activeIndex = 0
+  activeOrigin = null
+  activeStart = undefined
+  activeEnd = undefined
   pinned = false
   editingPreview = false
   // Focus before retiring the preview: the focused button lives inside it, and

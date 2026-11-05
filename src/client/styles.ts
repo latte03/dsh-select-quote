@@ -108,20 +108,20 @@ ${atomRules}
    animation，给 .dsq_toolbarInner 加回 dsq-rise-in（关键帧还在）。 */
 @keyframes dsq-toolbar-in {
   from {
-    transform: translate(-50%, -100%) translateY(4px) scale(0.96);
+    transform: translate(calc(-50% + var(--dsq-toolbar-shift, 0px)), -100%) translateY(4px) scale(0.96);
   }
   to {
-    transform: translate(-50%, -100%) translateY(0) scale(1);
+    transform: translate(calc(-50% + var(--dsq-toolbar-shift, 0px)), -100%) translateY(0) scale(1);
   }
 }
 
 /* Same entrance for the below-anchor variant (only the content top uses it). */
 @keyframes dsq-toolbar-in-below {
   from {
-    transform: translate(-50%, 0) translateY(-4px) scale(0.96);
+    transform: translate(calc(-50% + var(--dsq-toolbar-shift, 0px)), 0) translateY(-4px) scale(0.96);
   }
   to {
-    transform: translate(-50%, 0) translateY(0) scale(1);
+    transform: translate(calc(-50% + var(--dsq-toolbar-shift, 0px)), 0) translateY(0) scale(1);
   }
 }
 
@@ -167,6 +167,19 @@ ${atomRules}
   }
 }
 
+/* Toast is centered with translateX(-50%); the shared rise keyframes would
+   drop that shift and make it jump sideways, so it owns the full transform. */
+@keyframes dsq-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 /* Exit of the chip preview: the same 4px travel, reversed. Transform only, so
    the material layer keeps sampling its backdrop until the node is removed. */
 @keyframes dsq-rise-out {
@@ -191,7 +204,8 @@ ${atomRules}
 .dsq_chipPreview::before,
 .dsq_ctxMenu::before,
 .dsq_modelMenu::before,
-.dsq_langMenu::before {
+.dsq_langMenu::before,
+.dsq_targetPicker::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -220,7 +234,8 @@ ${atomRules}
 .dsq_chipPreview,
 .dsq_ctxMenu,
 .dsq_modelMenu,
-.dsq_langMenu {
+.dsq_langMenu,
+.dsq_targetPicker {
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
   /* Every surface above takes the same elevation; declaring it once here is
@@ -258,7 +273,7 @@ ${atomRules}
      max-content keeps the bubble sized by its row regardless of the host. */
   width: max-content;
   max-width: calc(100vw - 24px);
-  transform: translate(-50%, var(--dsq-anchor-y, -100%));
+  transform: translate(calc(-50% + var(--dsq-toolbar-shift, 0px)), var(--dsq-anchor-y, -100%));
   gap: 2px;
   padding: 4px;
   /* 无边框：--dsq-shadow（宿主的 elevation-prominent）自带 0 0 0 .5px 的描边环，
@@ -304,17 +319,15 @@ ${atomRules}
   background: var(--dsq-fill-hover);
 }
 
-/* Accent-filled actions: comment commit, annotation save, chip jump. Only the
+/* Accent-filled actions: comment commit and annotation save. Only the
    metrics differ; fill and hover live here once. */
 .dsq_buttonAddComment,
-.dsq_annEditSave,
-.dsq_chipPreviewJump {
+.dsq_annEditSave {
   background: var(--dsq-accent);
   color: #fff;
 }
 .dsq_buttonAddComment:hover,
-.dsq_annEditSave:hover,
-.dsq_chipPreviewJump:hover {
+.dsq_annEditSave:hover {
   background: var(--dsq-accent-400);
 }
 
@@ -352,6 +365,31 @@ ${atomRules}
   height: 14px;
   background: var(--dsq-line-divider);
   margin: 0 2px;
+}
+
+/* Target session name inside "放入 <name>": the accent separates it from the
+   action word at a glance, including on the stacked touch bar. */
+.dsq_handoffTargetName {
+  color: var(--dsq-accent);
+  font-weight: 500;
+}
+
+/* Split affordance beside 放入 <target>: a narrow chevron that opens the
+   picker. Kept inside the toolbar row, so it never grows the bubble. */
+.dsq_handoffChevron {
+  width: 20px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsq-label-2);
+  cursor: pointer;
+}
+
+.dsq_handoffChevron:hover {
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label);
 }
 
 /* Toast pill: the desktop status and the touch status share the whole skin;
@@ -792,6 +830,7 @@ ${atomRules}
   z-index: 3;
   width: 20px;
   height: 20px;
+  padding: 0;
   border-radius: 6px;
   color: var(--dsq-label-3);
   font-size: 14px;
@@ -939,7 +978,8 @@ ${atomRules}
   .dsq_summaryHoverInner::before,
   .dsq_touchBar::before,
   .dsq_chipPreview::before,
-  .dsq_ctxMenu::before {
+  .dsq_ctxMenu::before,
+  .dsq_targetPicker::before {
     background: var(--dsq-bg-raised);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -1543,26 +1583,8 @@ ${atomRules}
   overscroll-behavior: contain;
 }
 
-.dsq_chipPreviewComment {
-  color: var(--dsq-label-2);
-}
-
 .dsq_chipPreviewCommentEmpty {
   color: var(--dsq-label-3);
-}
-
-.dsq_chipPreviewJump {
-  flex: none;
-  justify-content: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 0 9px;
-  border-radius: 7px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
 }
 
 /* Edit/remove sit in the preview's title row, matching the summary list's
@@ -1576,6 +1598,7 @@ ${atomRules}
 .dsq_chipPreviewAction {
   width: 26px;
   height: 26px;
+  padding: 0;
   border-radius: 7px;
   color: var(--dsq-label-3);
 }
@@ -1583,6 +1606,44 @@ ${atomRules}
 .dsq_chipPreviewAction:hover {
   background: var(--dsq-fill-hover);
   color: var(--dsq-label);
+}
+
+/* Second step of "取消放入": the trash icon grows a text label but stays the
+   same control, so the destructive action never hides behind a new button. */
+/* Two-step destructive confirm shared by every annotation delete surface.
+   The label is always in the DOM (collapsed) so the first press can grow it in
+   place with a width/opacity transition instead of swapping nodes. */
+.dsq_deleteConfirm {
+  gap: 0;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: var(--dsq-danger-bg);
+  color: var(--dsq-danger);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.dsq_deleteConfirmLabel {
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition: max-width 0.16s ease, margin-left 0.16s ease, opacity 0.12s ease;
+}
+
+/* One grid item, so the icon-only state stays centered in the 26/20px button
+   while the collapsed label rides along invisibly. */
+.dsq_deleteConfirmInner {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dsq_deleteConfirm[data-confirming='true'] .dsq_deleteConfirmLabel {
+  max-width: 140px;
+  margin-left: 4px;
+  opacity: 1;
 }
 
 /* Touch selection chrome. Fixed to the visual viewport and mounted on body:
@@ -1835,8 +1896,305 @@ ${atomRules}
   cursor: pointer;
 }
 
+/* Arrow badge for a selection sent to another conversation. One glyph, so the
+   width is fixed instead of digit-based; the box matches the ordinal badge so
+   collision offsets stay interchangeable. */
+.dsq_annMark[data-dsq-ann-arrow]::after {
+  content: "↗";
+  position: absolute;
+  bottom: 8px;
+  left: 100%;
+  z-index: 2;
+  transform: translate(var(--dsq-ann-badge-x, 0px), var(--dsq-ann-badge-y, 0px));
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 2px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--dsq-mark-color);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .dsq_annMark:hover {
   background: var(--dsq-mark-hover);
+}
+
+/* One row per handoff destination inside the arrow preview. */
+.dsq_handoffRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.dsq_handoffRowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Target selection portalled to body, same layer as the context menu. */
+.dsq_targetPicker {
+  position: fixed;
+  z-index: 64;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(460px, calc(100vh - 32px));
+  padding: 8px;
+  border-radius: 14px;
+  animation: dsq-menu-in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Touch opens the same list as a bottom sheet. Transform-only entrance. */
+.dsq_targetPicker[data-touch='true'] {
+  left: 50% !important;
+  top: auto !important;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  width: min(520px, calc(100vw - 16px));
+  max-height: min(72vh, 560px);
+  transform: translateX(-50%);
+  animation: dsq-sheet-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dsq-sheet-in {
+  from {
+    transform: translate(-50%, 8px);
+  }
+  to {
+    transform: translate(-50%, 0);
+  }
+}
+
+.dsq_targetHead {
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 6px;
+}
+
+.dsq_targetHeading {
+  color: var(--dsq-label);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dsq_targetSearchRow {
+  padding: 0 2px 6px;
+}
+
+.dsq_targetSearch {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--dsq-line);
+  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  color: var(--dsq-label);
+  font: inherit;
+  font-size: 13px;
+}
+
+.dsq_targetSearch::placeholder {
+  color: var(--dsq-label-3);
+}
+
+.dsq_targetSearch:focus-visible {
+  outline: 2px solid var(--dsq-focus-ring-soft);
+  outline-offset: 1px;
+}
+
+.dsq_targetList {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dsq_targetGroupLabel {
+  padding: 8px 10px 4px;
+  color: var(--dsq-label-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.dsq_targetOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsq-label);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dsq_targetOption:hover,
+.dsq_targetOption[aria-selected='true'] {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_targetOption:focus-visible {
+  outline: 2px solid var(--dsq-focus-ring);
+  outline-offset: -2px;
+}
+
+.dsq_targetOptionMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dsq_targetTitleMain {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsq_targetMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsq-label-3);
+  font-size: 11px;
+}
+
+.dsq_targetNew {
+  color: var(--dsq-accent);
+}
+
+.dsq_targetTime {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsq-label-3);
+  font-size: 11px;
+}
+
+.dsq_targetEmpty {
+  padding: 10px;
+  color: var(--dsq-label-3);
+  font-size: 12px;
+}
+
+/* Handoff composer mode: the target chip and its copy. */
+.dsq_handoffChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--dsq-fill-hover);
+  color: var(--dsq-label);
+  font-size: 12.5px;
+}
+
+.dsq_handoffChipTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsq-accent);
+  font-weight: 500;
+}
+
+.dsq_handoffChipLabel {
+  flex: none;
+  color: var(--dsq-label-3);
+  font-size: 11px;
+}
+
+.dsq_handoffChange {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsq-accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dsq_handoffChange:hover {
+  background: var(--dsq-fill-hover);
+}
+
+.dsq_handoffHint {
+  color: var(--dsq-label-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dsq_handoffError {
+  color: var(--dsq-danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* "来自：<source>" row in a target's pending/history card. */
+.dsq_originLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsq-accent);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dsq_originLink span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsq_originLink:disabled {
+  color: var(--dsq-label-3);
+  cursor: default;
+}
+
+/* Body-level transient notice (archived target, handoff success). */
+.dsq_toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 1100;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 8px 12px;
+  border-radius: 10px;
+  transform: translateX(-50%);
+  /* The host's layer-3 / inverted-label pair resolves to white on white in
+     the light theme. Derive both from the primary label instead: dark pill in
+     light mode, light pill in dark mode, always readable. */
+  background: color-mix(in srgb, var(--dsq-label) 90%, transparent);
+  color: var(--dsq-bg-raised);
+  font-size: 12.5px;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--dsq-label) 22%, transparent);
+  animation: dsq-toast-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
 }
 
 .dsq_annMarkFlash {
@@ -1863,8 +2221,10 @@ ${atomRules}
 .dsq_button:focus-visible,
 .dsq_touchAction:focus-visible,
 .dsq_touchSheetClose:focus-visible,
-.dsq_chipPreviewJump:focus-visible,
 .dsq_chipPreviewAction:focus-visible,
+.dsq_handoffChevron:focus-visible,
+.dsq_handoffChange:focus-visible,
+.dsq_originLink:focus-visible,
 .dsq_annMark:focus-visible,
 .dsq_summaryItemAction:focus-visible,
 .dsq_summaryItemButton:focus-visible,
@@ -1904,8 +2264,12 @@ ${atomRules}
     position: absolute;
     inset: -12px;
   }
-  .dsq_chipPreviewJump {
+  .dsq_targetOption {
     min-height: 44px;
+  }
+  /* iOS zooms the page when a focused field is under 16px. */
+  .dsq_targetSearch {
+    font-size: 16px;
   }
   .dsq_segOption {
     min-height: 44px;
@@ -2117,6 +2481,10 @@ ${atomRules}
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dsq_deleteConfirmLabel {
+    transition: none;
+  }
+
   .dsq_segThumb {
     transition: none;
   }
@@ -2335,6 +2703,32 @@ export const styles = {
   annMark: 'dsq_annMark',
   annMarkFlash: 'dsq_annMarkFlash',
   annMessageFlash: 'dsq_annMessageFlash',
+  handoffRow: 'dsq_handoffRow',
+  handoffRowHead: 'dsq_handoffRowHead',
+  targetPicker: 'dsq_targetPicker',
+  targetHead: 'dsq_targetHead',
+  targetHeading: 'dsq_targetHeading',
+  targetSearchRow: 'dsq_targetSearchRow',
+  targetSearch: 'dsq_targetSearch',
+  targetList: 'dsq_targetList',
+  targetGroupLabel: 'dsq_targetGroupLabel',
+  targetOption: 'dsq_targetOption',
+  targetOptionMain: 'dsq_targetOptionMain',
+  targetTitleMain: 'dsq_targetTitleMain',
+  targetMeta: 'dsq_targetMeta',
+  targetNew: 'dsq_targetNew',
+  targetTime: 'dsq_targetTime',
+  targetEmpty: 'dsq_targetEmpty',
+  handoffChevron: 'dsq_handoffChevron',
+  handoffTargetName: 'dsq_handoffTargetName',
+  handoffChip: 'dsq_handoffChip',
+  handoffChipTitle: 'dsq_handoffChipTitle',
+  handoffChipLabel: 'dsq_handoffChipLabel',
+  handoffChange: 'dsq_handoffChange',
+  handoffHint: 'dsq_handoffHint',
+  handoffError: 'dsq_handoffError',
+  originLink: 'dsq_originLink',
+  toast: 'dsq_toast',
   commentPop: 'dsq_commentPop',
   commentPopSide: 'dsq_commentPopSide',
   commentPopTranslate: 'dsq_commentPopTranslate',
@@ -2379,9 +2773,11 @@ export const styles = {
   chipPreviewQuote: 'dsq_chipPreviewQuote',
   chipPreviewComment: 'dsq_chipPreviewComment',
   chipPreviewCommentEmpty: 'dsq_chipPreviewCommentEmpty',
-  chipPreviewJump: 'dsq_chipPreviewJump',
   chipPreviewActions: 'dsq_chipPreviewActions',
   chipPreviewAction: 'dsq_chipPreviewAction',
+  deleteConfirm: 'dsq_deleteConfirm',
+  deleteConfirmInner: 'dsq_deleteConfirmInner',
+  deleteConfirmLabel: 'dsq_deleteConfirmLabel',
   touchBar: 'dsq_touchBar',
   touchAction: 'dsq_touchAction',
   touchScrim: 'dsq_touchScrim',
