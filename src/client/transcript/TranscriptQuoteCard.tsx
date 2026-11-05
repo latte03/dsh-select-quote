@@ -112,6 +112,33 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
     [markIdOf, quotes],
   )
 
+  /**
+   * "From: <source>" opens the conversation this annotation was selected in.
+   *
+   * The composer card has always wired this; the history card rendered the same
+   * button from `item.origin` but passed no handler, so the link was visibly
+   * there and did nothing. A cross-session item has no mark in THIS transcript
+   * by design, so the origin jump is the only way back to its source.
+   */
+  const onOrigin = useCallback(
+    (index: number, _item: AnnotationSummaryItem) => {
+      const quote = quotes[index]
+      const origin = quote?.origin
+      if (origin === undefined) return
+      const live = sessionTitleOf(origin.sessionId, origin.title)
+      if (isSessionArchived(origin.sessionId)) {
+        showToast(t('handoff.archived', { title: live }))
+        return
+      }
+      openSourceAndLocate({
+        sessionId: origin.sessionId,
+        text: quote.text,
+        ...(origin.handoffId ? { markId: handoffMarkIdOf(origin.handoffId) } : {}),
+      })
+    },
+    [quotes],
+  )
+
   if (quotes.length === 0) return null
 
   return (
@@ -134,6 +161,7 @@ export function TranscriptQuoteCard({ node }: TranscriptQuoteCardProps): ReactNo
             : {}),
         }))}
         onItemSelect={onSelect}
+        onItemOrigin={onOrigin}
       />
     </div>
   )

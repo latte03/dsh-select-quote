@@ -1,44 +1,14 @@
-import { useEffect, type MutableRefObject } from 'react'
-import { DRAFT_MARKER, stripDraftMarker, withDraftMarker } from '../protocol/quote-protocol.ts'
-
-export interface DraftMarkerDeps {
-  readonly itemCount: number
-  readonly draftRef: MutableRefObject<string>
-  readonly setDraft: (text: string) => void
-}
+import { DRAFT_MARKER, stripDraftMarker } from '../protocol/quote-protocol.ts'
 
 /**
- * Keep the composer's own send button usable while only annotations are
- * pending: an invisible marker makes an otherwise empty draft non-empty.
+ * True when the draft is nothing but the legacy invisible send marker.
  *
- * Written ONCE per list change — never on a draft change (see QuoteCard history
- * for why rewriting on draft fights IME / backspace).
- */
-export function useDraftMarker({
-  itemCount,
-  draftRef,
-  setDraft,
-}: DraftMarkerDeps): void {
-  useEffect(() => {
-    if (itemCount === 0) return
-    const current = draftRef.current
-    if (current.includes(DRAFT_MARKER)) return
-    if (current.trim() !== '') return
-    setDraft(withDraftMarker(current))
-  }, [itemCount, draftRef, setDraft])
-}
-
-export function clearDraftMarker(draft: string, setDraft: (text: string) => void): void {
-  if (!draft.includes(DRAFT_MARKER)) return
-  setDraft(stripDraftMarker(draft))
-}
-
-/**
- * True when the draft is nothing but the invisible send marker.
- *
- * `setDraft('')` on a Lexical host clears the whole document, so an empty
- * marker-only draft must be *emptied*, not rewritten with the marker removed:
- * a rewrite that clears and rebuilds would also drop the user's quote nodes.
+ * The plugin used to append U+200B so an annotation-only draft looked non-empty
+ * and the Host's send button stayed enabled. That is gone: it made sending a
+ * wordless message possible, and a Host-rendered bubble for such a message is
+ * an empty box. Older persisted drafts may still carry the character, so the
+ * composer distinguishes "only the marker" (empty the draft) from "marker next
+ * to real text" (strip the marker, keep the text).
  */
 export function isMarkerOnly(draft: string): boolean {
   return draft.includes(DRAFT_MARKER) && stripDraftMarker(draft).trim() === ''

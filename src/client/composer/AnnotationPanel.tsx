@@ -32,10 +32,9 @@ import {
 import {
   DRAFT_MARKER,
   stripDraftMarker,
-  withDraftMarker,
 } from '../protocol/quote-protocol.ts'
 import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
-import { clearDraftMarker, isMarkerOnly, useDraftMarker } from './useDraftMarker.ts'
+import { isMarkerOnly } from './useDraftMarker.ts'
 import { writeDraft, type InputActionsFace } from './draft-write.ts'
 import { useSendIntercept } from './useSendIntercept.ts'
 
@@ -154,7 +153,6 @@ export function AnnotationPanel({
     }
   }, [items])
 
-  useDraftMarker({ itemCount: items.length, draftRef, setDraft })
   useSendIntercept({
     itemCount: items.length,
     draftRef,
@@ -194,40 +192,34 @@ export function AnnotationPanel({
     setDraft(restored.rest)
   }, [draft, sessionId, setDraft, composing])
 
-  // Reconcile the invisible marker with the annotation list. The host persists
-  // the draft — marker included — so a refresh used to come back with an orphan
-  // U+200B and no annotations: an empty-looking composer with a live send
-  // button. Both directions are idempotent with useDraftMarker's own write.
+  // Strip the legacy invisible marker from a persisted draft.
+  //
+  // The plugin used to append U+200B so an annotation-only draft counted as
+  // non-empty and the Host's send button stayed enabled. That enabled sending a
+  // message with no words — and since the bubble is now Host-rendered, such a
+  // message shows as an empty bubble, which reads as a rendering bug. The
+  // marker is no longer written; this pass only cleans drafts persisted before
+  // the change, and the composer keeps its own placeholder because the draft is
+  // genuinely empty again.
   //
   // Never write while an IME composition is in flight: the host store's draft
   // goes transiently empty when composition starts (the composing text is not
-  // in it yet), and a programmatic setDraft at that moment replaces the editor
-  // content — the first pinyin character disappears. Composition ends, the
-  // committed text lands as a draft change, and this runs again.
+  // in it yet), and a programmatic write at that moment replaces the editor
+  // content — the first pinyin character disappears.
   useEffect(() => {
     if (composing.current) return
-    if (items.length === 0) {
-      if (draft.includes(DRAFT_MARKER)) {
-        // Marker-only draft: empty it outright. Stripping the marker and
-        // rewriting the same empty text still makes the host clear and rebuild
-        // the document, which is what dropped the user's own quote node.
-        setDraft(isMarkerOnly(draft) ? '' : stripDraftMarker(draft))
-      }
-      return
-    }
-    if (!draft.includes(DRAFT_MARKER) && draft.trim() === '') setDraft(withDraftMarker(draft))
-  }, [items, draft, setDraft, composing])
+    if (!draft.includes(DRAFT_MARKER)) return
+    setDraft(isMarkerOnly(draft) ? '' : stripDraftMarker(draft))
+  }, [draft, setDraft, composing])
 
   const onRemoveAll = useCallback(() => {
     clearAnnotations(undefined, 'discarded')
     setItems(EMPTY)
-    clearDraftMarker(draftRef.current, setDraft)
-  }, [setDraft])
+  }, [])
 
   const dropIfEmpty = useCallback(() => {
     setItems(getAnnotations())
-    if (getAnnotations().length === 0) clearDraftMarker(draftRef.current, setDraft)
-  }, [setDraft])
+  }, [])
 
   const onItemSelect = useCallback((index: number, item: AnnotationSummaryItem) => {
     scrollToAnnotation(index + 1, item.text, item.id)

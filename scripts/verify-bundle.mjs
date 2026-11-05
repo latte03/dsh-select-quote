@@ -651,7 +651,9 @@ function checkCascadePrecedence(code) {
   const css = code.replace(/\/\*[\s\S]*?\*\//g, '')
   const shared = [...css.matchAll(/(^|})\s*([^{}]*\.dsq_deleteConfirm\[data-confirming='true'\][^{]*)\{/g)]
     .map((match) => match[2].trim())
-    .filter((selector) => !selector.includes('.dsq_summaryItemActions'))
+    // Only preview.ts's own rule starts at the bare class. Every rule this
+    // module owns carries one of our scopes in front of it.
+    .filter((selector) => selector.startsWith('.dsq_deleteConfirm'))
   for (const selector of shared) {
     const theirs = cssSpecificity(selector)
     for (const ours of [
@@ -670,8 +672,12 @@ function checkCascadePrecedence(code) {
   for (const ours of [
     `${OUR_LABEL} .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
     `${OUR_LABEL}[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
+    // The summary card's own remove-all button takes the other code path (it
+    // swaps .dsq_cardClose for .dsq_deleteConfirm, losing its absolute anchor).
+    `.dsq_summary > .dsq_deleteConfirm`,
+    `.dsq_summary > .dsq_deleteConfirm[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
   ]) {
-    if (!css.includes(ours)) problems.push(`${ours} is missing — the summary confirm step falls back to the shared in-flow rule`)
+    if (!css.includes(ours)) problems.push(`${ours} is missing — the confirm step falls back to the shared in-flow rule`)
   }
   if (shared.length === 0) problems.push('the shared delete-confirm rule was not found — cascade check is stale')
   return problems

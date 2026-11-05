@@ -44,6 +44,7 @@
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
     "sync:desktop": "node scripts/sync-desktop.mjs",
+    "sync:web": "node scripts/sync-desktop.mjs --profile web",
     "dev:desktop": "node scripts/dev-desktop.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

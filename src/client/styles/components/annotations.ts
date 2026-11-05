@@ -346,6 +346,61 @@ export const ANNOTATIONS_CSS = `
   white-space: nowrap;
 }
 
+/* "移除全部" on the summary card, second step.
+ *
+ * The corner button swaps .dsq_cardClose for .dsq_deleteConfirm when it
+ * enters the confirm step — and cardClose is what carries
+ * position:absolute. Without a replacement the button lands back in the
+ * card's flex row, takes its width from the grown label, and squeezes the
+ * title/hint column into a vertical stack ("注 / 悬停查 / 看批注"). So the
+ * confirm state re-anchors the button to the same corner and hangs the pill
+ * off its trailing edge, exactly like the per-item confirm does. */
+.dsq_summary > .dsq_deleteConfirm {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  gap: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsq-danger);
+  overflow: visible;
+}
+
+.dsq_summary > .dsq_deleteConfirm .dsq_deleteConfirmInner {
+  display: grid;
+  place-items: center;
+  white-space: nowrap;
+}
+
+/* [0,4,0]: outranks preview.ts's [0,3,0] confirm shorthand. */
+.dsq_summary > .dsq_deleteConfirm[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  display: block;
+  max-width: 92px;
+  margin-right: 6px;
+  margin-left: 0;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--dsq-danger-bg);
+  color: var(--dsq-danger);
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .dsq_summaryItemMain {
   min-width: 0;
   /* The lead-in lives on the shared wrapper, not on the normal-mode button, so
@@ -410,6 +465,26 @@ export const ANNOTATIONS_CSS = `
 
 .dsq_summaryItemTextEmpty {
   color: var(--dsq-label-3);
+}
+
+/* A user message that carries annotations but no words.
+ *
+ * The bubble is Host-rendered now, and the Host decides to show it from the raw
+ * content: an annotation-only message still has content (the protocol block), so
+ * the bubble paints — but our userText rule renders that block as empty text, so
+ * what remains is an empty rounded box above the card. Hide it, and hide it only
+ * when the bubble really holds nothing else:
+ *
+ *   bubble > (only child) userText root > (only child) text seat > (only child) empty run
+ *
+ * Any attachment, file card, reference summary or extra JSON block adds a
+ * sibling at one of those levels and keeps the bubble visible. */
+[data-message-bubble]:has(
+    > span:only-child
+      > span[data-slot='conversation.user.text.node']:only-child
+      > span:empty:only-child
+  ) {
+  display: none;
 }
 
 /* Inline edit form rendered inside the hover panel item (no extra layer).
