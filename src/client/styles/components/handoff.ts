@@ -47,6 +47,11 @@ export const HANDOFF_CSS = `
   z-index: 2;
   /* The mark stays the click target; the badge is decoration. */
   pointer-events: none;
+  /* Never part of a text selection. Otherwise Ctrl+A or a drag across the
+     sentence includes the glyph, and the native highlight paints a coloured
+     box behind a badge that is meant to look like a superscript label. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Side-question mark: the lucide bot glyph instead of the ordinal, drawn in

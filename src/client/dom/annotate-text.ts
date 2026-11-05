@@ -157,6 +157,21 @@ function sameText(a: string, b: string): boolean {
 }
 
 /**
+ * The mark's own prose, without the badge glyph.
+ *
+ * The badge is a child element carrying the ordinal or the arrow, so plain
+ * `textContent` returns "…text1" and never equals the annotation text.
+ */
+function markTextOf(mark: Element): string {
+  let text = ''
+  for (const node of mark.childNodes) {
+    if (node instanceof Text) text += node.data
+    else if (node instanceof Element && !node.classList.contains(styles.annBadge)) text += node.textContent ?? ''
+  }
+  return text
+}
+
+/**
  * Already decorated by THIS job. A different job may wrap the same span (a
  * local pending annotation and the outbound arrow of the same selection are
  * separate marks), so the check must be by mark id, not by any mark.
@@ -717,7 +732,7 @@ export function findAnnotationMark(
   )
   if (marks.length === 0) return null
   if (text) {
-    const hit = marks.find((mark) => sameText(mark.textContent ?? '', text))
+    const hit = marks.find((mark) => sameText(markTextOf(mark), text))
     if (hit) return hit
   }
   return marks[0]
