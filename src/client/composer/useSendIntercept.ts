@@ -9,6 +9,8 @@ export interface SendInterceptDeps {
   readonly draftRef: MutableRefObject<string>
   /** Rewrites the draft in place where the host supports it (see `draft-write`). */
   readonly actionsRef: MutableRefObject<InputActionsFace>
+  /** Session whose pending list this composer owns (never the global bind). */
+  readonly sessionId?: string
   /** Stamps the fold as a self-write so it is not read back as a rewind. */
   readonly onSelfWrite: () => void
   readonly onFolded: () => void
@@ -28,6 +30,7 @@ export function useSendIntercept({
   itemCount,
   draftRef,
   actionsRef,
+  sessionId,
   onSelfWrite,
   onFolded,
   foldingRef,
@@ -49,7 +52,7 @@ export function useSendIntercept({
       )
       // Cross-session records stay (state becomes `sent`) while the target
       // list clears; a plain clear would delete the source's arrow mark.
-      clearAnnotations(undefined, 'sent')
+      clearAnnotations(sessionId, 'sent')
       onFolded()
     }
 
@@ -81,5 +84,5 @@ export function useSendIntercept({
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onClick, true)
     }
-  }, [itemCount, draftRef, actionsRef, onSelfWrite, onFolded, foldingRef])
+  }, [itemCount, draftRef, actionsRef, sessionId, onSelfWrite, onFolded, foldingRef])
 }

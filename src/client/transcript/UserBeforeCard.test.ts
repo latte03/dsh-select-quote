@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { userMessageTextOf, type ChatStateLike } from './chat-seat.ts'
+import { chatNodeTextOf, userMessageTextOf, type ChatStateLike } from './chat-seat.ts'
 
 const RPC = 'rpc-42'
 
@@ -74,5 +74,23 @@ describe('userMessageTextOf', () => {
       ],
     ])
     expect(userMessageTextOf(value, 'r1')).toBe('甲乙')
+  })
+})
+describe('chatNodeTextOf', () => {
+  const state = (entries: [string, unknown][]): ChatStateLike =>
+    ({ nodes: { byKey: new Map(entries) } }) as unknown as ChatStateLike
+
+  it('resolves the activation row that carries no rpcId', () => {
+    const value = state([
+      ['7:user', { kind: 'user', data: { source: { kind: 'user' }, content: [{ type: 'text', text: '问题' }] } }],
+    ])
+    expect(chatNodeTextOf(value, '7:user')).toBe('问题')
+  })
+
+  it('ignores non-user rows and unknown keys', () => {
+    const value = state([['x', { kind: 'assistant-step', data: { content: [] } }]])
+    expect(chatNodeTextOf(value, 'x')).toBeUndefined()
+    expect(chatNodeTextOf(value, 'missing')).toBeUndefined()
+    expect(chatNodeTextOf(value, null)).toBeUndefined()
   })
 })

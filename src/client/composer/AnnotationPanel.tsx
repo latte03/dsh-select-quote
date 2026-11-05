@@ -120,7 +120,7 @@ export function AnnotationPanel({
   const seenSelfWrite = useRef(0)
 
   const sync = useCallback(() => {
-    setItems(getAnnotations())
+    setItems(getAnnotations(sessionId))
   }, [])
 
   useEffect(() => {
@@ -157,6 +157,7 @@ export function AnnotationPanel({
     itemCount: items.length,
     draftRef,
     actionsRef,
+    sessionId,
     onSelfWrite: () => {
       selfWrites.current += 1
     },
@@ -213,12 +214,12 @@ export function AnnotationPanel({
   }, [draft, setDraft, composing])
 
   const onRemoveAll = useCallback(() => {
-    clearAnnotations(undefined, 'discarded')
+    clearAnnotations(sessionId, 'discarded')
     setItems(EMPTY)
   }, [])
 
   const dropIfEmpty = useCallback(() => {
-    setItems(getAnnotations())
+    setItems(getAnnotations(sessionId))
   }, [])
 
   const onItemSelect = useCallback((index: number, item: AnnotationSummaryItem) => {
@@ -227,20 +228,20 @@ export function AnnotationPanel({
 
   const onItemRemove = useCallback((_index: number, item: AnnotationSummaryItem) => {
     if (item.id) {
-      removeAnnotation(undefined, item.id)
+      removeAnnotation(sessionId, item.id)
     } else {
       // Fallback: drop by text match.
-      const current = getAnnotations()
+      const current = getAnnotations(sessionId)
       const hit = current.find((entry) => entry.text === item.text)
-      if (hit) removeAnnotation(undefined, hit.id)
+      if (hit) removeAnnotation(sessionId, hit.id)
     }
     dropIfEmpty()
   }, [dropIfEmpty])
 
   const onItemEdit = useCallback((_index: number, item: AnnotationSummaryItem, comment: string) => {
-    const id = item.id ?? getAnnotations().find((entry) => entry.text === item.text)?.id
+    const id = item.id ?? getAnnotations(sessionId).find((entry) => entry.text === item.text)?.id
     if (!id) return
-    updateAnnotationComment(undefined, id, comment)
+    updateAnnotationComment(sessionId, id, comment)
     sync()
   }, [sync])
 
@@ -257,7 +258,7 @@ export function AnnotationPanel({
       showToast(t('handoff.archived', { title: live }))
       return
     }
-    const entry = getAnnotations().find((candidate) => candidate.id === item.id)
+    const entry = getAnnotations(sessionId).find((candidate) => candidate.id === item.id)
     const handoffId = origin.handoffId ?? entry?.origin?.handoffId
     openSourceAndLocate({
       sessionId: origin.sessionId,

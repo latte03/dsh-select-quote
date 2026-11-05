@@ -62,6 +62,26 @@ function blocksToText(content: unknown): string {
  * Kept as plain data code (no React) so the verification harness can replay it
  * without a DOM.
  */
+/**
+ * The message text for one chat flow key.
+ *
+ * The activation prompt a side question sends carries `source: { kind: "user" }`
+ * with **no rpcId** (the Host's `startLocal` submits it that way), so the rpcId
+ * match cannot find it. The row's own `data-chat-flow-key` is the durable key
+ * into `nodes.byKey`, which resolves it exactly instead of guessing.
+ */
+export function chatNodeTextOf(
+  state: ChatStateLike | undefined,
+  flowKey: string | null | undefined,
+): string | undefined {
+  if (flowKey === null || flowKey === undefined) return undefined
+  const byKey = state?.nodes?.byKey
+  if (!(byKey instanceof Map)) return undefined
+  const node = byKey.get(flowKey)
+  if (node?.kind !== 'user') return undefined
+  return blocksToText(node.data?.content)
+}
+
 export function userMessageTextOf(
   state: ChatStateLike | undefined,
   rpcId: string | undefined,

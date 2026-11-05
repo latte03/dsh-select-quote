@@ -164,11 +164,13 @@ function registerHistoryCard(ctx: Context): void {
         name: 'conversation.chat.user.before',
         // Elect on user rows only; steering and pending rows never render this
         // seat, so a null selection there is simply "nothing to decorate".
+        //
+        // A missing `source.rpcId` is NOT a reason to decline: a side question's
+        // activation prompt is submitted with `source: { kind: 'user' }` only,
+        // and the card resolves that row through its chat flow key instead.
         select: (owner: unknown) => {
-          const seat = owner as { kind?: string; source?: { rpcId?: unknown } }
-          if (seat?.kind !== 'user') return null
-          if (typeof seat.source?.rpcId !== 'string') return null
-          return owner
+          const seat = owner as { kind?: string }
+          return seat?.kind === 'user' ? owner : null
         },
       },
       UserBeforeCard,
