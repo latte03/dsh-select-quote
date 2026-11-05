@@ -5,10 +5,9 @@
  * from the composer draft — which, at that instant, is the protocol block the
  * send gesture just folded in. A message submitted while a turn is running is
  * also previewed in the queue dock (`[data-queue-dock]`) from the same wire
- * content. Both are rendered by the chat flow itself, not by a
- * `conversation.chat.node` registration, so `UserMessageDisplay` never sees
- * them; without this, the raw JSON sits on screen until (or unless) a durable
- * message replaces it.
+ * content. Both are painted by the chat flow itself rather than by any slot
+ * entry, so the durable-message path never sees them; without this, the raw
+ * JSON sits on screen until (or unless) a durable message replaces it.
  *
  * The durable message keeps the block (the model needs it). This is display
  * only: the echo's protocol run is rewritten in place, and the queue preview's

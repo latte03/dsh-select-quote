@@ -35,8 +35,7 @@ const EXPECTED = [
   { kind: 'slots.register', label: 'shell.overlay / select-quote-toolbar' },
   { kind: 'slots.register', label: 'conversation.input.overlay / select-quote-card' },
   { kind: 'slots.register', label: 'conversation.input.overlay / select-quote-session-bridge' },
-  { kind: 'slots.register', label: 'conversation.chat.node / user' },
-  { kind: 'slots.register', label: 'conversation.chat.node / steering' },
+  { kind: 'slots.register', label: 'conversation.chat.user.before / undefined' },
   { kind: 'slots.register', label: 'plugins.bundle.config / dsh-select-quote' },
   { kind: 'locale.language', label: 'ja' },
   { kind: 'locale.language', label: 'es' },
@@ -274,44 +273,44 @@ async function checkSelectionUrl() {
 }
 
 /**
- * The replaced `user` node must delegate to the host's own node view.
+ * The bubble stays Host-owned.
  *
- * The shipped `UserMessageNodeView` renders the bubble/content factory and the
- * time/copy `MessageIconActions` row as siblings. A private bubble that
- * redraws the chrome silently drops the clock, the copy button, every plugin
- * that portals into that row (dsh-rewind's ↶), and stops following host
- * changes. So the built artifact must resolve and render `UserMessageNodeView`
- * (with its `chat` translator) and must not carry a private actions row.
- * `renderMessageImages` is not a host prop in 0.2.1-rc.2 at all.
+ * dsh 0.2.2 makes `conversation.chat.user.before` the official decoration seat
+ * for a user row, so the annotation card mounts there and the plugin no longer
+ * registers a `conversation.chat.node` renderer at all. That override used to
+ * shadow the Host's `UserMessageNodeView`; once shadowed, the Host entry left
+ * the registry, the wrapper could not delegate to it, and the message lost its
+ * time/copy actions row. Guard the regression instead of the workaround:
+ *
+ *   - no `conversation.chat.node` registration may come back
+ *   - the card must be elected through a chain `select`
+ *   - the body must be resolved from the Chat snapshot by `rpcId`
+ *   - and the Host's own actions row must not be reimplemented
  */
 function checkUserChrome(code) {
   const problems = []
-  if (!/["']UserMessageNodeView["']/.test(code) || !code.includes('conversation.chat.node')) {
+  if (code.includes('conversation.chat.node')) {
     problems.push(
-      'replacement user node does not resolve the host UserMessageNodeView — chrome stops following the host',
+      'the client registers into conversation.chat.node again — that shadows the host bubble and drops its time/copy row',
     )
   }
-  if (!/locale:\s*["']chat["']/.test(code)) {
-    problems.push('delegated host node view is registered without the chat locale seat (copy labels break)')
+  if (!code.includes('conversation.chat.user.before')) {
+    problems.push('the annotation card does not mount on conversation.chat.user.before')
+  }
+  if (!/select\s*:/.test(code)) {
+    problems.push('the user-before entry has no chain select — it can never be elected')
+  }
+  if (!code.includes('rpcId')) {
+    problems.push('the card does not match the durable node by source.rpcId — its body would never resolve')
   }
   if (code.includes('dsq_userActions')) {
-    problems.push('user node redraws the actions row instead of delegating it to the host')
+    problems.push('user bubble redraws the actions row instead of leaving it to the host')
   }
   if (code.includes('renderMessageImages')) {
-    problems.push('renderMessageImages is not a host prop — pass the node through the host view')
+    problems.push('renderMessageImages is not a host prop — leave the bubble to the host')
   }
   if (!code.includes('isSubmitKey')) {
     problems.push('composer send intercept does not use isSubmitKey — modified Enter gestures skip the fold')
-  }
-  // dsh 0.2.2 asserts slot ownership: an entry that wins `conversation.chat.node`
-  // must itself declare the nested slots the host bubble renders, or the
-  // delegated view throws SlotOwnershipError inside the entry boundary and the
-  // message loses its actions row. Only `before` is an entry-owned chain; the
-  // text/content seats are factory-owned and must NOT be claimed here.
-  if (!code.includes('conversation.chat.user.before')) {
-    problems.push(
-      'the user node registration does not declare conversation.chat.user.before — the delegated host bubble throws SlotOwnershipError and loses its time/copy row',
-    )
   }
   if (!/addEventListener\(["']storage["']/.test(code)) {
     problems.push('annotation store has no storage listener — another tab can overwrite newer state')
@@ -889,53 +888,45 @@ function checkTranscriptSurfaces(code) {
  * not by the priority value that happens to win the slot election, and it
  * must never delegate to an arbitrary wrapper when the host is ambiguous.
  */
-async function checkHostNode() {
+/**
+ * The decoration seat resolves the right message body.
+ *
+ * A `conversation.chat.user.before` entry is handed `{source, kind}` only, so
+ * the card recovers the message through the Chat snapshot. Matching is on
+ * `source.rpcId`: the durable node keeps the submission rpc id in its own
+ * `data.source`, while `data.messageId` is a different value — matching on the
+ * latter would silently resolve nothing.
+ */
+async function checkUserSeat() {
   const problems = []
-  const { pickHostNode } = await import(
-    new URL('../src/client/transcript/host-user.ts', import.meta.url).href
+  const { userMessageTextOf } = await import(
+    new URL('../src/client/transcript/chat-seat.ts', import.meta.url).href
   )
-  const self = function UserNode() {}
-  const host = function UserMessageNodeView() {}
-  const other = function OtherUserNode() {}
-  const third = function ThirdUserNode() {}
-  const entry = (component, priority, key = 'user') => ({
-    component,
-    options: { key, ...(priority === undefined ? {} : { priority }) },
-  })
-  // memo() is an object whose `type` carries the function name.
-  const memoHost = { type: host }
+  const RPC = 'rpc-42'
+  const TEXT = '正文'
+  const byKey = new Map([
+    ['a', { kind: 'user', data: { messageId: 'msg-other', source: { kind: 'user', rpcId: 'rpc-other' }, content: [{ type: 'text', text: '别的消息' }] } }],
+    ['b', { kind: 'user', data: { messageId: 'msg-42', source: { kind: 'user', rpcId: RPC }, content: [{ type: 'text', text: TEXT }] } }],
+    ['c', { kind: 'assistant-step', data: { content: [{ type: 'text', text: '回答' }] } }],
+  ])
+  const state = { nodes: { byKey } }
 
-  if (pickHostNode([entry(self, -10), entry(host)], self, 'user') !== host) {
-    problems.push('the named host user view was not resolved')
+  if (userMessageTextOf(state, RPC) !== TEXT) {
+    problems.push('the seat did not resolve the message body by source.rpcId')
   }
-  if (pickHostNode([entry(self, -10), entry(memoHost)], self, 'user') !== memoHost) {
-    problems.push('a memo-wrapped host user view was not resolved')
+  if (userMessageTextOf(state, 'nope') !== undefined) {
+    problems.push('an unknown rpcId resolved to some message')
   }
-  if (pickHostNode([entry(self, -10)], self, 'user') !== undefined) {
-    problems.push('the plugin resolved its own registration as the host')
+  if (userMessageTextOf(state, undefined) !== undefined) {
+    problems.push('a missing rpcId resolved to some message')
   }
-  if (pickHostNode([entry(self, -10), entry(other, -1)], self, 'user') !== other) {
-    problems.push('a renamed host with one non-self candidate was not used')
+  if (userMessageTextOf({}, RPC) !== undefined) {
+    problems.push('a snapshot without nodes.byKey resolved to some message')
   }
-  if (
-    pickHostNode([entry(self, -10), entry(other, -1), entry(third, 0)], self, 'user') !== undefined
-  ) {
-    problems.push('ambiguous host candidates were guessed instead of falling back')
-  }
-  if (
-    pickHostNode([entry(self, -10), entry(host), entry(other, -1)], self, 'user') !== host
-  ) {
-    problems.push('another user wrapper beat the named host view')
-  }
-  // The host registers the same component under steering; the lookup must not
-  // borrow the user entry (and vice versa).
-  if (pickHostNode([entry(host, 0, 'steering'), entry(other, 0, 'user')], self, 'steering') !== host) {
-    problems.push('the steering host view was not resolved by key')
-  }
-  if (
-    pickHostNode([entry(host, 0, 'user'), entry(other, 0, 'steering')], self, 'steering') !== other
-  ) {
-    problems.push('a steering lookup resolved the user view')
+  // contentBlocksToText joins every text block; attachments must not crash it.
+  const withImage = { nodes: { byKey: new Map([['d', { kind: 'user', data: { source: { rpcId: 'r1' }, content: [{ type: 'text', text: '甲' }, { type: 'image', attachment: {} }, { type: 'text', text: '乙' }] } }]]) } }
+  if (userMessageTextOf(withImage, 'r1') !== '甲乙') {
+    problems.push('text blocks around an attachment were not joined')
   }
   return problems
 }
@@ -2235,9 +2226,11 @@ if (
 ) {
   degradeProblems.push('a settings section was registered although no config form is served')
 }
-if (degradeRecord.filter((entry) => entry.kind === 'slots.register').length !== 5) {
+// Core slots: the root toolbar, the composer card, the session bridge and the
+// history card seat. The settings section is the only one that needs a form.
+if (degradeRecord.filter((entry) => entry.kind === 'slots.register').length !== 4) {
   degradeProblems.push(
-    `without configForms the client registered ${degradeRecord.filter((entry) => entry.kind === 'slots.register').length} slots, want the 5 core ones`,
+    `without configForms the client registered ${degradeRecord.filter((entry) => entry.kind === 'slots.register').length} slots, want the 4 core ones`,
   )
 }
 if (!degradeRecord.some((entry) => entry.kind === 'inject' && entry.label === 'configForms')) {
@@ -2354,7 +2347,7 @@ const targetProblems = await checkTargetDirectory()
 const handoffWiringProblems = checkHandoffWiring(code)
 const linkProblems = await checkSelectionUrl()
 const metaProblems = checkPackageMeta()
-const userChromeProblems = [...checkUserChrome(code), ...(await checkHostNode())]
+const userChromeProblems = [...checkUserChrome(code), ...(await checkUserSeat())]
 const sendKeyProblems = await checkSendKey()
 const classCoverageProblems = checkClassCoverage(code)
 const cascadeProblems = checkCascadePrecedence(code)
@@ -2436,7 +2429,7 @@ if (
 console.log(
   `ok: ${EXPECTED.length} contributions registered, ${module.inject.join(', ')} injected, ` +
     `copy complete for ${[...languages].sort().join('/')}, annotation persistence + cross-tab sync replayed, link detection replayed, ` +
-    `host view resolution replayed, send gestures replayed, draft writes stay in place on a Lexical host, composed annotation blocks read back, ` +
+    `decoration-seat body resolution replayed, send gestures replayed, draft writes stay in place on a Lexical host, composed annotation blocks read back, ` +
     `echo strip replayed, transcript summary single-block, mark preview wired, ` +
     `host config + bundle settings section wired (defaults, live update, invalid-value fallback, no-service fallback), ` +
     `right-click ownership + shortcut commands replayed (two actions, defaults, selection gating, live registration, catalog mirror), ` +

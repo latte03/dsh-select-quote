@@ -43,6 +43,11 @@ export interface SlotRegistration {
    * re-declare whatever the entry it shadows declared.
    */
   children?: Record<string, { kind: 'single' | 'keyed' | 'list' | 'chain'; scope: string }>
+  /**
+   * Chain-entry routing selector. Entries are tried in ascending order; the
+   * first non-null result elects the entry and arrives as its `matched` prop.
+   */
+  select?: (owner: unknown) => unknown
 }
 
 /** One selectable language. */

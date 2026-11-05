@@ -38,12 +38,7 @@ import {
   resolveTranslatePrompt,
   type TranslateLanguage,
 } from './translate.ts'
-import {
-  UserMessageDisplay,
-  type HostNodeComponent,
-  type UserMessageDisplayProps,
-} from './transcript/UserMessageDisplay.tsx'
-import { componentName, pickHostNode } from './transcript/host-user.ts'
+import { UserBeforeCard } from './transcript/UserBeforeCard.tsx'
 import { createProtocolRule } from './transcript/protocol-rule.ts'
 import {
   adoptStorageAnnotations,
@@ -63,13 +58,13 @@ import { sessionIdOfKey } from './state/annotation-persistence.ts'
  * Selection toolbar is root-scoped (`shell.overlay`) so transcript selections
  * are always observed. Annotation summary stays on the session composer.
  *
- * History summary renders **inside** the `user` Chat node view, not on a
- * `select-quote` Chat node. `conversation.chat.node` is gated by the shipped
- * `TURN_PROCESS_INDEPENDENT_KINDS` allowlist (system-prompt, user, steering,
- * turn-trigger, turn-process, turn-error, turn-max-tokens, turn-tail): any other
- * kind is classified as a turn-process member and `hidden` when the completed
- * turn's process disclosure is folded — mounted, but invisible. `user` is on
- * that allowlist, so the bubble is the only placement that is reliably visible.
+ * History summary mounts on the Host's own decoration seat
+ * (`conversation.chat.user.before`) rather than by overriding a Chat node:
+ * overriding the `user` node shadowed the Host's `UserMessageNodeView`, which
+ * then left the registry and could not be delegated to — the message lost its
+ * time/copy actions row. The seat keeps the bubble Host-owned; the card only
+ * reads the message body through the `useChat` snapshot (see
+ * `transcript/UserBeforeCard.tsx`).
  *
  * Language is the host's decision, never this plugin's: dictionaries go to
  * `ctx.locale`, and `t()` resolves against whatever language the user picked in
@@ -139,6 +134,50 @@ interface SessionCatalogApi {
 
 export function apply(ctx: Context): void {
   ensureToolbarStyles()
+  try {
+    applyBody(ctx)
+  } catch (error) {
+    // A cordis fiber that throws mid-`apply` is disposed without a page-visible
+    // trace: the stylesheet is already in the document, so the plugin "looks
+    // loaded" while every slot registration is missing. Surface the cause.
+    console.error('dsh-select-quote: activation failed', error)
+    throw error
+  }
+}
+
+/**
+ * Annotation cards hang on the Host's own user-message decoration seat.
+ *
+ * `conversation.chat.user.before` is the official place for message-source
+ * decoration in dsh 0.2.2, and using it is what keeps the bubble Host-owned:
+ * the message keeps its attachments, reference summary and time/copy actions
+ * row, and this plugin only adds the summary above it.
+ *
+ * The entry receives `{source, kind}` — no message body — so the card resolves
+ * the body through the `useChat` seat (see `transcript/UserBeforeCard.tsx`),
+ * matching the durable node by `source.rpcId`.
+ */
+function registerHistoryCard(ctx: Context): void {
+  ctx.slots.inject('conversation.chat.user.before', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.chat.user.before',
+        // Elect on user rows only; steering and pending rows never render this
+        // seat, so a null selection there is simply "nothing to decorate".
+        select: (owner: unknown) => {
+          const seat = owner as { kind?: string; source?: { rpcId?: unknown } }
+          if (seat?.kind !== 'user') return null
+          if (typeof seat.source?.rpcId !== 'string') return null
+          return owner
+        },
+      },
+      UserBeforeCard,
+    ),
+  )
+}
+function applyBody(ctx: Context): void {
+  registerHistoryCard(ctx)
+
 
   // Dictionary registrations are owned effects; the fallback chain must end at
   // `en`, and both shipped host locales are required in one typed call.
@@ -559,12 +598,13 @@ export function apply(ctx: Context): void {
   // The selection toolbar above is ours end-to-end, but the durable bubble is
   // no longer ours to rewrite on dsh 0.2.2: the host renders user text through
   // `conversation.user.text` -> `uiConversation.userText` rules, and any text
-  // no rule claims paints literally. That is why a annotated message used to
+  // no rule claims paints literally. That is why an annotated message used to
   // show its whole JSON payload in the bubble. Claim the protocol span here so
-  // it renders as nothing on both host generations.
+  // the durable bubble renders only the user's own words.
   //
-  // Optional service: a 0.2.1 host has no rule registry at all, and the
-  // `priority: -10` `conversation.chat.node` override below still covers it.
+  // Required service: this plugin targets dsh 0.2.2-rc.1 and later, where the
+  // rule registry is part of the client. A host without it would paint the raw
+  // block, so the feature detection below is a guard, not a compatibility path.
   ctx.inject(['uiConversation'], (scope) => {
     const rules = scope.uiConversation?.userText
     if (typeof rules?.register !== 'function') return
@@ -607,98 +647,10 @@ export function apply(ctx: Context): void {
     )
   })
 
-  // History: delegate the bubble to the host's own UserMessageNodeView after
-  // rewriting `node.data.content`, then prepend the annotation summary. The host
-  // view owns the time/copy actions row, attachments, file cards and reference
-  // summaries, so a host change or another plugin's decoration of that row is
-  // preserved instead of being shadowed by a private copy.
-  //
-  // `steering` is the same host bubble registered under another key; a
-  // steering send carries the same protocol block, so it needs the same
-  // rewrite. Each wrapper passes itself by identity so the lookup never
-  // resolves the plugin's own registration as the host.
-  /** Keys whose resolution failure was already reported (one console line each). */
-  const diagnosed = new Set<string>()
-  const hostNodeOf = (
-    key: 'user' | 'steering',
-    self: unknown,
-  ): HostNodeComponent | undefined => {
-    const entries =
-      typeof ctx.slots.entries === 'function'
-        ? ctx.slots.entries('conversation.chat.node')
-        : []
-    const picked = pickHostNode(entries, self, key) as HostNodeComponent | undefined
-    if (picked === undefined) {
-      // One-shot diagnostic: the fallback bubble has no actions row, so a
-      // resolution failure shows up as "the message lost its time/copy row".
-      // Print the registry shape once per key so the cause is visible without a
-      // debugger.
-      if (!diagnosed.has(key)) {
-        diagnosed.add(key)
-        const nameOf = (component: unknown): string | undefined => componentName(component)
-        console.warn(
-          `dsh-select-quote: no host view resolved for conversation.chat.node / ${key}`,
-          entries.map((entry) => ({
-            key: entry.options?.key,
-            priority: entry.options?.priority,
-            name: nameOf(entry.component),
-            self: entry.component === self,
-          })),
-        )
-      }
-    }
-    return picked
-  }
-
-  /**
-   * Slot declarations that travel with the winning entry.
-   *
-   * dsh 0.2.2 renders the user bubble through `conversation.chat.user.before`
-   * and `conversation.chat.user.content`, and the slot core asserts that the
-   * *entry* declares a nested slot before the entry may render it: a
-   * `renderSlot(key)` from an entry whose `children` omits `key` throws
-   * `SlotOwnershipError` instead of falling back. The host's own registration
-   * carries these declarations, so a wrapper that wins the cell by `priority`
-   * must re-declare them or the delegated host view blows up inside the
-   * entry's error boundary — and the message renders without its actions row.
-   *
-   * Exactly what the host declares, no more: `conversation.chat.user.before`
-   * is the chain `UserStyleBubble` renders above the bubble. The text/content
-   * seats are *factory* slots (`conversation.chat.user.content`,
-   * `conversation.user.text`) whose ownership lives on the factory definition,
-   * so declaring them here would be a false claim about this entry.
-   */
-  const HOST_BUBBLE_CHILDREN = {
-    'conversation.chat.user.before': { kind: 'chain', scope: 'session' },
-  } as const
-
-  function UserNode(props: UserMessageDisplayProps) {
-    return <UserMessageDisplay {...props} hostNodeOf={() => hostNodeOf('user', UserNode)} />
-  }
-  function SteeringNode(props: UserMessageDisplayProps) {
-    return (
-      <UserMessageDisplay {...props} hostNodeOf={() => hostNodeOf('steering', SteeringNode)} />
-    )
-  }
-  for (const [key, View] of [
-    ['user', UserNode],
-    ['steering', SteeringNode],
-  ] as const) {
-    ctx.slots.inject('conversation.chat.node', () => {
-      ctx.slots.register(
-        {
-          name: 'conversation.chat.node',
-          key,
-          priority: -10,
-          // The delegated host view needs its own translator for the copy
-          // tooltip; the chat namespace is the one it is written against.
-          locale: 'chat',
-          children: HOST_BUBBLE_CHILDREN,
-        },
-        View,
-      )
-    })
-  }
+  // History is rendered entirely by the Host: the annotation block is hidden by
+  // the `uiConversation.userText` rule registered above, so the bubble needs no
+  // rewrite and keeps its own time/copy actions row. The card mounts on the
+  // official decoration seat below.
 }
 
 /** Invisible session-scoped bridge that publishes sessionId for the root toolbar. */
