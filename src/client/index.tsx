@@ -403,10 +403,13 @@ function applyBody(ctx: Context): void {
 
       const publish = (): void => {
         const api = scope.get('remote.selectQuoteSideTask') as SideTaskRemoteApi | undefined
-        // Resolved at publish time: the mount resolves asynchronously, so a
-        // service that activates just after this plugin is already visible.
-        const sidebar = scope.get('sidebarRight') as SidebarRightApi | undefined
-        if (api !== undefined && sidebar !== undefined) {
+        // Only the Remote namespace decides whether the action exists. The
+        // sidebar is resolved when the question is actually sent: requiring it
+        // here made publication depend on service arrival order — the mount
+        // resolves asynchronously, and a sidebar that activated a moment later
+        // would leave the action permanently missing even though the Remote
+        // was ready.
+        if (api !== undefined) {
           const openSideTask = async (
             snapshot: SelectionSnapshot,
             question: string,
@@ -414,6 +417,8 @@ function applyBody(ctx: Context): void {
           ): Promise<void> => {
             const sessionId = runtime.sessionId
             if (!sessionId) throw new Error('no active session')
+            const sidebar = scope.get('sidebarRight') as SidebarRightApi | undefined
+            if (sidebar === undefined) throw new Error('the right sidebar is unavailable')
             // Same wire format as the main conversation: the Host copies the
             // prompt into the child's transcript, so the quote must be a parsed
             // annotation block there, not prose the user never typed.

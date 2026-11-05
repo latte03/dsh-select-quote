@@ -14,7 +14,13 @@ body {
   --dsq-font-size: var(--dsh-content-font-size, 14px);
   --dsq-font-delta: var(--dsh-content-font-delta, 0px);
   --dsq-bg-raised: var(--dsw-alias-bg-layer-1, #fff);
-  --dsq-bg-toast: var(--dsw-alias-bg-layer-3, rgba(0, 0, 0, 0.78));
+  /* Toast pill. The product token that used to back this (bg-layer-3) is plain
+     white in dsh 0.2.2 while the label inverted token is white too — a white
+     pill with white text. Pair two tokens that are guaranteed to be each
+     other's inverse instead: primary label as the surface, raised surface as
+     the ink. Light theme gives dark-on-light, dark theme flips with it. */
+  --dsq-toast-bg: var(--dsq-label);
+  --dsq-toast-fg: var(--dsq-bg-raised);
   /* The settings switch mirrors the Host's own switch: neutral track when off,
      brand fill when on, and a thumb that inverts with the theme. */
   --dsq-switch-off: var(--dsw-alias-border-l3, rgba(0, 0, 0, 0.12));

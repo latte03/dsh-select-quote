@@ -302,8 +302,8 @@ export const SELECTION_CSS = `
 .dsq_touchStatus {
   padding: 4px 10px;
   border-radius: 999px;
-  background: var(--dsq-bg-toast);
-  color: var(--dsq-label-inverted);
+  background: var(--dsq-toast-bg);
+  color: var(--dsq-toast-fg);
   font-size: 12px;
   line-height: 18px;
   pointer-events: none;
