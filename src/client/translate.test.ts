@@ -68,6 +68,9 @@ describe('isAlreadyTargetLanguage', () => {
   it('never hides for content without a detectable language', () => {
     expect(isAlreadyTargetLanguage('12345 !!! ---', 'auto', 'zh')).toBe(false)
     expect(isAlreadyTargetLanguage('12345 !!! ---', 'en', 'en')).toBe(false)
+    // Latin text without any hint word or diacritic is unknown, not English.
+    expect(isAlreadyTargetLanguage('Merhaba, bu bir test.', 'auto', 'en')).toBe(false)
+    expect(isAlreadyTargetLanguage('Halo, apa kabar?', 'en', 'zh')).toBe(false)
   })
 
   it('falls back to English for an unsupported UI locale', () => {

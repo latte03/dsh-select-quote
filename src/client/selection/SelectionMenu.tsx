@@ -68,14 +68,13 @@ export function SelectionMenu({
   }, [placement, initialFocus])
 
   useEffect(() => {
+    // Scrolling another portalled surface of this plugin (the target picker)
+    // is not a page scroll; dismissing the menu under it would also unmount
+    // the surface. Any plugin surface is marked `data-dsq-menu`.
     const inside = (node: EventTarget | null): boolean =>
       node instanceof Node &&
       (rootRef.current?.contains(node) === true ||
-        // The target picker is a separate portal opened from this menu.
-        // Scrolling or clicking inside it must not dismiss the menu that
-        // spawned it — otherwise a wheel event closes both surfaces.
-        (node instanceof Element &&
-          node.closest('[data-dsq-target-picker="true"]') !== null))
+        (node instanceof Element && node.closest('[data-dsq-menu]') !== null))
     const onPointerDown = (event: PointerEvent): void => {
       if (inside(event.target)) return
       onClose()
@@ -89,7 +88,12 @@ export function SelectionMenu({
       }
       onClose()
     }
-    const onScroll = (): void => onClose()
+    const onScroll = (event: Event): void => {
+      // Wheel/trackpad scrolling inside a plugin surface (the target picker)
+      // targets that surface, not the page; it must not dismiss this menu.
+      if (inside(event.target)) return
+      onClose()
+    }
     const onResize = (): void => onClose()
     const onBlur = (): void => onClose()
 

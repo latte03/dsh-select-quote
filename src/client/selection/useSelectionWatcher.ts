@@ -11,6 +11,7 @@ import { getConfig, resolveTriggers } from '../config.ts'
 import { isInsideTranscript } from '../dom/message-text.ts'
 import { pointInRects, shouldOpenSelectionMenu } from '../dom/menu-trigger.ts'
 import { readSelectionSnapshot, type SelectionSnapshot } from '../dom/selection.ts'
+import { isInsideTargetPicker } from './picker-surface.ts'
 
 export type SelectionPhase = 'idle' | 'comment' | 'handoff' | 'side' | 'translate'
 
@@ -181,8 +182,7 @@ export function useSelectionWatcher({
           commentWrapRef.current?.contains(target) === true ||
           // The target picker is a sibling portal; scrolling its list is not a
           // page scroll and must not re-run selection refresh under the user.
-          (target instanceof Element &&
-            target.closest('[data-dsq-target-picker="true"]') !== null))
+          isInsideTargetPicker(target))
       ) {
         return
       }

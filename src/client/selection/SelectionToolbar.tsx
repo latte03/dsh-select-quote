@@ -245,8 +245,15 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const closePicker = useCallback((): void => {
     updatePicker(null)
     // A picker opened from the menu replaced it; do not leave the auto toolbar
-    // behind in contextmenu mode when the picker closes without a choice.
-    if (!touch && !resolveTriggers(getConfig()).auto) setActive(null)
+    // behind in contextmenu mode when it closes without a choice. During the
+    // handoff comment step the pinned toolbar must stay for the user to finish.
+    if (
+      phaseRef.current === 'idle' &&
+      !touch &&
+      !resolveTriggers(getConfig()).auto
+    ) {
+      setActive(null)
+    }
   }, [touch, updatePicker])
 
   const hide = useCallback(() => {
@@ -401,7 +408,8 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         (outcome) => {
           setHandoffBusy(false)
           if (!outcome.ok || !outcome.targetId) {
-            setHandoffError(outcome.error ?? t('handoff.failed'))
+            if (outcome.error) console.error('dsh-select-quote: handoff failed', outcome.error)
+            setHandoffError(t('handoff.failed'))
             return
           }
           const name = targetName(target)
@@ -422,7 +430,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         (error) => {
           setHandoffBusy(false)
           console.error('dsh-select-quote: handoff failed', error)
-          setHandoffError(error instanceof Error ? error.message : String(error))
+          setHandoffError(t('handoff.failed'))
         },
       )
     },
@@ -450,6 +458,10 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
    * result being unselectable.
    */
   const selectionInOwnSurface = useCallback((): boolean => {
+    // The target picker latches its own snapshot and owns focus (search field).
+    // Any refresh while it is open would read a collapsed selection and drop
+    // the very surface the reader is interacting with.
+    if (pickerRef.current !== null) return true
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return false
     const owns = (root: HTMLElement | null, node: Node | null): boolean =>
@@ -485,12 +497,8 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     // Touch keeps its bottom bar regardless of the trigger mode.
     if (!touch && !resolveTriggers(getConfig()).auto) {
       // The right-click / shortcut menu is a separate entry point: its host
-      // must stay mounted while the selection is still the menu's own. The
-      // target picker is modal on top of it and must survive refresh passes
-      // triggered by scrolling its list.
-      if (phaseRef.current === 'idle' && !menuRef.current && pickerRef.current === null) {
-        setActive(null)
-      }
+      // must stay mounted while the selection is still the menu's own.
+      if (phaseRef.current === 'idle' && !menuRef.current) setActive(null)
       return
     }
     const current = activeRef.current

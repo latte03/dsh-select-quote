@@ -29,6 +29,7 @@ import {
   type TargetDirectory,
   type TargetSession,
 } from './session-targets.ts'
+import { TARGET_PICKER_ATTRIBUTES } from './picker-surface.ts'
 
 const GAP = 4
 /** Search appears only once the list is long enough to be worth filtering. */
@@ -202,7 +203,7 @@ export function SessionTargetPicker({
       role="dialog"
       aria-label={t('handoff.dialogAria')}
       data-dsq-menu="true"
-      data-dsq-target-picker="true"
+      {...TARGET_PICKER_ATTRIBUTES}
       data-touch={touch ? 'true' : 'false'}
       style={touch ? undefined : { top: placement?.top ?? 0, left: placement?.left ?? 0, visibility: placement ? 'visible' : 'hidden' }}
       onKeyDown={onKeyDown}

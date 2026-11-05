@@ -107,8 +107,8 @@ const LATIN_HINTS: readonly {
   },
 ]
 
-function detectLatin(text: string): TranslateLanguage {
-  let best: TranslateLanguage = 'en'
+function detectLatin(text: string, strict = false): TranslateLanguage | null {
+  let best: TranslateLanguage | null = null
   let bestScore = 0
   for (const hint of LATIN_HINTS) {
     // Diacritics are far stronger evidence than a shared short word ("de",
@@ -119,14 +119,22 @@ function detectLatin(text: string): TranslateLanguage {
       bestScore = score
     }
   }
-  return best
+  if (best !== null) return best
+  // Without any hint the text may be English or a Latin-script language this
+  // heuristic cannot name. Callers that hide UI need "unknown", not "English".
+  return strict ? null : 'en'
 }
 
 /**
  * Best-effort source language for the smart default. `null` means "unknown";
- * callers then translate into the UI language without a special case.
+ * callers then translate into the UI language without a special case. In
+ * `strict` mode Latin text without any hint word/diacritic stays unknown
+ * instead of defaulting to English.
  */
-export function detectSourceLanguage(text: string): TranslateLanguage | null {
+export function detectSourceLanguage(
+  text: string,
+  strict = false,
+): TranslateLanguage | null {
   const sample = text.slice(0, 2000)
   const kana = count(KANA, sample)
   const han = count(HAN, sample)
@@ -138,8 +146,14 @@ export function detectSourceLanguage(text: string): TranslateLanguage | null {
   if (kana > 0) return 'ja'
   if (han > latin && han > cyrillic) return 'zh'
   if (cyrillic > latin && cyrillic > han) return 'ru'
-  if (latin > 0) return detectLatin(sample)
+  if (latin > 0) return detectLatin(sample, strict)
   return null
+}
+
+/** Normalize a host locale id onto a language this plugin serves. */
+function resolveUiLanguage(uiLocale: string): TranslateLanguage {
+  const base = uiLocale.toLowerCase().split(/[-_]/)[0]
+  return isTranslateLanguage(base) ? base : 'en'
 }
 
 /**
@@ -156,8 +170,7 @@ export function resolveTranslateTarget(
   uiLocale: string,
 ): TranslateLanguage {
   if (isTranslateLanguage(configured)) return configured
-  const base = uiLocale.toLowerCase().split(/[-_]/)[0]
-  const ui: TranslateLanguage = isTranslateLanguage(base) ? base : 'en'
+  const ui = resolveUiLanguage(uiLocale)
   const source = detectSourceLanguage(text)
   if (source === ui) return ui === 'en' ? 'zh' : 'en'
   return ui
@@ -181,10 +194,8 @@ export function isAlreadyTargetLanguage(
   configured: TranslateTarget,
   uiLocale: string,
 ): boolean {
-  const source = detectSourceLanguage(text)
+  const source = detectSourceLanguage(text, true)
   if (source === null) return false
   if (isTranslateLanguage(configured)) return source === configured
-  const base = uiLocale.toLowerCase().split(/[-_]/)[0]
-  const ui: TranslateLanguage = isTranslateLanguage(base) ? base : 'en'
-  return source === ui
+  return source === resolveUiLanguage(uiLocale)
 }
