@@ -19,6 +19,8 @@ export const de: LocaleDict = {
   'toolbar.askInSide': 'In Seitenaufgabe fragen',
   'toolbar.sideTaskFailed': 'Seitenaufgabe konnte nicht gestartet werden',
   'toolbar.sideTaskUnavailable': 'Die Seitenaufgabe ist hier nicht verfügbar',
+  'toolbar.sideUnavailable': 'Seitenfragen sind nicht verfügbar: der Sidebar-Dienst des Hosts ist nicht bereit',
+  'toolbar.translateUnavailable': 'Übersetzung ist nicht verfügbar: der Modell-Dienst des Hosts ist nicht bereit',
   'sideTask.title': 'In Seitenaufgabe fragen',
   'sideTask.placeholder': 'Frage zu dieser Passage stellen…',
   'sideTask.send': 'Senden',

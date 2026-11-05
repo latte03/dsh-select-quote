@@ -20,6 +20,17 @@ export interface SelectionAction {
   readonly labelParts?: readonly SelectionLabelPart[]
   /** Right-click menu wording when it differs (the menu always opens the picker). */
   readonly menuLabel?: string
+  /**
+   * The action is offered but cannot run in this Host.
+   *
+   * Disabled entries stay in the row instead of disappearing: a button that
+   * silently vanishes reads as a missing feature, while a disabled one that
+   * explains itself on hover tells the user the capability exists and what is
+   * missing. Clicks are ignored; the reason travels in `disabledReason`.
+   */
+  readonly disabled?: boolean
+  /** Tooltip shown on hover while `disabled`. */
+  readonly disabledReason?: string
 }
 
 /**
@@ -71,11 +82,22 @@ export interface SelectionActionVisibility {
  * the right-click menu paints it vertically. Adding or reordering an action
  * here reaches both, so the two entry points cannot drift apart.
  */
+/** Runtime bridges that decide whether an entry point can actually run. */
+export interface SelectionActionAvailability {
+  /** `runtime.sideTask` is published by the Remote mount. */
+  readonly sideTask?: boolean
+  /** `runtime.translate` is published by the Remote mount. */
+  readonly translate?: boolean
+}
+
 export function selectionActions(
   snapshot: SelectionSnapshot,
   handoff?: HandoffActionOptions,
   visibility?: SelectionActionVisibility,
+  availability?: SelectionActionAvailability,
 ): readonly SelectionAction[] {
+  const translateDisabled = availability?.translate === false
+  const sideDisabled = availability?.sideTask === false
   return [
     ...(linkTarget(snapshot.text, snapshot.anchorHref) === null
       ? []
@@ -83,7 +105,16 @@ export function selectionActions(
     { key: 'copy', icon: 'copy', label: t('toolbar.copy') },
     ...(visibility?.hideTranslate
       ? []
-      : [{ key: 'translate' as const, icon: 'languages' as const, label: t('toolbar.translate') }]),
+      : [
+          {
+            key: 'translate' as const,
+            icon: 'languages' as const,
+            label: t('toolbar.translate'),
+            ...(translateDisabled
+              ? { disabled: true, disabledReason: t('toolbar.translateUnavailable') }
+              : {}),
+          },
+        ]),
     { key: 'add', icon: 'plus', label: t('toolbar.addToTask') },
     ...(handoff?.available
       ? [
@@ -96,6 +127,11 @@ export function selectionActions(
           },
         ]
       : []),
-    { key: 'side', icon: 'panel-right', label: t('toolbar.askInSide') },
+    {
+      key: 'side',
+      icon: 'panel-right',
+      label: t('toolbar.askInSide'),
+      ...(sideDisabled ? { disabled: true, disabledReason: t('toolbar.sideUnavailable') } : {}),
+    },
   ]
 }

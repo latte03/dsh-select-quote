@@ -19,6 +19,8 @@ export const pt: LocaleDict = {
   'toolbar.askInSide': 'Perguntar na tarefa lateral',
   'toolbar.sideTaskFailed': 'Não foi possível iniciar a tarefa lateral',
   'toolbar.sideTaskUnavailable': 'A tarefa lateral não está disponível aqui',
+  'toolbar.sideUnavailable': 'Perguntas laterais indisponíveis: o serviço de barra lateral do host não está pronto',
+  'toolbar.translateUnavailable': 'A tradução está indisponível: o serviço de modelos do host não está pronto',
   'sideTask.title': 'Perguntar na tarefa lateral',
   'sideTask.placeholder': 'Pergunte sobre esta passagem…',
   'sideTask.send': 'Enviar',

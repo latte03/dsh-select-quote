@@ -178,9 +178,11 @@ export function SelectionMenu({
           role="menuitem"
           className={cx(A.plain, A.row, styles.ctxItem)}
           tabIndex={-1}
+          aria-disabled={entry.disabled ? 'true' : undefined}
+          data-dsq-tip={entry.disabled ? entry.disabledReason : undefined}
           onPointerDown={keepSelection}
           onPointerEnter={(event) => event.currentTarget.focus({ preventScroll: true })}
-          onClick={entry.onClick}
+          onClick={entry.disabled ? undefined : entry.onClick}
         >
           <LucideIcon name={entry.icon} size={15} />
           <span>{entry.label}</span>

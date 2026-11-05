@@ -117,8 +117,17 @@ function ActionRow({
             stacked ? styles.touchAction : styles.button,
           )}
           aria-haspopup={handoff ? 'dialog' : undefined}
+          // aria-disabled rather than `disabled`: a disabled button drops hover
+          // in some browsers, and the tooltip is the whole point here. Clicks
+          // are ignored below instead.
+          aria-disabled={action.disabled ? 'true' : undefined}
+          data-dsq-tip={action.disabled ? action.disabledReason : undefined}
           data-dsq-handoff-trigger={handoff ? 'true' : undefined}
-          onClick={action.onClick}
+          onClick={
+            action.disabled
+              ? undefined
+              : action.onClick
+          }
         >
           <LucideIcon name={action.icon} size={stacked ? 18 : 14} />
           {stacked ? (
@@ -704,6 +713,7 @@ export function ToolbarView({
             style={{ bottom: `calc(${viewport.inset}px + 72px + env(safe-area-inset-bottom, 0px))` }}
             role="status"
           >
+            <LucideIcon name="circle-alert" size={13} className={styles.statusIcon} />
             {status}
           </div>
         ) : null}
@@ -812,6 +822,7 @@ export function ToolbarView({
       ) : null}
       {status ? (
         <div className={styles.status} style={toolbarStyle} role="status">
+          <LucideIcon name="circle-alert" size={13} className={styles.statusIcon} />
           {status}
         </div>
       ) : null}

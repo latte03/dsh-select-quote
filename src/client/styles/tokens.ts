@@ -19,8 +19,9 @@ body {
      pill with white text. Pair two tokens that are guaranteed to be each
      other's inverse instead: primary label as the surface, raised surface as
      the ink. Light theme gives dark-on-light, dark theme flips with it. */
-  --dsq-toast-bg: var(--dsq-label);
-  --dsq-toast-fg: var(--dsq-bg-raised);
+  --dsq-toast-bg: var(--dsq-bg-raised);
+  --dsq-toast-fg: var(--dsq-label);
+  --dsq-toast-line: var(--dsq-line);
   /* The settings switch mirrors the Host's own switch: neutral track when off,
      brand fill when on, and a thumb that inverts with the theme. */
   --dsq-switch-off: var(--dsw-alias-border-l3, rgba(0, 0, 0, 0.12));

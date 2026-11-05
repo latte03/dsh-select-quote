@@ -19,6 +19,8 @@ export const en: LocaleDict = {
   'toolbar.askInSide': 'Ask in side task',
   'toolbar.sideTaskFailed': 'Could not start the side task',
   'toolbar.sideTaskUnavailable': 'The side task is unavailable here',
+  'toolbar.sideUnavailable': 'Sidebar questions are unavailable: the host sidebar service is not ready',
+  'toolbar.translateUnavailable': 'Translation is unavailable: the host model service is not ready',
   'sideTask.title': 'Ask in side task',
   'sideTask.placeholder': 'Ask about this passage…',
   'sideTask.send': 'Send',

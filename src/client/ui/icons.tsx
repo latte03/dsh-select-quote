@@ -34,6 +34,7 @@ export type IconName =
   | 'chevron-right'
   | 'check'
   | 'arrow-up-right'
+  | 'circle-alert'
 
 const SHAPES: Record<IconName, string> = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
@@ -54,6 +55,7 @@ const SHAPES: Record<IconName, string> = {
   'chevron-right': '<path d="m9 18 6-6-6-6"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   'arrow-up-right': '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
+  'circle-alert': '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
 }
 
 /** Markup form for plain-DOM call sites; `insertAdjacentHTML('afterbegin', …)`. */

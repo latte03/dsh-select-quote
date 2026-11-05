@@ -40,6 +40,7 @@ export const styles = {
   kbd: 'dsq_kbd',
   divider: 'dsq_divider',
   status: 'dsq_status',
+  statusIcon: 'dsq_statusIcon',
   ctxMenu: 'dsq_ctxMenu',
   ctxItem: 'dsq_ctxItem',
   modelSeat: 'dsq_modelSeat',

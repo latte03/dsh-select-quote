@@ -19,6 +19,8 @@ export const zh: LocaleDict = {
   'toolbar.askInSide': '在侧边提问',
   'toolbar.sideTaskFailed': '侧边提问创建失败',
   'toolbar.sideTaskUnavailable': '当前无法创建侧边提问',
+  'toolbar.sideUnavailable': '侧边提问不可用：宿主的侧边栏服务未就绪',
+  'toolbar.translateUnavailable': '翻译不可用：宿主的模型服务未就绪',
   'sideTask.title': '在侧边提问',
   'sideTask.placeholder': '就这段原文提问…',
   'sideTask.send': '发送',

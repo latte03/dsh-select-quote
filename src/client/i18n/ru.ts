@@ -19,6 +19,8 @@ export const ru: LocaleDict = {
   'toolbar.askInSide': 'Спросить в боковой задаче',
   'toolbar.sideTaskFailed': 'Не удалось открыть боковую задачу',
   'toolbar.sideTaskUnavailable': 'Боковая задача недоступна в этом окне',
+  'toolbar.sideUnavailable': 'Боковые вопросы недоступны: служба боковой панели хоста не готова',
+  'toolbar.translateUnavailable': 'Перевод недоступен: служба моделей хоста не готова',
   'sideTask.title': 'Спросить в боковой задаче',
   'sideTask.placeholder': 'Спросите об этом фрагменте…',
   'sideTask.send': 'Отправить',

@@ -485,10 +485,18 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       isAlreadyTargetLanguage(text, config.translateTarget, activeLocale()),
   })
   const toolbarStyle: CSSProperties = { left: active.left, top: active.top }
+  // The Remote mount publishes these bridges after activation, so re-read them
+  // on every render instead of memoising: an entry point that is unavailable at
+  // boot must become usable as soon as the bridge lands.
+  const availability = {
+    sideTask: runtime.sideTask !== undefined,
+    translate: runtime.translate !== undefined,
+  }
   const actions: SelectionActionEntry[] = selectionActions(
     active,
     handoff.options,
     visibilityFor(active.text),
+    availability,
   ).map((action) => ({
     ...action,
     onClick: () => runAction(action.key, active),
@@ -580,6 +588,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
             menu.snapshot,
             handoff.options,
             visibilityFor(menu.snapshot.text),
+            availability,
           ).map((action) => ({
             ...action,
             label: action.key === 'handoff' ? (action.menuLabel ?? action.label) : action.label,

@@ -144,7 +144,7 @@ export const SELECTION_CSS = `
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
   /* Every surface above takes the same elevation; declaring it once here is
      what keeps the component blocks free of a copied box-shadow. */
-  box-shadow: var(--dsq-shadow);
+  box-shadow: var(--dsw-elevation-prominent, 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.06));
 }
 
 /* 浮层挂载与层带（2026-10-20 定，改前先读）：
@@ -221,6 +221,48 @@ export const SELECTION_CSS = `
 }
 .dsq_button:hover {
   background: var(--dsq-fill-hover);
+}
+
+/* An entry point the Host cannot run right now stays in the row, dimmed, and
+   explains itself on hover. Removing it instead would read as a missing
+   feature; a click that only produces a toast makes the user hunt for why. */
+.dsq_button[aria-disabled='true'],
+.dsq_touchAction[aria-disabled='true'],
+.dsq_ctxItem[aria-disabled='true'],
+.dsq_handoffChevron[aria-disabled='true'] {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.dsq_button[aria-disabled='true']:hover {
+  background: transparent;
+}
+
+/* Hover tooltip. A native title would be slower and styled by the OS; this
+   rides the same token set as the rest of the chrome. */
+[data-dsq-tip] {
+  position: relative;
+}
+
+[data-dsq-tip]:hover::after {
+  content: attr(data-dsq-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  z-index: 4;
+  max-width: 240px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 0.5px solid var(--dsq-line);
+  background: var(--dsq-bg-raised);
+  color: var(--dsq-label);
+  box-shadow: var(--dsw-elevation-prominent, 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.08));
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 400;
+  white-space: normal;
+  pointer-events: none;
+  transform: translateX(-50%);
 }
 
 /* Accent-filled actions: comment commit and annotation save. Only the
@@ -300,14 +342,28 @@ export const SELECTION_CSS = `
    only where they anchor differs. */
 .dsq_status,
 .dsq_touchStatus {
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 9px;
   border-radius: 999px;
+  border: 0.5px solid var(--dsq-toast-line);
+  /* Surface colours, not an inverted pill: a light page gets a light chip with
+     dark text, a dark page a dark chip with light text. The hairline keeps the
+     chip readable when it sits on a same-tone bubble. */
   background: var(--dsq-toast-bg);
   color: var(--dsq-toast-fg);
+  box-shadow: var(--dsw-elevation-prominent, 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.06));
   font-size: 12px;
   line-height: 18px;
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* Every current status is a failure notice, so the icon is the error glyph. */
+.dsq_statusIcon {
+  flex: none;
+  color: var(--dsq-danger);
 }
 
 .dsq_status {

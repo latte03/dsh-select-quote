@@ -19,6 +19,8 @@ export const ja: LocaleDict = {
   'toolbar.askInSide': 'サイドで質問',
   'toolbar.sideTaskFailed': 'サイドタスクを開始できませんでした',
   'toolbar.sideTaskUnavailable': 'この画面ではサイドタスクを使えません',
+  'toolbar.sideUnavailable': 'サイドバー質問は利用できません: ホストのサイドバーサービスが未準備です',
+  'toolbar.translateUnavailable': '翻訳は利用できません: ホストのモデルサービスが未準備です',
   'sideTask.title': 'サイドで質問',
   'sideTask.placeholder': 'この箇所について質問…',
   'sideTask.send': '送信',
