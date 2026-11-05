@@ -292,39 +292,34 @@ export const ANNOTATIONS_CSS = `
 
 /* "移除全部" on the summary card, second step.
  *
- * The chip has to sit on the title line and still let the hint keep its full
- * width. A flex row cannot do both: whatever width the chip takes is subtracted
- * from the body column for *both* lines, so "悬停查看批注" ellipsised as soon as
- * the chip appeared. The confirm state therefore switches the card to a
- * two-column grid whose second column spans both lines, with the chip dropped
- * into the first row only and the title reserving room for it. Hint below is
- * untouched and nothing is covered. */
-.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  column-gap: 10px;
-  row-gap: 0;
+ * The chip keeps the icon button's corner (absolute, right-anchored) and only
+ * claims a fixed width, so it grows leftwards without touching the card layout:
+ * the badge, the title and the hint stay exactly where they were, with no
+ * reflow and no jitter. Because cardClose already sits in that corner, the
+ * confirm step is the same control in the same place — it just gets wider.
+ *
+ * Fixed rather than shrink-to-fit: the width has to hold "× 确认移除" at the
+ * smallest text size the app uses, and a fixed value keeps the two states
+ * visually interchangeable. */
+.dsq_summary > .dsq_deleteConfirm {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 26px;
+  padding: 0;
+  gap: 0;
+  white-space: nowrap;
 }
 
-.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_summaryIcon {
-  grid-area: 1 / 1 / 3 / 2;
-}
-
-.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_summaryBody {
-  grid-area: 1 / 2 / 3 / 3;
-}
-
-/* Only the title gives up room; the hint keeps the whole column. */
-.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_summaryBody > .dsq_summaryTitle {
-  padding-right: 84px;
-}
-
-.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_deleteConfirm {
-  grid-area: 1 / 2 / 2 / 3;
-  justify-self: end;
-  align-self: center;
-  margin-top: 0;
+.dsq_summary > .dsq_deleteConfirm .dsq_deleteConfirmInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   white-space: nowrap;
 }
 

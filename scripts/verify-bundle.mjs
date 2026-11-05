@@ -634,29 +634,39 @@ function checkCascadePrecedence(code) {
   const problems = []
   const css = code.replace(/\/\*[\s\S]*?\*\//g, "")
 
-  // 1. No rule that styles the confirm chip or its label may take it out of
-  //    flow: absolute positioning is exactly what stopped siblings shifting
-  //    and let the pill sit on top of the card title.
+  // The two confirm surfaces want opposite layouts, on purpose:
+  //   preview card -> in flow, so the edit button slides left as the chip grows
+  //   summary card -> fixed-width corner anchor, so nothing inside it reflows
+  // Mixing them up produced both past failures: a pill covering the title, and
+  // a card whose text jittered on every confirm.
   for (const match of css.matchAll(/([^{}]*)\{([^}]*)\}/g)) {
     const selector = match[1].trim()
     if (!selector.includes("deleteConfirm")) continue
-    if (/position:\s*absolute/.test(match[2])) {
-      problems.push(`${selector} positions the confirm chip absolutely — it must stay in flow so siblings shift`)
+    const absolute = /position:\s*absolute/.test(match[2])
+    const inPreviewCard = selector.includes(".dsq_summaryItemActions")
+    const inSummaryCard = selector.startsWith(".dsq_summary > .dsq_deleteConfirm")
+    if (inPreviewCard && absolute) {
+      problems.push(`${selector} positions the preview-card chip absolutely — it must stay in flow so the edit icon slides`)
+    }
+    if (!inPreviewCard && !inSummaryCard && absolute) {
+      problems.push(`${selector} positions a confirm chip absolutely outside the two known surfaces`)
     }
   }
 
-  // 2. The anti-squeeze guards are what keep the label on one line.
   if (!/\.dsq_summaryItemActions \.dsq_deleteConfirm\s*\{[^}]*flex:\s*none/.test(css)) {
     problems.push(".dsq_summaryItemActions .dsq_deleteConfirm lost flex:none — the row squeezes the chip and the label wraps")
   }
-  if (!/\.dsq_summary:has\(> \.dsq_deleteConfirm\[data-confirming='true'\]\)\s*\{[^}]*display:\s*grid/.test(css)) {
-    problems.push("the summary card no longer switches to the two-line grid — the chip either squeezes the hint or takes a whole row")
+  if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*position:\s*absolute/.test(css)) {
+    problems.push(".dsq_summary > .dsq_deleteConfirm lost its absolute corner anchor — the chip would reflow the card")
   }
-  if (!/\.dsq_summary:has\(> \.dsq_deleteConfirm\[data-confirming='true'\]\) > \.dsq_summaryBody > \.dsq_summaryTitle\s*\{[^}]*padding-right:\s*84px/.test(css)) {
-    problems.push("the title no longer reserves room for the chip — the two would overlap")
+  if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*width:\s*88px/.test(css)) {
+    problems.push(".dsq_summary > .dsq_deleteConfirm lost its fixed width — a shrink-to-fit chip jitters between states")
+  }
+  if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*right:\s*4px/.test(css)) {
+    problems.push(".dsq_summary > .dsq_deleteConfirm is no longer right-anchored in the card corner")
   }
   if (!/\.dsq_cardStack\s*\{[^}]*min-width:\s*210px/.test(css)) {
-    problems.push(".dsq_cardStack lost its 210px floor — the title and the confirm chip no longer fit on one line")
+    problems.push(".dsq_cardStack lost its 210px floor")
   }
   if (!/\.dsq_summaryTitle[^{]*\{[^}]*white-space:\s*nowrap/.test(css)) {
     problems.push("summary title lost nowrap — it stacks one character per line when space is tight")
