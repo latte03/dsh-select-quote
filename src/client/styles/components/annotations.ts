@@ -11,8 +11,9 @@ export const ANNOTATIONS_CSS = `
   left: 8px;
   z-index: 12;
   width: 20%;
-  min-width: 148px;
-  max-width: 220px;
+  /* Wide enough for the title and an inline confirm chip on one line. */
+  min-width: 210px;
+  max-width: 240px;
   align-items: stretch;
   gap: 6px;
   pointer-events: auto;
@@ -291,19 +292,39 @@ export const ANNOTATIONS_CSS = `
 
 /* "移除全部" on the summary card, second step.
  *
- * cardClose carries position:absolute and the confirm class does not, so the
- * button returns to the flex row. In a 148-220px card a full "× 确认移除" chip
- * cannot share the line with the title without squeezing one of them, so the
- * confirm step takes a line of its own: the row wraps and the chip claims the
- * full width. Nothing is hidden and nothing is covered — the card simply grows
- * by one row, and the composer overlay re-measures itself. */
+ * The chip has to sit on the title line and still let the hint keep its full
+ * width. A flex row cannot do both: whatever width the chip takes is subtracted
+ * from the body column for *both* lines, so "悬停查看批注" ellipsised as soon as
+ * the chip appeared. The confirm state therefore switches the card to a
+ * two-column grid whose second column spans both lines, with the chip dropped
+ * into the first row only and the title reserving room for it. Hint below is
+ * untouched and nothing is covered. */
 .dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 0;
 }
 
-.dsq_summary > .dsq_deleteConfirm {
-  flex: 0 0 100%;
-  justify-content: center;
+.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_summaryIcon {
+  grid-area: 1 / 1 / 3 / 2;
+}
+
+.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_summaryBody {
+  grid-area: 1 / 2 / 3 / 3;
+}
+
+/* Only the title gives up room; the hint keeps the whole column. */
+.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_summaryBody > .dsq_summaryTitle {
+  padding-right: 84px;
+}
+
+.dsq_summary:has(> .dsq_deleteConfirm[data-confirming='true']) > .dsq_deleteConfirm {
+  grid-area: 1 / 2 / 2 / 3;
+  justify-self: end;
+  align-self: center;
+  margin-top: 0;
   white-space: nowrap;
 }
 

@@ -649,11 +649,14 @@ function checkCascadePrecedence(code) {
   if (!/\.dsq_summaryItemActions \.dsq_deleteConfirm\s*\{[^}]*flex:\s*none/.test(css)) {
     problems.push(".dsq_summaryItemActions .dsq_deleteConfirm lost flex:none — the row squeezes the chip and the label wraps")
   }
-  if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*flex:\s*0 0 100%/.test(css)) {
-    problems.push(".dsq_summary > .dsq_deleteConfirm lost its own-row basis — the card title gets squeezed again")
+  if (!/\.dsq_summary:has\(> \.dsq_deleteConfirm\[data-confirming='true'\]\)\s*\{[^}]*display:\s*grid/.test(css)) {
+    problems.push("the summary card no longer switches to the two-line grid — the chip either squeezes the hint or takes a whole row")
   }
-  if (!/\.dsq_summary:has\(> \.dsq_deleteConfirm\[data-confirming='true'\]\)\s*\{[^}]*flex-wrap:\s*wrap/.test(css)) {
-    problems.push("the summary card no longer wraps for the confirm chip")
+  if (!/\.dsq_summary:has\(> \.dsq_deleteConfirm\[data-confirming='true'\]\) > \.dsq_summaryBody > \.dsq_summaryTitle\s*\{[^}]*padding-right:\s*84px/.test(css)) {
+    problems.push("the title no longer reserves room for the chip — the two would overlap")
+  }
+  if (!/\.dsq_cardStack\s*\{[^}]*min-width:\s*210px/.test(css)) {
+    problems.push(".dsq_cardStack lost its 210px floor — the title and the confirm chip no longer fit on one line")
   }
   if (!/\.dsq_summaryTitle[^{]*\{[^}]*white-space:\s*nowrap/.test(css)) {
     problems.push("summary title lost nowrap — it stacks one character per line when space is tight")
