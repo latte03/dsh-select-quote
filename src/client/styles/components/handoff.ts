@@ -53,12 +53,13 @@ export const HANDOFF_CSS = `
    white to match the badge ink on the accent fill. The glyph is a data URI
    because the badge is a single element with no room for an inline svg. */
 .dsq_annBadge[data-dsq-ann-robot] {
-  width: 15px;
-  padding: 0;
+  /* Same padding as an ordinal badge, so the two read as one control; the
+     glyph shrinks to the content box (15px min-width - 6px padding). */
+  padding: 0 3px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 11px 11px;
+  background-size: 9px 9px;
 }
 
 /* Arrow badge for a selection sent to another conversation. One glyph, so the
