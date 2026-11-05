@@ -2281,7 +2281,7 @@ ${atomRules}
 .dsq_settings {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
   padding: 2px 0;
 }
 
