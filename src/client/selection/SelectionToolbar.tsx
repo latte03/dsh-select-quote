@@ -135,6 +135,8 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const [menu, setMenu] = useState<MenuState | null>(null)
   /** Latched target picker; its directory is frozen while it is open. */
   const [picker, setPicker] = useState<PickerState | null>(null)
+  /** Mirrors `picker` for callbacks that must not depend on the render value. */
+  const pickerRef = useRef<PickerState | null>(null)
   const [handoffTarget, setHandoffTarget] = useState<TargetSession | null>(null)
   const [handoffBusy, setHandoffBusy] = useState(false)
   const [handoffError, setHandoffError] = useState<string | null>(null)
@@ -234,6 +236,19 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     return true
   }, [])
 
+  /** Keep the ref in lockstep: refresh runs from DOM listeners between renders. */
+  const updatePicker = useCallback((next: PickerState | null): void => {
+    pickerRef.current = next
+    setPicker(next)
+  }, [])
+
+  const closePicker = useCallback((): void => {
+    updatePicker(null)
+    // A picker opened from the menu replaced it; do not leave the auto toolbar
+    // behind in contextmenu mode when the picker closes without a choice.
+    if (!touch && !resolveTriggers(getConfig()).auto) setActive(null)
+  }, [touch, updatePicker])
+
   const hide = useCallback(() => {
     pendingIdRef.current = null
     dismissMenu()
@@ -247,7 +262,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     setActive(null)
     setPhase('idle')
     setComment('')
-    setPicker(null)
+    updatePicker(null)
     setHandoffTarget(null)
     setHandoffBusy(false)
     setHandoffError(null)
@@ -257,7 +272,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     setStatus(null)
     setTranslation(null)
     setTranslateCopied(false)
-  }, [dismissMenu])
+  }, [dismissMenu, updatePicker])
 
   /**
    * Keep what was typed when the comment popover goes away without an explicit
@@ -345,7 +360,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       const fromContent = snapshot.layer.fromContent(snapshot.left, snapshot.top)
       const point = at ?? { x: fromContent.left, y: fromContent.top }
       const current = handoffTargetRef.current
-      setPicker({
+      updatePicker({
         snapshot,
         x: point.x,
         y: point.y,
@@ -357,7 +372,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
             : undefined,
       })
     },
-    [activeSessionId, handoffHost],
+    [activeSessionId, handoffHost, updatePicker],
   )
 
   const cancelHandoff = useCallback(() => {
@@ -416,7 +431,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
 
   const pickHandoffTarget = useCallback(
     (target: TargetSession) => {
-      setPicker(null)
+      updatePicker(null)
       if (phaseRef.current === 'handoff') {
         setHandoffTarget(target)
         setHandoffError(null)
@@ -425,7 +440,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       const latched = activeRef.current
       if (latched) beginHandoff(latched, target)
     },
-    [beginHandoff],
+    [beginHandoff, updatePicker],
   )
 
   /**
@@ -470,8 +485,12 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     // Touch keeps its bottom bar regardless of the trigger mode.
     if (!touch && !resolveTriggers(getConfig()).auto) {
       // The right-click / shortcut menu is a separate entry point: its host
-      // must stay mounted while the selection is still the menu's own.
-      if (phaseRef.current === 'idle' && !menuRef.current) setActive(null)
+      // must stay mounted while the selection is still the menu's own. The
+      // target picker is modal on top of it and must survive refresh passes
+      // triggered by scrolling its list.
+      if (phaseRef.current === 'idle' && !menuRef.current && pickerRef.current === null) {
+        setActive(null)
+      }
       return
     }
     const current = activeRef.current
@@ -966,7 +985,11 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           const defaultTarget = handoffDirectory.defaultTarget
           if (surface === 'menu') {
             const menu = menuRef.current
-            openPicker(snapshot, menu ? { x: menu.x, y: menu.y } : undefined)
+            const at = menu ? { x: menu.x, y: menu.y } : undefined
+            // The picker replaces the menu: keeping both open left the menu
+            // painted above the list and its scroll listener dismissed both.
+            dismissMenu()
+            openPicker(snapshot, at)
           } else if (defaultTarget) {
             beginHandoff(snapshot, defaultTarget)
           } else {
@@ -986,6 +1009,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       beginHandoff,
       beginTranslate,
       copySnapshot,
+      dismissMenu,
       handoffDirectory,
       openLinkSnapshot,
       openPicker,
@@ -1111,7 +1135,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         toolbarRef={toolbarRef}
         commentWrapRef={commentWrapRef}
         commentRef={commentRef}
-        menuOpen={menu !== null}
+        menuOpen={menu !== null || picker !== null}
         onToolbarPointerDown={handleToolbarPointerDown}
         onCommentChange={setComment}
         onCommentKeyDown={handleCommentKeyDown}
@@ -1162,7 +1186,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           y={picker.y}
           touch={touch}
           onPick={pickHandoffTarget}
-          onClose={() => setPicker(null)}
+          onClose={closePicker}
         />
       ) : null}
       {menu ? (

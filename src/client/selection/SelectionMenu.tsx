@@ -69,7 +69,13 @@ export function SelectionMenu({
 
   useEffect(() => {
     const inside = (node: EventTarget | null): boolean =>
-      node instanceof Node && rootRef.current?.contains(node) === true
+      node instanceof Node &&
+      (rootRef.current?.contains(node) === true ||
+        // The target picker is a separate portal opened from this menu.
+        // Scrolling or clicking inside it must not dismiss the menu that
+        // spawned it — otherwise a wheel event closes both surfaces.
+        (node instanceof Element &&
+          node.closest('[data-dsq-target-picker="true"]') !== null))
     const onPointerDown = (event: PointerEvent): void => {
       if (inside(event.target)) return
       onClose()

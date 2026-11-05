@@ -178,7 +178,11 @@ export function useSelectionWatcher({
       if (
         target instanceof Node &&
         (toolbarRef.current?.contains(target) === true ||
-          commentWrapRef.current?.contains(target) === true)
+          commentWrapRef.current?.contains(target) === true ||
+          // The target picker is a sibling portal; scrolling its list is not a
+          // page scroll and must not re-run selection refresh under the user.
+          (target instanceof Element &&
+            target.closest('[data-dsq-target-picker="true"]') !== null))
       ) {
         return
       }
