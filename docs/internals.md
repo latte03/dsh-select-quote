@@ -130,7 +130,7 @@ Each item contains text selected from an earlier message ...
 摘要块、工具条和评论泡都复用宿主的材质/阴影 token（见下），不再有独立的文件卡片几何。
 
 - 深色模式用产品自己的 `body[data-ds-dark-theme]`（由 `dsh-client-ui-layout` 挂在 body 上），**不是** `prefers-color-scheme`；
-- 颜色一律走产品 token，但**不直接写 token 名**：`styles.ts` 的分层是
+- 颜色一律走产品 token，但**不直接写 token 名**：`src/client/styles/` 的分层是（`styles.ts` 只按序拼接与导出）
   1. **token 层**：产品 token 各包一次成 `--dsq-*` 别名（`--dsq-label`、`--dsq-line`、`--dsq-shadow`…），兜底值只在这里出现一遍；别名块挂在 `body` 而不是 `:root`，因为产品在 `body[data-ds-dark-theme]` 上翻转调色板，挂在根元素会把亮色值冻结后继承进深色页；
   2. **原子层**：`.dsq_a_*`（`row` / `col` / `col-end` / `grid-mid` / `ell` / `plain` / `keep` / `grow` / `box` / `inline-row`），由 `ATOMS` 表同时生成 CSS 规则和 `A` 常量，两边不可能对不上；**只放形状，不放数字和颜色**；
   3. **组件层**：带数字的取值都留在这里，注入顺序在原子之后，所以组件规则总能盖住原子；
@@ -306,7 +306,13 @@ src/client/index.tsx               # Client 半入口：注册 Slot、配置跟�
 src/client/config.ts               # 配置默认值/归一化/resolveTriggers + configForms 订阅发布
 src/client/translate.ts            # 目标语言智能解析、本地语言粗判、内置/自定义提示词（纯逻辑）
 src/client/settings/ConfigRow.tsx  # 插件页外层的配置区（划词入口 / 快捷键 / 子代理模式 / 翻译语言、模型、提示词）
-src/client/selection/SelectionToolbar.tsx # 划词控制器：状态机、批注保存、评论/侧边/翻译、动作与快捷键桥（state/open/add）
+src/client/selection/SelectionToolbar.tsx # 划词协调器：选中态、相位机与收尾顺序；动作分发与快捷键桥（state/open/add），各动作的状态与生命周期在同目录 flow hook 里
+src/client/selection/useSelectionMenu.ts # 右键/快捷键菜单：选中快照锁存 + 同步 ref（DOM 监听在渲染之间关闭它）
+src/client/selection/useAnnotationFlow.ts # 批注评论：打开即保存、评论补写、完成/外部关闭、宿主“加入任务”入口
+src/client/selection/useSideQuestion.ts # 侧边提问：问题与模型座、目录解析、发送到 Host、Enter/Escape 手势
+src/client/selection/useHandoffFlow.ts # 放入流程：目标目录与订阅、目标选择器、写入/跳转、取消时的评论记忆
+src/client/selection/useTranslatePopover.ts # 翻译流程：目标语言解析、流式请求与取消、复制反馈、缓存、浮层重排/Escape/焦点
+src/client/selection/useSystemActions.ts # 复制与打开链接：交给系统后收起浮层，失败保留当前表面
 src/client/selection/useSelectionWatcher.ts # 指针/选区/右键/滚动的监听编排（只管何时 refresh）
 src/client/selection/useCommentPlacement.ts # 评论泡与提示条的测量/落位生命周期（`side` / `translate` 相位复用）
 src/client/selection/ToolbarView.tsx # 纯视图：桌面工具条/评论泡、触屏底栏/抽屉、状态提示、侧边提问与翻译面板
@@ -339,7 +345,9 @@ src/client/dom/badge-layout.ts     # 角标碰撞避让的纯几何（右移两�
 src/client/dom/scrollToAnnotation.ts # 点击批注滚动到正文 mark 并闪烁
 src/client/dom/stripSubmissionEcho.ts # 发送回显气泡里剥掉协议块（只改展示）
 src/client/dom/decorateAnnotationDirectives.ts # 模型回的 :dsh-annotation{index="N"} 渲染成可点 chip
-src/client/dom/chipPreview.ts      # chip 的 hover/focus/click 预览 + 正文 mark 的点击/键盘回看（共用浮层）
+src/client/dom/chipPreview.ts      # chip 的 hover/focus/click 预览 + 正文 mark 的点击/键盘回看（浮层状态与生命周期）
+src/client/dom/chipPreviewDom.ts   # 预览的叶子 DOM：标签/正文、图标按钮、内联两步删除
+src/client/dom/preview-anchors.ts  # 预览锚点纯查询：mark/chip 归属消息、摘要卡、flow item、闪烁
 src/client/dom/popoverPlacement.ts # 浮层定位（翻转 + 视口夹取）
 src/client/dom/comment-placement.ts # 评论泡/提示条的纯几何（上下翻转 + 夹取，可单测）
 src/client/dom/composer-host.ts    # composer DOM 约定（[data-composer-card] 等）
@@ -354,11 +362,17 @@ src/client/transcript/TranscriptQuoteCard.tsx # 对话记录里的批注摘要�
 src/client/transcript/quote-registry.ts # 用户消息 flow key → 解析后的 quotes（chip 预览取原文/评论）
 src/client/transcript/UserMessageDisplay.tsx  # 替换用户气泡：委托宿主 UserMessageNodeView，只改文本块并前置摘要块
 src/client/ui/AnnotationCardView.tsx  # 摘要块与悬停列表面板（portal 到 body、内联编辑）
-src/client/ui/icons.tsx               # 内联 lucide 图标（pencil / trash / x / copy / plus / languages / arrow-up-right）
+src/client/ui/icons.tsx               # lucide 图标唯一来源：Shape 存 markup，React 走 LucideIcon、纯 DOM 走 iconMarkup()
 src/client/ui/toast.ts                # body 级瞬时提示（归档目标、放入成功、定位失败）
-src/client/i18n.ts                   # 八份词典（zh/en + ja/es/fr/de/ru/pt）、语言包清单、复数形式挑选、把 t() 转给宿主 bind 结果
+src/client/i18n.ts                   # 语言包清单、复数形式挑选、把 t() 转给宿主 bind 结果；词典在 i18n/<lang>.ts
+src/client/i18n/{zh,en,ja,es,fr,de,ru,pt}.ts # 每种语言一份扁平键词典
 src/client/useLocale.ts              # 语言变化时重渲染（useSyncExternalStore 挂在 ctx.locale）
-src/client/styles.ts               # 全部 CSS，四层：token / 原子 / 组件 / 宿主（模板字符串注入）
+src/client/styles.ts                 # 按序拼接四层 CSS、注入 style、导出 cx / A / 类名映射
+src/client/styles/tokens.ts          # 第 1 层：产品 token 的 --dsq-* 别名
+src/client/styles/atoms.ts           # 第 2 层：形状原子表，规则与类名同源生成
+src/client/styles/components/index.ts # 第 3 层拼接入口：按原顺序组合下列子系统
+src/client/styles/components/{selection,model,annotations,composer,preview,handoff,a11y,settings}.ts # 组件样式，模块顺序即层叠顺序
+src/client/styles/host.ts            # 第 4 层：keyframes、主题翻转与触达宿主 DOM 的规则
 src/client/runtime.ts              # 跨 slot 的运行时共享（sessionId、selection 快捷键桥、sideTask、translate、全局模型目录、配置写入器、子代理会话判定）
 src/client/context.d.ts            # 客户端 Context 服务的类型补充
 scripts/build.mjs                  # host 编译到 lib/index.js、typert 清单到 lib/typert.js，再跑 client tsdown 构建与 ModuleLoader 包装
