@@ -17,6 +17,8 @@ import { clearNativeSelection, type SelectionSnapshot } from '../dom/selection.t
 import { t } from '../i18n.ts'
 import type { ModelChoice } from '../model/types.ts'
 import { runtime } from '../runtime.ts'
+import { getAnnotations, removeAnnotation } from '../state/annotation-store.ts'
+import { selectionKeyOf } from '../state/handoff.ts'
 import { popoverEnter } from './popover-keys.ts'
 import type { SelectionPhase } from './useSelectionWatcher.ts'
 
@@ -28,6 +30,44 @@ export interface SideQuestionInput {
   readonly setActive: (snapshot: SelectionSnapshot) => void
   readonly dismissMenu: () => boolean
   readonly setPhase: (phase: SelectionPhase) => void
+}
+
+/**
+ * Remove the pending draft annotations that stand for this selection.
+ *
+ * A pending item carries every source the selection resolved to; the side send
+ * carries the same locator. Matching on `selectionKeyOf` keeps two annotations
+ * of identical text from different messages apart, and falls back to plain text
+ * when the snapshot has no locator (the selection missed the transcript model).
+ */
+export function consumeQuote(
+  target: {
+    readonly text: string
+    readonly source?: SelectionSnapshot['source']
+  },
+  sessionId?: string,
+): void {
+  const source = target.source
+  const wanted = selectionKeyOf(
+    target.text,
+    source === undefined
+      ? undefined
+      : {
+          text: target.text,
+          messageId: source.messageId,
+          startOffset: source.startOffset,
+          endOffset: source.endOffset,
+        },
+  )
+  for (const item of getAnnotations(sessionId)) {
+    const matches = item.sources.some((candidate) =>
+      // A locator-less snapshot can only match on text.
+      source === undefined
+        ? candidate.text === target.text
+        : selectionKeyOf(candidate.text, candidate) === wanted,
+    )
+    if (matches) removeAnnotation(sessionId, item.id)
+  }
 }
 
 export function useSideQuestion(input: SideQuestionInput) {
@@ -87,6 +127,12 @@ export function useSideQuestion(input: SideQuestionInput) {
       () => {
         setSending(false)
         clearNativeSelection()
+        // The quote just went out with the question, so the pending card that
+        // stands for it must go too. `useSendIntercept` only watches the Host
+        // composer's own send gesture, and this popover lives outside that
+        // card — without this the card would linger and ride along with the
+        // next ordinary message as a duplicate.
+        consumeQuote(snapshot)
         hide()
       },
       (error) => {
