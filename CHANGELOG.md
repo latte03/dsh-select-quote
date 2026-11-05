@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.21](https://github.com/latte03/dsh-select-quote/compare/v0.3.20...v0.3.21) (2026-11-05)
+
+### Features
+
+* 增加同语言隐藏翻译开关 ([17036e2](https://github.com/latte03/dsh-select-quote/commit/17036e2773f2339af8fa4fb79a483c6733ec0a96))
+* 支持将批注放入其他会话 ([2b3bfa4](https://github.com/latte03/dsh-select-quote/commit/2b3bfa49ed186ecab49b3098afe8fca3700a5398))
+
+### Bug Fixes
+
+* 修复右键菜单下会话选择器无法滚动 ([6bb0616](https://github.com/latte03/dsh-select-quote/commit/6bb06166e5ef5a35c61fde41a9a2cf6d78c88e60))
+* 加固会话选择器生命周期与同语言判断 ([bdaeec4](https://github.com/latte03/dsh-select-quote/commit/bdaeec47644e620b3648f6aa9d500851691dde23))
+
 ## [0.3.20](https://github.com/latte03/dsh-select-quote/compare/v0.3.19...v0.3.20) (2026-11-03)
 
 ## [0.3.19](https://github.com/latte03/dsh-select-quote/compare/v0.3.18...v0.3.19) (2026-11-03)
