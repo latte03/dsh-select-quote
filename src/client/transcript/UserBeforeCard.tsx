@@ -87,14 +87,16 @@ export function UserBeforeCard({
   // carry the parent's rpcId, so their cards would show up a second time inside
   // the child — the parent's annotations leaking into a conversation that never
   // wrote them. Keep the decoration to the child's own question.
-  const inherited =
-    sessionId !== undefined &&
-    runtime.isSubagentSession?.(sessionId) === true &&
-    rpcId !== undefined
+  const isSubagent = sessionId !== undefined && runtime.isSubagentSession?.(sessionId) === true
+  const inherited = isSubagent && rpcId !== undefined
 
   return (
     <span ref={hostRef} style={{ display: 'contents' }} data-dsq-user-before="">
-      {quotes !== null && !inherited ? <TranscriptQuoteCard node={{ data: { quotes } }} /> : null}
+      {quotes !== null && !inherited ? (
+        // In a side session the quote was taken by the sidebar agent, so its
+        // mark wears a bot glyph instead of an ordinal.
+        <TranscriptQuoteCard node={{ data: { quotes } }} robot={isSubagent} />
+      ) : null}
     </span>
   )
 }

@@ -26,6 +26,7 @@ import { cleanTextOf, cleanTextRange, overlappingEntries } from './message-text.
 
 const MARK_ATTR = 'data-dsq-ann-mark'
 const INDEX_ATTR = 'data-dsq-ann-index'
+const ROBOT_ATTR = 'data-dsq-ann-robot'
 const ARROW_ATTR = 'data-dsq-ann-arrow'
 const FLASH_MS = 1500
 
@@ -43,7 +44,8 @@ export interface AnnotationJob {
    * `badge` (default) is the ordinal superscript; `arrow` is the single `↗`
    * marker left by a selection sent to another conversation.
    */
-  readonly variant?: 'badge' | 'arrow'
+  /** obot keeps the ordinal slot but paints a bot glyph (side questions). */
+  readonly variant?: 'badge' | 'arrow' | 'robot'
   /** Localized target names for the arrow mark's aria-label. */
   readonly targetLabel?: string
 }
@@ -206,6 +208,10 @@ function createMark(job: AnnotationJob, withIndex: boolean): HTMLSpanElement {
   // Only the last fragment carries the ordinal, so the corner badge shows once.
   if (withIndex) {
     mark.setAttribute(INDEX_ATTR, String(job.index))
+    // A side question's mark keeps the ordinal for lookups and previews but
+    // paints a bot glyph: the passage was quoted by the sidebar agent, not by
+    // an ordinary user annotation.
+    if (job.variant === 'robot') mark.setAttribute(ROBOT_ATTR, 'true')
     makeBadgeInteractive(mark, job.index)
   }
   return mark
@@ -337,6 +343,28 @@ export function refreshAnnotationMarkLabels(): void {
  * never participates in text layout. Collisions are resolved inside each
  * message block, and a stack may not climb into the message above.
  */
+/**
+ * Horizontal distance from a mark's union box to its last line fragment.
+ *
+ * The ordinal badge is pinned at `left: 100%` of the mark box, and an inline
+ * box that wraps spans every line: its right edge is the widest line's. The
+ * badge must instead sit immediately after the final character, so the caller
+ * translates it by this (normally negative) delta.
+ */
+function badgeBaseOffsetX(mark: HTMLElement): number {
+  if (typeof document === 'undefined') return 0
+  const box = mark.getBoundingClientRect()
+  if (box.width === 0 && box.height === 0) return 0
+  const range = document.createRange()
+  range.selectNodeContents(mark)
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 || rect.height > 0)
+  const last = rects[rects.length - 1]
+  if (last === undefined) return 0
+  const delta = last.right - box.right
+  // Ignore sub-pixel noise from fractional layout.
+  return Math.abs(delta) < 1 ? 0 : delta
+}
+
 function layoutBadges(scope: ParentNode): void {
   const marks = Array.from(
     scope.querySelectorAll<HTMLElement>(`[${INDEX_ATTR}], [${ARROW_ATTR}]`),
@@ -344,6 +372,17 @@ function layoutBadges(scope: ParentNode): void {
   for (const mark of marks) {
     mark.style.removeProperty('--dsq-ann-badge-x')
     mark.style.removeProperty('--dsq-ann-badge-y')
+  }
+  // Correct the resting anchor first, for every mark. `getBoundingClientRect`
+  // on an inline element returns the union of its line fragments, so a mark
+  // that wraps reports the *widest* line's right edge — the badge then hangs
+  // off the end of the first line instead of after the last character. The
+  // last client rect of a range over the mark is the final line fragment.
+  const bases = new Map<HTMLElement, number>()
+  for (const mark of marks) {
+    const base = badgeBaseOffsetX(mark)
+    bases.set(mark, base)
+    if (base !== 0) mark.style.setProperty('--dsq-ann-badge-x', `${base}px`)
   }
   if (marks.length < 2) return
   const scroller = marks[0]?.closest('[data-conversation-scroll]')
@@ -375,7 +414,7 @@ function layoutBadges(scope: ParentNode): void {
         return {
           mark,
           index: Number(mark.getAttribute(INDEX_ATTR) ?? 0),
-          x: rect.right + BADGE_MARGIN,
+          x: rect.right + (bases.get(mark) ?? 0) + BADGE_MARGIN,
           y: rect.bottom - BADGE_BOTTOM - BADGE_HEIGHT,
           width: arrow ? 15 : BADGE_WIDTH,
           height: BADGE_HEIGHT,
@@ -388,10 +427,18 @@ function layoutBadges(scope: ParentNode): void {
     const offsets = placeBadges(anchors, { right: rightEdge - 4, top: topEdge })
     anchors.forEach((anchor, i) => {
       const { dx, dy } = offsets[i]
-      if (dx !== 0) anchor.mark.style.setProperty('--dsq-ann-badge-x', `${dx}px`)
+      // The resting base correction is already on the element; the collision
+      // step must add to it, not replace it.
+      const total = (bases.get(anchor.mark) ?? 0) + dx
+      if (total !== 0) anchor.mark.style.setProperty('--dsq-ann-badge-x', `${total}px`)
       if (dy !== 0) anchor.mark.style.setProperty('--dsq-ann-badge-y', `${dy}px`)
     })
   }
+}
+
+/** True when this message row is rendered inside the right sidebar's session pane. */
+function insideSidePane(node: Element): boolean {
+  return node.closest('[data-sidebar-right-session]') !== null
 }
 
 /**
@@ -423,6 +470,11 @@ export function applyAnnotationMarks(
           )
     let decorated = false
     for (const item of items) {
+      // A forked child copies the parent's messages verbatim — same
+      // `data-chat-flow-key`, same text — so a job registered by the parent
+      // card would decorate the copy too. Inside a side pane only the job that
+      // belongs there (the bot-marked side question) may paint.
+      if (job.variant !== 'robot' && insideSidePane(item)) continue
       // Refresh every rendered copy that already carries the mark, including
       // copies after the first one that owns the decoration.
       if (refreshMarkIndex(item, job)) {

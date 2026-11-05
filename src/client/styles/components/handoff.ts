@@ -56,6 +56,13 @@ export const HANDOFF_CSS = `
   cursor: pointer;
 }
 
+/* Side-question mark: same badge slot, a bot glyph instead of the ordinal.
+   Declared after the ordinal rule so it wins on equal specificity. */
+.dsq_annMark[data-dsq-ann-robot]::after {
+  content: "🤖";
+  font-size: 9px;
+}
+
 /* Arrow badge for a selection sent to another conversation. One glyph, so the
    width is fixed instead of digit-based; the box matches the ordinal badge so
    collision offsets stay interchangeable. */
