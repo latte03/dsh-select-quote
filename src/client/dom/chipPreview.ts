@@ -31,6 +31,16 @@ import {
   type OutboundAnnotation,
 } from '../state/handoff.ts'
 import { A, cx, styles } from '../styles.ts'
+import { appendLabel, appendText, iconActionButton, twoStepRemoveButton } from './chipPreviewDom.ts'
+import {
+  flashMessage,
+  flowItem,
+  isVisible,
+  markByOwner,
+  quoteCardFor,
+  quotesOwnerBefore,
+  quotesOwnerOf,
+} from './preview-anchors.ts'
 import { messageQuotes } from '../transcript/quote-registry.ts'
 import { createKbd } from '../ui/Kbd.tsx'
 import { isCoarsePointer } from '../ui/touch.ts'
@@ -50,13 +60,6 @@ const CLOSE_DELAY = 40
 const GAP = 8
 /** Matches the leaving keyframe; the node is detached after it finishes. */
 const EXIT_MS = 120
-/** Lucide arrow-up-right at the icon-button size (edit/trash also 14px). */
-const GO_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>'
-const EDIT_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>'
-const REMOVE_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
 
 let preview: HTMLDivElement | null = null
 let jumpButton: HTMLButtonElement | null = null
@@ -117,70 +120,6 @@ function animatePreviewOut(box: HTMLDivElement): void {
   }, EXIT_MS)
 }
 
-/**
- * The annotated text can sit in an earlier assistant turn while the quotes were
- * serialized into the user turn that sent them. The mark id is built by
- * `TranscriptQuoteCard` as `dqsm_<ownerFlowKey>_<zeroBasedIndex>`, so it — not
- * the mark's physical ancestor — names the message that owns the quotes.
- */
-function quotesOwnerOf(mark: HTMLElement | null): string | null {
-  if (!mark) return null
-  const id = mark.getAttribute('data-dsq-ann-mark') ?? ''
-  const match = /^dqsm_(.+)_\d+$/.exec(id)
-  return match ? match[1] : null
-}
-
-/** The quote card for the user turn that sent the annotation, before the chip. */
-function quotesOwnerBefore(chip: HTMLElement, index: number): string | null {
-  const cards = [...document.querySelectorAll<HTMLElement>('.dsq_tSummary')]
-  for (let i = cards.length - 1; i >= 0; i -= 1) {
-    const card = cards[i]
-    if ((card.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING) === 0) continue
-    const ownerKey = card.closest('[data-chat-flow-key]')?.getAttribute('data-chat-flow-key')
-    if (ownerKey && messageQuotes(ownerKey)?.[index - 1]) return ownerKey
-  }
-  return null
-}
-
-function markByOwner(ownerKey: string, index: number): HTMLElement | null {
-  const id = `dqsm_${ownerKey}_${index - 1}`
-  const marks = [...document.querySelectorAll<HTMLElement>('[data-dsq-ann-mark]')].filter(
-    (mark) => mark.getAttribute('data-dsq-ann-mark') === id,
-  )
-  return (
-    marks.find((mark) => mark.getAttribute('data-dsq-ann-index') === String(index)) ??
-    marks[0] ??
-    null
-  )
-}
-
-function flowItem(messageId: string): HTMLElement | null {
-  for (const item of document.querySelectorAll<HTMLElement>('[data-chat-flow-key]')) {
-    if (item.getAttribute('data-chat-flow-key') === messageId) return item
-  }
-  return null
-}
-
-function quoteCardFor(ownerKey: string): HTMLElement | null {
-  for (const card of document.querySelectorAll<HTMLElement>('.dsq_tSummary')) {
-    if (card.closest('[data-chat-flow-key]')?.getAttribute('data-chat-flow-key') === ownerKey) {
-      return card
-    }
-  }
-  return null
-}
-
-function isVisible(el: HTMLElement | null): el is HTMLElement {
-  if (!el?.isConnected) return false
-  const rect = el.getBoundingClientRect()
-  return rect.width > 0 && rect.height > 0
-}
-
-function flashMessage(el: HTMLElement): void {
-  el.classList.add(styles.annMessageFlash)
-  window.setTimeout(() => el.classList.remove(styles.annMessageFlash), 1400)
-}
-
 function cancelClose(): void {
   if (hideTimer !== 0) window.clearTimeout(hideTimer)
   hideTimer = 0
@@ -220,20 +159,6 @@ function reposition(): void {
   const { top, left } = placePopover(anchor, panel, 'top', GAP)
   preview.style.top = `${top}px`
   preview.style.left = `${left}px`
-}
-
-function appendLabel(parent: HTMLElement, text: string): void {
-  const label = document.createElement('div')
-  label.className = styles.chipPreviewLabel
-  label.textContent = text
-  parent.append(label)
-}
-
-function appendText(parent: HTMLElement, className: string, text: string): void {
-  const node = document.createElement('div')
-  node.className = className
-  node.textContent = text
-  parent.append(node)
 }
 
 function jumpToMark(event: MouseEvent): void {
@@ -360,65 +285,36 @@ function buildPreview(
     const actions = document.createElement('div')
     actions.className = cx(A.row, styles.chipPreviewActions)
     if (withJump) {
-      jumpButton = document.createElement('button')
-      jumpButton.type = 'button'
+      const archived =
+        origin !== undefined && isSessionArchived(origin.sessionId)
+          ? t('handoff.archived', {
+              title: sessionTitleOf(origin.sessionId, origin.title),
+            })
+          : undefined
       // Same icon-button skin as edit/remove, so the title row reads as one row.
-      jumpButton.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
+      jumpButton = iconActionButton(
+        'arrow-up-right',
+        archived ?? t('chip.jumpAria'),
+        archived ? undefined : jumpToMark,
+      )
       jumpButton.setAttribute('data-dsq-chip-jump', 'true')
-      jumpButton.setAttribute('aria-label', t('chip.jumpAria'))
-      jumpButton.title = t('chip.jumpAria')
-      jumpButton.insertAdjacentHTML('afterbegin', GO_ICON)
-      if (origin !== undefined && isSessionArchived(origin.sessionId)) {
-        const archived = t('handoff.archived', {
-          title: sessionTitleOf(origin.sessionId, origin.title),
-        })
-        jumpButton.disabled = true
-        jumpButton.title = archived
-        jumpButton.setAttribute('aria-label', archived)
-      } else {
-        jumpButton.addEventListener('click', jumpToMark)
-      }
+      if (archived !== undefined) jumpButton.disabled = true
       actions.append(jumpButton)
     }
     // Only the composer's pending annotations can be changed here: a durable
     // mark belongs to a sent message, whose quote is history, not editable.
     if (pendingId !== undefined) {
-      const edit = document.createElement('button')
-      edit.type = 'button'
-      edit.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
-      edit.setAttribute('aria-label', t('summary.edit', { index }))
-      edit.title = t('summary.edit', { index })
-      edit.insertAdjacentHTML('afterbegin', EDIT_ICON)
-      edit.addEventListener('click', enterEdit)
-      actions.append(edit)
-
-      const remove = document.createElement('button')
-      remove.type = 'button'
-      remove.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
-      remove.setAttribute('aria-label', t('summary.remove', { index }))
-      remove.title = t('summary.remove', { index })
-      const inner = document.createElement('span')
-      inner.className = styles.deleteConfirmInner
-      inner.insertAdjacentHTML('afterbegin', REMOVE_ICON)
-      const removeLabel = document.createElement('span')
-      removeLabel.className = styles.deleteConfirmLabel
-      removeLabel.textContent = t('handoff.confirmRemove')
-      inner.append(removeLabel)
-      remove.append(inner)
-      remove.addEventListener('click', () => {
-        // Same two-step contract as the handoff preview: the label is already
-        // in the DOM, so flipping the attribute animates it open in place.
-        if (remove.dataset.confirming !== 'true') {
-          remove.dataset.confirming = 'true'
-          remove.className = cx(A.plain, A.inlineRow, styles.deleteConfirm)
-          remove.setAttribute('aria-label', t('handoff.confirmRemove'))
-          remove.title = t('handoff.confirmRemove')
-          return
-        }
-        removeAnnotation(undefined, pendingId)
-        closeChipPreview(false)
-      })
-      actions.append(remove)
+      actions.append(
+        iconActionButton('pencil', t('summary.edit', { index }), enterEdit),
+        twoStepRemoveButton({
+          label: t('summary.remove', { index }),
+          confirmLabel: t('handoff.confirmRemove'),
+          onConfirm: () => {
+            removeAnnotation(undefined, pendingId)
+            closeChipPreview(false)
+          },
+        }),
+      )
     }
     if (actions.childElementCount > 0) head.append(actions)
     return head
@@ -730,63 +626,31 @@ function buildHandoffPreview(group: HandoffGroup): HTMLDivElement {
     const buttons: HTMLButtonElement[] = []
 
     if (record.state === 'pending') {
-      const edit = document.createElement('button')
-      edit.type = 'button'
-      edit.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
-      edit.setAttribute('aria-label', t('handoff.edit'))
-      edit.title = t('handoff.edit')
-      edit.insertAdjacentHTML('afterbegin', EDIT_ICON)
-      edit.addEventListener('click', () => {
-        editingId = record.id
-        editingPreview = true
-        render()
-      })
-      buttons.push(edit)
+      buttons.push(
+        iconActionButton('pencil', t('handoff.edit'), () => {
+          editingId = record.id
+          editingPreview = true
+          render()
+        }),
+      )
     }
 
-    const go = document.createElement('button')
-    go.type = 'button'
-    go.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
-    go.insertAdjacentHTML('afterbegin', GO_ICON)
-    go.setAttribute('aria-label', t('handoff.go'))
-    go.title = t('handoff.go')
-    if (archived) {
-      const archivedText = t('handoff.archived', { title: name })
-      go.disabled = true
-      go.title = archivedText
-      go.setAttribute('aria-label', archivedText)
-    } else {
-      go.addEventListener('click', () => openConversation(record.destination.sessionId))
-    }
+    const go = iconActionButton(
+      'arrow-up-right',
+      archived ? t('handoff.archived', { title: name }) : t('handoff.go'),
+      archived ? undefined : () => openConversation(record.destination.sessionId),
+    )
+    if (archived) go.disabled = true
     buttons.push(go)
 
     if (record.state === 'pending') {
-      const remove = document.createElement('button')
-      remove.type = 'button'
-      remove.className = cx(A.plain, A.gridMid, styles.chipPreviewAction)
-      remove.setAttribute('aria-label', t('handoff.cancelPut'))
-      remove.title = t('handoff.cancelPut')
-      const inner = document.createElement('span')
-      inner.className = styles.deleteConfirmInner
-      inner.insertAdjacentHTML('afterbegin', REMOVE_ICON)
-      const label = document.createElement('span')
-      label.className = styles.deleteConfirmLabel
-      label.textContent = t('handoff.confirmRemove')
-      inner.append(label)
-      remove.append(inner)
-      remove.addEventListener('click', () => {
-        // First press grows the label in place; the second removes. No re-render,
-        // so the width/opacity transition actually runs.
-        if (remove.dataset.confirming !== 'true') {
-          remove.dataset.confirming = 'true'
-          remove.className = cx(A.plain, A.inlineRow, styles.deleteConfirm)
-          remove.setAttribute('aria-label', t('handoff.confirmRemove'))
-          remove.title = t('handoff.confirmRemove')
-          return
-        }
-        removeRecord(record)
-      })
-      buttons.push(remove)
+      buttons.push(
+        twoStepRemoveButton({
+          label: t('handoff.cancelPut'),
+          confirmLabel: t('handoff.confirmRemove'),
+          onConfirm: () => removeRecord(record),
+        }),
+      )
     }
     return buttons
   }
