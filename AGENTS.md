@@ -41,4 +41,4 @@ DeepSeek Harness（dsh）的 web 客户端插件：对话区**划词加批注**�
 - [`docs/internals.md`](docs/internals.md) —— 机制、内部约定、排错（**只记现存**）
 - [`docs/archive/`](docs/archive/) —— 历史调查记录（结论已并入正文，仅供溯源）
 - `CHANGELOG.md` —— commit-and-tag-version 生成，勿手改
-- 面向用户的是 `README.md`（安装 / 用法 / 已知限制）
+- 面向用户的是 `README.md`（简体中文）/ `README.en.md`（English），改功能说明要两份同步
