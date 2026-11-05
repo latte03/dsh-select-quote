@@ -617,72 +617,49 @@ function checkClassCoverage(code) {
   return problems
 }
 
-/** Specificity tuple of one selector (attribute selectors count as classes). */
-function cssSpecificity(selector) {
-  const plain = selector.replace(/\[[^\]]*\]/g, ' X')
-  const ids = (plain.match(/#[A-Za-z]/g) ?? []).length
-  const classes = (plain.match(/\.[A-Za-z]| X/g) ?? []).length
-  const types = (plain.match(/(?:^|[\s>+~])[a-z]/g) ?? []).length
-  return [ids, classes, types]
-}
-
-function compareSpecificity(left, right) {
-  for (let i = 0; i < 3; i += 1) {
-    if (left[i] !== right[i]) return left[i] - right[i]
-  }
-  return 0
-}
-
 /**
- * A later layer must not silently override an earlier one on equal specificity.
+ * The delete-confirm chip must stay IN FLOW.
  *
- * Layer order is source order (`components/index.ts`), so the last module wins
- * every tie. The delete-confirm geometry lived in `annotations.ts` while the
- * shared look lived in `preview.ts` — same [0,3,0], preview later — so the fix
- * looked correct in the source and did nothing in the browser. Guard the pair
- * explicitly: the summary's own confirm rules must outrank the shared ones.
+ * dsh 0.2.2 renders the confirm step as the same button growing a label. That
+ * only reads when the button keeps its place: the sibling edit button slides
+ * left as the label grows, and the summary card gets a row of its own instead
+ * of covering its title. An absolutely positioned overlay (an earlier fix)
+ * broke exactly that: nothing moved and the pill sat on top of the text.
+ *
+ * Two things are asserted here:
+ *   - neither surface positions the confirm button or its label absolutely
+ *   - the guards that keep the chip from being squeezed or wrapped ship
  */
 function checkCascadePrecedence(code) {
   const problems = []
-  /** Prefix of every rule this module owns for the summary's confirm step. */
-  const OUR_LABEL = '.dsq_summaryItemActions .dsq_deleteConfirm'
-  // Comments quote these selectors; strip them first or a match spans the
-  // prose and glues two unrelated rules together.
-  const css = code.replace(/\/\*[\s\S]*?\*\//g, '')
-  const shared = [...css.matchAll(/(^|})\s*([^{}]*\.dsq_deleteConfirm\[data-confirming='true'\][^{]*)\{/g)]
-    .map((match) => match[2].trim())
-    // Only preview.ts's own rule starts at the bare class. Every rule this
-    // module owns carries one of our scopes in front of it.
-    .filter((selector) => selector.startsWith('.dsq_deleteConfirm'))
-  for (const selector of shared) {
-    const theirs = cssSpecificity(selector)
-    for (const ours of [
-      `${OUR_LABEL} .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
-      `${OUR_LABEL}[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
-    ]) {
-      const mine = cssSpecificity(ours)
-      if (compareSpecificity(mine, theirs) <= 0) {
-        problems.push(`${ours} (${mine.join(',')}) does not outrank the shared ${selector} (${theirs.join(',')})`)
-      }
+  const css = code.replace(/\/\*[\s\S]*?\*\//g, "")
+
+  // 1. No rule that styles the confirm chip or its label may take it out of
+  //    flow: absolute positioning is exactly what stopped siblings shifting
+  //    and let the pill sit on top of the card title.
+  for (const match of css.matchAll(/([^{}]*)\{([^}]*)\}/g)) {
+    const selector = match[1].trim()
+    if (!selector.includes("deleteConfirm")) continue
+    if (/position:\s*absolute/.test(match[2])) {
+      problems.push(`${selector} positions the confirm chip absolutely — it must stay in flow so siblings shift`)
     }
   }
-  // Our own geometry must actually be shipped, not merely outrank on paper:
-  // without these, preview.ts's in-flow rule takes over and the label collapses
-  // to one character per line inside the 148px summary card.
-  for (const ours of [
-    `${OUR_LABEL} .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
-    `${OUR_LABEL}[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
-    // The summary card's own remove-all button takes the other code path (it
-    // swaps .dsq_cardClose for .dsq_deleteConfirm, losing its absolute anchor).
-    `.dsq_summary > .dsq_deleteConfirm`,
-    `.dsq_summary > .dsq_deleteConfirm[data-confirming='true'] .dsq_deleteConfirmInner .dsq_deleteConfirmLabel`,
-  ]) {
-    if (!css.includes(ours)) problems.push(`${ours} is missing — the confirm step falls back to the shared in-flow rule`)
+
+  // 2. The anti-squeeze guards are what keep the label on one line.
+  if (!/\.dsq_summaryItemActions \.dsq_deleteConfirm\s*\{[^}]*flex:\s*none/.test(css)) {
+    problems.push(".dsq_summaryItemActions .dsq_deleteConfirm lost flex:none — the row squeezes the chip and the label wraps")
   }
-  if (shared.length === 0) problems.push('the shared delete-confirm rule was not found — cascade check is stale')
+  if (!/\.dsq_summary > \.dsq_deleteConfirm\s*\{[^}]*flex:\s*0 0 100%/.test(css)) {
+    problems.push(".dsq_summary > .dsq_deleteConfirm lost its own-row basis — the card title gets squeezed again")
+  }
+  if (!/\.dsq_summary:has\(> \.dsq_deleteConfirm\[data-confirming='true'\]\)\s*\{[^}]*flex-wrap:\s*wrap/.test(css)) {
+    problems.push("the summary card no longer wraps for the confirm chip")
+  }
+  if (!/\.dsq_summaryTitle[^{]*\{[^}]*white-space:\s*nowrap/.test(css)) {
+    problems.push("summary title lost nowrap — it stacks one character per line when space is tight")
+  }
   return problems
 }
-
 async function checkSendKey() {
   const problems = []
   const { isSubmitKey } = await import(
