@@ -5,7 +5,7 @@ const open = {
   defaultPrevented: false,
   contextMenuEnabled: true,
   touch: false,
-  targetInTranscript: true,
+  targetInSelectionSurface: true,
   pointInSelection: true,
   hasSelection: true,
 }
@@ -19,7 +19,7 @@ describe('shouldOpenSelectionMenu', () => {
     ['defaultPrevented', true],
     ['contextMenuEnabled', false],
     ['touch', true],
-    ['targetInTranscript', false],
+    ['targetInSelectionSurface', false],
     ['pointInSelection', false],
     ['hasSelection', false],
   ] as const)('leaves the event alone when %s blocks it', (field, blocking) => {

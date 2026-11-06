@@ -1,13 +1,16 @@
 /** Selection snapshot used by the floating toolbar. */
 import { getConfig, type ToolbarPlacement } from '../config.ts'
 import { floatingLayerFor, type FloatingLayer } from './floating-layer.ts'
-import { isInsideTranscript, rangeOffsetsInFlowItem, type MessageLocator } from './message-text.ts'
+import { rangeOffsetsInFlowItem, type MessageLocator } from './message-text.ts'
+import { selectionSurfaceOf, type SelectionSurface } from './selection-surface.ts'
 
 export interface SelectionSnapshot {
   /** Trimmed selected text. */
   readonly text: string
+  /** Which selectable surface raised the quote UI. */
+  readonly surface: SelectionSurface
   /**
-   * Toolbar anchor inside the transcript scroll layer: center-x / top-y in
+   * Toolbar anchor inside the surface's scroll layer: center-x / top-y in
    * content coordinates (they move with the scrolled content).
    */
   readonly left: number
@@ -155,8 +158,9 @@ export function selectionFirstLineRect(): DOMRect | null {
 }
 
 /**
- * Read the live selection when it is a non-empty range inside a conversation
- * message and outside the composer / our own chrome.
+ * Read the live selection when it is a non-empty range inside one selectable
+ * surface — a conversation message or a Sidebar file preview — and outside the
+ * composer / our own chrome.
  */
 export function readSelectionSnapshot(toolbarRoot?: HTMLElement | null): SelectionSnapshot | null {
   const selection = window.getSelection()
@@ -166,9 +170,10 @@ export function readSelectionSnapshot(toolbarRoot?: HTMLElement | null): Selecti
   if (!anchorNode || !focusNode) return null
   if (isInsideComposerInput(anchorNode) || isInsideComposerInput(focusNode)) return null
   if (toolbarRoot?.contains(anchorNode) || toolbarRoot?.contains(focusNode)) return null
-  // Only quotes taken from the transcript qualify: selecting the sidebar,
-  // settings or any other app chrome must not raise the toolbar.
-  if (!isInsideTranscript(anchorNode) || !isInsideTranscript(focusNode)) return null
+  // Both ends must live in the same surface: selecting across the transcript
+  // and the Sidebar (or over app chrome) is not a quote.
+  const surface = selectionSurfaceOf(anchorNode)
+  if (surface === null || selectionSurfaceOf(focusNode) !== surface) return null
 
   const text = selection.toString().replace(/\r\n/g, '\n').trim()
   if (!text) return null
@@ -206,6 +211,7 @@ export function readSelectionSnapshot(toolbarRoot?: HTMLElement | null): Selecti
   const anchorHref = anchorElement?.closest('a[href]')?.getAttribute('href') ?? undefined
   return {
     text,
+    surface,
     left: anchor.left,
     top: anchor.top,
     below,

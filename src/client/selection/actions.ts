@@ -127,11 +127,19 @@ export function selectionActions(
           },
         ]
       : []),
-    {
-      key: 'side',
-      icon: 'panel-right',
-      label: t('toolbar.askInSide'),
-      ...(sideDisabled ? { disabled: true, disabledReason: t('toolbar.sideUnavailable') } : {}),
-    },
+    // A file quoted from the Sidebar preview has no conversation message to
+    // fork around, so the side-question entry point stays in the transcript.
+    ...(snapshot.surface === 'sidebarFile'
+      ? []
+      : [
+          {
+            key: 'side' as const,
+            icon: 'panel-right' as const,
+            label: t('toolbar.askInSide'),
+            ...(sideDisabled
+              ? { disabled: true, disabledReason: t('toolbar.sideUnavailable') }
+              : {}),
+          },
+        ]),
   ]
 }

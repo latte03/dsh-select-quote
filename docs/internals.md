@@ -118,9 +118,11 @@ Each item contains text selected from an earlier message ...
 - **触屏**：`(hover: none), (pointer: coarse)` 下提示从「悬停查看批注」切成「点按查看批注」；`pointerup` 的 `pointerType === 'touch'` 时点按摘要展开，`pointerleave` 不触发自动关闭（触屏抬手也会发 pointerleave），点外部关闭。操作按钮在 coarse 指针下为 44px；角落关闭按钮保留视觉尺寸，用 `::after` 扩展命中区。
 - **触屏的划词 chrome**：coarse pointer 下工具条和评论泡改走 `document.body` 级 fixed，不再挂滚动容器。操作条贴 visual viewport 底部（`visualViewport` 算软键盘 inset，再加 `env(safe-area-inset-bottom)`），评论是底部抽屉：带上选中原文预览、输入框 16px 防 iOS 聚焦缩放、按钮 44px，`maxHeight` 跟 visual viewport 走。抽屉打开时不自动聚焦评论框，关闭后也不把焦点抢回 composer，避免软键盘第二次弹出。细指针（鼠标）仍走内容坐标 + 滚动容器裁剪。
 
-**7. 划词只在对话区生效**
+**7. 划词只在对话正文和右侧文件预览生效**
 
-工具条的唯一入口是 `readSelectionSnapshot()`（`SelectionToolbar.tsx` 的 refresh 调它）：选区的 anchor 与 focus 都必须在 `[data-chat-flow-key]` 消息里（`isInsideTranscript()`），且不在输入框 / 工具条自身里。侧边栏、设置、模型选择等其它面板划词不会有任何反应——这几处没有 flow item。宿主侧确认：`ChatView` 给每条消息的 div 写 `data-chat-flow-key: routedNode.key`，分组座位也带同一个属性（属于对话区，允许划词）。右键接管和快捷键桥复用同一个准入：工具条读不到的选区也打不开菜单（见机制 15）。
+工具条的唯一入口是 `readSelectionSnapshot()`（`SelectionToolbar.tsx` 的 refresh 调它）：选区的 anchor 与 focus 必须落在**同一类**可选区——对话消息的 `[data-chat-flow-key]`，或右侧栏文档预览的内容盒 `[data-textpreview-content]`（`dom/selection-surface.ts` 的 `selectionSurfaceOf()` 返回 `transcript` / `sidebarFile`）。文件树 `aside[data-files-navigator]`、预览头、设置、模型选择等仍是应用 chrome：它们要么不在内容盒里，要么被导航区排除。宿主侧确认：`ui-sidebar-documentpreview` 的 `PreviewFrame` 给内容盒写 `data-textpreview-content`，文件树是内容盒里的 `aside[data-files-navigator]`；markdown / code / 纯文本 / PDF 文本层都在内容盒内。两侧落在不同 surface（跨对话与侧栏）的选区不算引用。右键接管和快捷键桥复用同一个准入：工具条读不到的选区也打不开菜单（见机制 15）。
+
+侧栏文件选区没有消息定位（`source` 为空），批注与放入会话按纯文本记录；**动作清单不出现「在侧边提问」**——`selectionActions()` 按 `snapshot.surface === 'sidebarFile'` 跳过该项，浮条与右键菜单共用这一份清单，不会一边有一边没有。浮层宿主也从选区向上找滚动祖先（`floatingLayerFor()` 不再只从 flow item 起步），因此工具条随预览内容滚动、被预览面板裁剪，且不会被主对话 composer 的底边夹住。
 
 **8. 样式与主题**
 
@@ -230,8 +232,8 @@ Each item contains text selected from an earlier message ...
 
 **15. 右键菜单与快捷键：只在选区上接管**
 
-- **判定是纯矩阵**（`dom/menu-trigger.ts`，verify 直接 import 跑用例）：`shouldOpenSelectionMenu()` 要求 `contextMenuEnabled`（`triggerMode` 为 `contextmenu` / `both`）、非触屏、`!event.defaultPrevented`、右键目标在对话区（`isInsideTranscript`）、指针点落在选区的某一段 client rect 内（`pointInRects` 逐行判断，2px 容差）、选区非空，全部为真才接管。工具条/菜单自身和评论阶段不参与。
-- **顺序**：新右键先关掉已打开的本插件菜单；`defaultPrevented` 最先检查，给别的插件让路；只有条件全过、且成功读到快照之后才同步 `preventDefault()` + `stopPropagation()`，再以**指针坐标**开菜单。任何一项不满足就完全不碰事件——选区外右键、编辑器/侧栏右键、别人处理过的右键都保留宿主原生菜单。
+- **判定是纯矩阵**（`dom/menu-trigger.ts`，verify 直接 import 跑用例）：`shouldOpenSelectionMenu()` 要求 `contextMenuEnabled`（`triggerMode` 为 `contextmenu` / `both`）、非触屏、`!event.defaultPrevented`、右键目标在可选区（`selectionSurfaceOf(target)` 非空：对话消息或右侧文件预览内容）、指针点落在选区的某一段 client rect 内（`pointInRects` 逐行判断，2px 容差）、选区非空，全部为真才接管。工具条/菜单自身和评论阶段不参与。
+- **顺序**：新右键先关掉已打开的本插件菜单；`defaultPrevented` 最先检查，给别的插件让路；只有条件全过、且成功读到快照之后才同步 `preventDefault()` + `stopPropagation()`，再以**指针坐标**开菜单。任何一项不满足就完全不碰事件——选区外右键、编辑器 / 文件树右键、别人处理过的右键都保留宿主原生菜单。
 - **菜单**（`SelectionMenu.tsx`）：portal 到 `document.body`，fixed、z 64；`placePopover` 以指针为锚点默认朝下，放不下时翻转/钳位。测量完成前 `visibility:hidden`，避免首帧闪在原点。**指针打开时焦点落在菜单容器本身**（`tabIndex=-1`，没有任何条目预先高亮），快捷键打开时才把焦点给第一项，Enter 可直接执行；两者都在 placement 提交后的 layout effect 里做（hidden 元素无法聚焦）。悬停条目会把焦点移到该条目，键盘与鼠标只保留一个高亮。入场只动 transform（`dsq-menu-in` / `dsq-menu-in-up`），不带 opacity；条目与工具条同源：`selection/actions.ts` 的 `selectionActions(snapshot)` 是唯一清单（打开链接按 `linkTarget` 出现，之后是复制 / 添加批注 / 在侧边提问），工具条内联渲染它、菜单纵向渲染它，两个入口不会各自维护一份。外部 pointerdown / 外部 contextmenu / 页面滚动（捕获）/ resize / window blur / Escape / Tab 关闭；菜单内部的 contextmenu 只 preventDefault，不再弹第二层。键盘支持 ↑/↓ 循环（从容器起步时 ↓ 到第一项、↑ 到最后一项）、Home/End、Enter。
 - **关菜单必须同步失效 ref**：`dismissMenu()` 先把 `menuRef.current` 置空，再 `setMenu(null)`，然后调用方才能 `refresh()`。`refresh()` 在 `contextmenu` 模式里靠 `!menuRef.current` 判断该不该清掉 `active`；只调 `setMenu(null)` 的话 ref 要等下一次 render 才更新，紧跟其后的同步 refresh 会以为菜单还开着，把 `active` 留下，菜单关闭后自动工具条就冒出来（表现为空白点击后闪一下、按住 Esc 时一直悬着）。空白点击、右键改口、设置切换、选中文字变化都走同一个出口；`both` 模式下 refresh 会重新抬起工具条，这是预期。
 - **快捷键桥**：工具条在非触屏时发布 `runtime.selection = { state, open, add }`。`state()` 按当前相位返回 `ready` / `busy`（评论步骤已开）/ `no-selection`。`open` 从**选区首行下边缘**（`selectionFirstLineRect()`）锚定，不用鼠标位置；`add` 读同一份选区后走 `beginComment()`，保存批注并打开评论框，与菜单里的「添加批注」是同一条路径。`shortcut-menu.ts` 在 `shortcut` 开启时向 `ctx.shortcuts` 注册两条命令：`select-quote.openMenu` 与 `select-quote.addToTask`，都是 `regions: ['page']`、`modals: []`、label 走 i18n。默认键位按 profile 写死：桌面 macOS `⌘L` / `⇧⌘L`；桌面 Windows/Linux 的菜单是 primary+shift+L、添加是 primary+shift+Period（不用 Alt：`Ctrl+Alt+L` 在多种布局上是 AltGr 字符，且桌面壳会先于输入区判定消费快捷键）；Web macOS 是 primary+shift+L / primary+alt+L，Web Windows 同桌面；**Web Linux 只能声明宿主允许的组合**，`primary+Slash` 已被宿主的快捷键面板占用，所以菜单是 primary+shift+Comma、添加是 primary+shift+Period（声明 `KeyL` 会让 `register()` 抛错）。`resolve()` 在桥缺失或无选区时返回 `blocked` +「先在对话里选中一段文字」，评论步骤未完成时返回 `blocked` +「先完成当前批注」，否则 `handled` + `run`。注册/注销严格跟随设置，两条命令各自 try/catch；与别的插件撞键时只 warn，工具条与菜单继续可用。设置区的键位列表订阅 `ctx.shortcuts.catalog`（见机制 14），改键或冲突即时反映。

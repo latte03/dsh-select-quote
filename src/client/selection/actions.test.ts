@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { SelectionSnapshot } from '../dom/selection.ts'
 import { selectionActions, splitLabelAt } from './actions.ts'
 
-function snapshot(anchorHref?: string): SelectionSnapshot {
+function snapshot(
+  anchorHref?: string,
+  surface: SelectionSnapshot['surface'] = 'transcript',
+): SelectionSnapshot {
   return {
     text: '一段正文',
+    surface,
     left: 0,
     top: 0,
     below: false,
@@ -44,6 +48,12 @@ describe('selection actions', () => {
     expect(
       selectionActions(snapshot(), undefined, { hideTranslate: true }).map((action) => action.key),
     ).toEqual(['copy', 'add', 'side'])
+  })
+
+  it('omits the side question for a file selected in the Sidebar', () => {
+    expect(
+      selectionActions(snapshot(undefined, 'sidebarFile')).map((action) => action.key),
+    ).toEqual(['copy', 'translate', 'add'])
   })
 })
 

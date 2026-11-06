@@ -1655,7 +1655,7 @@ async function checkMenuTrigger() {
     defaultPrevented: false,
     contextMenuEnabled: true,
     touch: false,
-    targetInTranscript: true,
+    targetInSelectionSurface: true,
     pointInSelection: true,
     hasSelection: true,
   }
@@ -1666,7 +1666,7 @@ async function checkMenuTrigger() {
     ['defaultPrevented', true, 'another listener already prevented the menu'],
     ['contextMenuEnabled', false, 'the right-click entry is off'],
     ['touch', true, 'the pointer is coarse'],
-    ['targetInTranscript', false, 'the target is app chrome'],
+    ['targetInSelectionSurface', false, 'the target is app chrome'],
     ['pointInSelection', false, 'the point is off the selection'],
     ['hasSelection', false, 'the selection is collapsed'],
   ]) {
@@ -2127,6 +2127,14 @@ function checkMenuWiring(code) {
   }
   if (!code.includes('data-dsq-menu') || !code.includes('dsq_ctxMenu')) {
     problems.push('built client has no selection menu surface')
+  }
+  // Selections in a Sidebar file preview share the toolbar but must not offer
+  // the side question, and the file tree beside the preview is not file text.
+  if (!code.includes('data-textpreview-content') || !code.includes('data-files-navigator')) {
+    problems.push('built client does not scope Sidebar file selections to the preview content')
+  }
+  if (!code.includes('sidebarFile')) {
+    problems.push('built client does not distinguish Sidebar file selections — side question would leak in')
   }
   if (!/shortcuts\.register\(/.test(code)) {
     problems.push('built client never registers a shortcut command')

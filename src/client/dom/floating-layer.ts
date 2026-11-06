@@ -24,6 +24,7 @@
  */
 
 import { flowItemOf } from './message-text.ts'
+import { SIDEBAR_FILE_CONTENT } from './selection-surface.ts'
 
 const HOST_ATTR = 'data-dsq-layer'
 /** Below the composer seat (sticky, z-index 7); above in-content stickies (6). */
@@ -128,7 +129,10 @@ function layerFor(scroller: HTMLElement): FloatingLayer {
       const rect = scroller.getBoundingClientRect()
       const top = rect.top + scroller.clientTop
       const rawBottom = top + scroller.clientHeight
-      const cover = composerTop(scroller)
+      // The composer covers the transcript's bottom edge, but it sits beside
+      // the Sidebar, not over a file preview: without this the document-wide
+      // seat lookup would clamp the preview's toolbar to the wrong pane.
+      const cover = scroller.closest(SIDEBAR_FILE_CONTENT) === null ? composerTop(scroller) : null
       const bottom = cover !== null && cover > top && cover < rawBottom ? cover : rawBottom
       return new DOMRect(
         rect.left + scroller.clientLeft,
@@ -194,13 +198,16 @@ export function canHostFloatingLayer(overflowY: string, insideFlowItem: boolean)
   return isScrollContainer(overflowY) && !insideFlowItem
 }
 
-/** Layer for a node inside the transcript (falls back to a body host). */
+/** Layer for a node inside a selectable surface (falls back to a body host). */
 export function floatingLayerFor(node: Node | null): FloatingLayer {
   const item = flowItemOf(node)
   const cached = item ? itemLayers.get(item) : undefined
   if (cached?.host.isConnected) return cached
 
-  let el: HTMLElement | null = item
+  // Start from the message item when there is one; a Sidebar file selection
+  // has no flow item, so the nearest scrollable ancestor is its preview body.
+  let el: HTMLElement | null =
+    item ?? (node instanceof HTMLElement ? node : (node?.parentElement ?? null))
   while (el && el !== document.body) {
     if (canHostFloatingLayer(getComputedStyle(el).overflowY, flowItemOf(el) !== null)) {
       const layer = layerFor(el)

@@ -8,9 +8,9 @@
 
 import { useEffect, type MutableRefObject } from 'react'
 import { getConfig, resolveTriggers } from '../config.ts'
-import { isInsideTranscript } from '../dom/message-text.ts'
 import { pointInRects, shouldOpenSelectionMenu } from '../dom/menu-trigger.ts'
 import { readSelectionSnapshot, type SelectionSnapshot } from '../dom/selection.ts'
+import { selectionSurfaceOf } from '../dom/selection-surface.ts'
 import { isInsideTargetPicker } from './picker-surface.ts'
 
 export type SelectionPhase = 'idle' | 'comment' | 'handoff' | 'side' | 'translate'
@@ -118,8 +118,8 @@ export function useSelectionWatcher({
 
     // Right-click is shared ground: the browser, the desktop shell and other
     // plugins may own it. Only take it when the gesture is unclaimed and aimed
-    // at a live selection inside a message (see dom/menu-trigger.ts); otherwise
-    // the native menu stays exactly as another plugin left it.
+    // at a live selection inside a selectable surface (see dom/menu-trigger.ts);
+    // otherwise the native menu stays exactly as another plugin left it.
     const onContextMenu = (event: MouseEvent) => {
       // A new right-click first retargets or dismisses our own menu. A dismissal
       // that does not open a replacement must also re-sync `active`, or the auto
@@ -148,7 +148,7 @@ export function useSelectionWatcher({
           defaultPrevented: event.defaultPrevented,
           contextMenuEnabled,
           touch,
-          targetInTranscript: isInsideTranscript(target),
+          targetInSelectionSurface: selectionSurfaceOf(target) !== null,
           pointInSelection,
           hasSelection,
         })
