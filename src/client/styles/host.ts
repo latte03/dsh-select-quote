@@ -31,4 +31,19 @@ body[data-ds-dark-theme] .dsq_annMark {
 .dsq_cardPad {
   padding-top: var(--dsq-quote-pad, 88px) !important;
 }
+
+/* The Host markdown renderer makes every image block-level (chat images and
+   screenshots need that), which turns this project's linked README badges into
+   one badge per line. Scope the inline override to exactly these badge URLs;
+   every other markdown image keeps the Host's block layout. The two-attribute
+   forms also tolerate the parser percent-encoding the destination. */
+img[src*="dshopen.org"][src*="dsh-select-quote"],
+img[src*="awesome-dsh-plugin.com/badge"],
+img[src*="img.shields.io/npm/"][src*="dsh-select-quote"],
+img[src*="img.shields.io/badge/DSH-"],
+img[src*="cdn.dsh.so/badge/dsh-select-quote"] {
+  display: inline-block;
+  margin: 0 4px 2px 0;
+  vertical-align: middle;
+}
 `
