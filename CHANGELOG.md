@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.1](https://github.com/latte03/dsh-select-quote/compare/v0.4.0...v0.4.1) (2026-11-06)
+
+### Features
+
+* 划词范围扩展到右侧文件预览 ([843433d](https://github.com/latte03/dsh-select-quote/commit/843433dee48ef9db18b05c97ec398a84a353c19c))
+* 更新 hero.png 和 screenshot-1.png 资源文件 ([4661588](https://github.com/latte03/dsh-select-quote/commit/46615881e48f002bd1ef5465a7be9a4ad9b5bac1))
+
+### Bug Fixes
+
+* 对齐 0.2.2 插件文档规范 ([8ece5ab](https://github.com/latte03/dsh-select-quote/commit/8ece5abced89e1f418b18f9d38ff670c929ab0ee))
+* 让 README 徽章在宿主 Markdown 预览中横排 ([9809480](https://github.com/latte03/dsh-select-quote/commit/9809480bad2b2a15b5183c0f972212c87d21bea1))
+
 ## [0.4.0](https://github.com/latte03/dsh-select-quote/compare/v0.3.21...v0.4.0) (2026-11-05)
 
 ### Features
