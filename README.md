@@ -5,11 +5,8 @@
 [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) 客户端插件：为 DSH 增加**划词批注、引用**、**划词翻译**、**侧边子代理提问**，链接用**默认浏览器**打开。选中的原文连同评论随下一条消息交给模型；对话正文保留高亮与序号角标、可跳回原文，右侧文件预览里的选区按纯文本引用。菜单可划词浮出或从右键打开，翻译可单独指定模型。
 
 [![开放插件市场](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-select-quote.json)](https://dshopen.org/zh/plugins/dsh-select-quote/)
-[![dsh.so risk](https://cdn.dsh.so/badge/dsh-select-quote.svg)](https://www.dsh.so/artifact/dsh-select-quote/?ref=badge)
-[![npm version](https://img.shields.io/npm/v/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
-[![npm monthly downloads](https://img.shields.io/npm/dm/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
-[![license](https://img.shields.io/npm/l/dsh-select-quote)](LICENSE)
 [![awesome-dsh-plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/)
+[![npm monthly downloads](https://img.shields.io/npm/dm/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
 [![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.1-blue)](package.json)
 
 ![dsh-select-quote](https://raw.githubusercontent.com/latte03/dsh-select-quote/main/assets/hero.png)

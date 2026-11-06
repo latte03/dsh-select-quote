@@ -5,11 +5,8 @@
 A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) client plugin: adds **selection annotations and quotes**, **in-place translation**, and **sidebar subagent questions** to DSH, and opens links in your **default browser**. The selected text and your comment ride along with the next message; conversation text keeps its highlight and ordinal mark for jumping back, while a Sidebar file selection is quoted as plain text. The menu can appear on selection or open from the right-click menu, and translation can use its own model.
 
 [![DSH Open Plugins](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-select-quote.json)](https://dshopen.org/zh/plugins/dsh-select-quote/)
-[![dsh.so risk](https://cdn.dsh.so/badge/dsh-select-quote.svg)](https://www.dsh.so/artifact/dsh-select-quote/?ref=badge)
-[![npm version](https://img.shields.io/npm/v/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
-[![npm monthly downloads](https://img.shields.io/npm/dm/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
-[![license](https://img.shields.io/npm/l/dsh-select-quote)](LICENSE)
 [![awesome-dsh-plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/)
+[![npm monthly downloads](https://img.shields.io/npm/dm/dsh-select-quote)](https://www.npmjs.com/package/dsh-select-quote)
 [![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.1-blue)](package.json)
 
 ![dsh-select-quote](https://raw.githubusercontent.com/latte03/dsh-select-quote/main/assets/hero.png)
