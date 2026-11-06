@@ -265,7 +265,7 @@ function applyBody(ctx: Context): void {
                 name: 'plugins.bundle.config',
                 key: PACKAGE_NAME,
                 locale: LOCALE_NS,
-                inject: () => ({ form }),
+                inject: () => ({ configForm: form }),
               },
               ConfigRow,
             ),
@@ -630,7 +630,7 @@ function applyBody(ctx: Context): void {
   })
 
   // Root: always mounted selection toolbar + comment popover.
-  ctx.slots.inject('shell.overlay', () => {
+  ctx.slots.inject('shell.overlay', () =>
     ctx.slots.register(
       {
         name: 'shell.overlay',
@@ -638,11 +638,11 @@ function applyBody(ctx: Context): void {
         order: 100,
       },
       SelectionToolbar,
-    )
-  })
+    ),
+  )
 
   // Session: pending annotation summary inside the composer (~1/5 width).
-  ctx.slots.inject('conversation.input.overlay', () => {
+  ctx.slots.inject('conversation.input.overlay', () =>
     ctx.slots.register(
       {
         name: 'conversation.input.overlay',
@@ -650,11 +650,11 @@ function applyBody(ctx: Context): void {
         order: 20,
       },
       QuoteCard,
-    )
-  })
+    ),
+  )
 
   // Track the active session for the root toolbar (AnnotationPanel also syncs).
-  ctx.slots.inject('conversation.input.overlay', () => {
+  ctx.slots.inject('conversation.input.overlay', () =>
     ctx.slots.register(
       {
         name: 'conversation.input.overlay',
@@ -662,8 +662,8 @@ function applyBody(ctx: Context): void {
         order: 1,
       },
       SessionBridge,
-    )
-  })
+    ),
+  )
 
   // History is rendered entirely by the Host: the annotation block is hidden by
   // the `uiConversation.userText` rule registered above, so the bubble needs no

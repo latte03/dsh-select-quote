@@ -108,10 +108,13 @@ export class SelectQuoteTranslate extends Service {
     })
   }
 
+  // `signal` is the Gateway's injected cancellation parameter, never a wire
+  // argument; the strict Remote signature requires it to be a required,
+  // plainly named parameter.
   async *translate(
     agent: LiveAgent,
     request: TranslateRequest,
-    signal?: AbortSignal,
+    signal: AbortSignal,
   ): AsyncGenerator<TranslateStreamEvent> {
     const services = this.ctx as unknown as HostServices
     const log = loggerOf(services.logger)
@@ -125,14 +128,14 @@ export class SelectQuoteTranslate extends Service {
     const controller = new AbortController()
     let timedOut = false
     const abortFromCaller = (): void => {
-      controller.abort(signal?.reason)
+      controller.abort(signal.reason)
     }
     const timer = setTimeout(() => {
       timedOut = true
       controller.abort(new Error('translation timed out'))
     }, TIMEOUT_MS)
-    if (signal?.aborted) abortFromCaller()
-    else signal?.addEventListener('abort', abortFromCaller, { once: true })
+    if (signal.aborted) abortFromCaller()
+    else signal.addEventListener('abort', abortFromCaller, { once: true })
 
     try {
       if (request.text.trim().length === 0) throw new Error('nothing to translate')
@@ -280,7 +283,7 @@ export class SelectQuoteTranslate extends Service {
         logFailure(log, meta, timeout, routeOf(meta))
         throw timeout
       }
-      if (signal?.aborted) {
+      if (signal.aborted) {
         log?.debug('dsh-select-quote: translation cancelled by the client')
         throw error
       }
@@ -288,7 +291,7 @@ export class SelectQuoteTranslate extends Service {
       throw error
     } finally {
       clearTimeout(timer)
-      signal?.removeEventListener('abort', abortFromCaller)
+      signal.removeEventListener('abort', abortFromCaller)
     }
   }
 }

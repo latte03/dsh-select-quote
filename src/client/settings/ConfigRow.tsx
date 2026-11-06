@@ -40,7 +40,12 @@ export interface ConfigFormController {
 export interface ConfigRowProps {
   /** The Plugins page renders the bundle section with `view: 'page'`. */
   view?: string
-  form?: ConfigFormController
+  /**
+   * The row controller, injected by this entry. Kept off the `form` prop name
+   * because `PluginConfigViewProps.form` is the Host-owned page form; the
+   * bundle page passes no form, so this entry brings its own.
+   */
+  configForm?: ConfigFormController
   /** Translator bound to this slot's locale seat. */
   t?: (key: string) => string
 }
@@ -129,10 +134,10 @@ function Segmented<T extends string>({
   )
 }
 
-export function ConfigRow({ view, form, t: slotTranslate }: ConfigRowProps): ReactNode {
+export function ConfigRow({ view, configForm, t: slotTranslate }: ConfigRowProps): ReactNode {
   useLocale()
-  if (view !== 'page' || form === undefined) return null
-  return <ConfigSection form={form} slotTranslate={slotTranslate} />
+  if (view !== 'page' || configForm === undefined) return null
+  return <ConfigSection form={configForm} slotTranslate={slotTranslate} />
 }
 
 /**

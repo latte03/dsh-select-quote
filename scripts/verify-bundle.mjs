@@ -1284,11 +1284,6 @@ function checkHandoffWiring(code) {
   if (!code.includes('data-dsq-ann-arrow')) {
     problems.push('outbound selections have no arrow mark')
   }
-  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
-  const inject = manifest.dsh?.client?.inject ?? []
-  if (!inject.includes('@deepseek-ai/dsh-client-ui-workspace')) {
-    problems.push('dsh.client.inject does not list the workspace client package')
-  }
   return problems
 }
 
@@ -2018,24 +2013,30 @@ async function checkHostConfig() {
   }
   if (!rejected) problems.push('host Config accepted an unknown triggerMode')
 
-  const inject = manifest.dsh?.client?.inject ?? []
-  for (const spec of [
-    '@deepseek-ai/dsh-client-locale',
-    '@deepseek-ai/dsh-client-shortcuts',
-    '@deepseek-ai/dsh-client-ui-settings',
-    '@deepseek-ai/dsh-client-ui-plugin-manager',
-    '@deepseek-ai/dsh-api-remotes',
-  ]) {
-    if (!inject.includes(spec)) {
-      problems.push(`dsh.client.inject lacks "${spec}" — the settings/shortcut surface may load without its services`)
-    }
-  }
   return problems
 }
 
 /** The settings page and config binding must survive as built, not just in source. */
 function checkConfigWiring(code) {
   const problems = []
+  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  const client = manifest.dsh?.client
+  if (client?.platform !== 'web') {
+    problems.push('dsh.client.platform is not "web"')
+  }
+  // `dsh.client.inject` names package factories that must arrive before this
+  // row materializes. This bundle only requires React seeds; every Harness
+  // service is a Cordis injection, so a nonempty edge list is a load-order
+  // dependency the plugin does not actually need.
+  if ((client?.inject ?? []).length > 0) {
+    problems.push('dsh.client.inject declares module arrival edges the client bundle does not require')
+  }
+  if (manifest.exports?.['./remote'] !== './lib/remote.js') {
+    problems.push('package.json does not export the mountable ./remote contribution')
+  }
+  if (!(manifest.files ?? []).includes('lib/remote.js')) {
+    problems.push('npm files list omits lib/remote.js')
+  }
   if (!/configForms\.get\((?:["']select-quote["']|ROW_ID)\)/.test(code)) {
     problems.push('built client does not read configForms.get(ROW_ID) — settings would never reach the toolbar')
   }
@@ -2075,6 +2076,42 @@ function checkConfigWiring(code) {
   const switchRule = code.match(/\.dsq_switch \{[\s\S]*?\}/)?.[0] ?? ''
   if (!switchRule.includes('border-radius: 999px') || !switchRule.includes('corner-shape: round')) {
     problems.push('the settings switch is not the Host full-round pill (999px + corner-shape: round)')
+  }
+  return problems
+}
+
+/** `./remote` must be a mountable contribution, not just an exported path. */
+async function checkRemoteArtifact() {
+  const problems = []
+  const remotePath = resolve(root, 'lib/remote.js')
+  let contribution
+  try {
+    contribution = (await import(pathToFileURL(remotePath).href)).default
+  } catch (error) {
+    problems.push(`lib/remote.js cannot be imported: ${String(error)}`)
+    return problems
+  }
+  if (contribution?.package !== 'dsh-select-quote') {
+    problems.push('lib/remote.js does not default-export a contribution for dsh-select-quote')
+  }
+  if (!Array.isArray(contribution?.descriptors) || contribution.descriptors.length !== 2) {
+    problems.push('lib/remote.js does not carry both Remote descriptors')
+    return problems
+  }
+  for (const descriptor of contribution.descriptors) {
+    for (const key of ['id', 'service', 'namespace', 'method']) {
+      if (typeof descriptor?.[key] !== 'string' || descriptor[key].length === 0) {
+        problems.push(`Remote descriptor has no ${key}`)
+      }
+    }
+    if (descriptor?.result?.mode !== 'strict') {
+      problems.push(`Remote descriptor ${descriptor?.id ?? '?'} result is not strict`)
+    }
+    for (const parameter of descriptor?.parameters ?? []) {
+      if (parameter?.codec?.mode !== 'strict') {
+        problems.push(`Remote descriptor ${descriptor.id} parameter ${parameter?.name} is not strict`)
+      }
+    }
   }
   return problems
 }
@@ -2156,6 +2193,16 @@ const { ctx, dicts } = mockContext(record, {
 const outcome = module.apply(ctx)
 if (outcome !== undefined) throw new Error('apply() must not return a value')
 
+// Service availability is Cordis injection, not `dsh.client.inject` package
+// edges. Keep the optional services the settings, shortcut, and handoff
+// surfaces wait on visible in the contribution ledger.
+const serviceWiringProblems = []
+for (const label of ['configForms', 'shortcuts', 'sessions, workspaces, uiWorkspace']) {
+  if (!record.some((entry) => entry.kind === 'inject' && entry.label === label)) {
+    serviceWiringProblems.push(`client never waits on the ${label} service`)
+  }
+}
+
 const configFixtureProblems = []
 if (configFixture.subscriberCount() !== 1) {
   configFixtureProblems.push(
@@ -2177,11 +2224,11 @@ if (bundleEntry === undefined) {
   bundleFormProblems.push('the bundle settings section does not inject a form controller')
 } else {
   const injected = bundleEntry.options.inject()
-  if (injected?.form !== configFixture.service.get('select-quote')) {
+  if (injected?.configForm !== configFixture.service.get('select-quote')) {
     bundleFormProblems.push('the bundle settings section injected a form other than the row form')
   }
   for (const method of ['getSnapshot', 'subscribe', 'set']) {
-    if (typeof injected?.form?.[method] !== 'function') {
+    if (typeof injected?.configForm?.[method] !== 'function') {
       bundleFormProblems.push(`the injected form controller has no ${method}()`)
     }
   }
@@ -2338,6 +2385,7 @@ const dictionaryProblems = checkDictionaries(dicts)
 const datasetProblems = checkDatasetKeys(code)
 const observerProblems = checkDirectiveObserver(code)
 const configWiringProblems = checkConfigWiring(code)
+const remoteArtifactProblems = await checkRemoteArtifact()
 const configStoreProblems = await checkConfigStore()
 const menuWiringProblems = checkMenuWiring(code)
 const menuTriggerProblems = await checkMenuTrigger()
@@ -2391,6 +2439,8 @@ if (
   degradeProblems.length > 0 ||
   hostCatalogProblems.length > 0 ||
   configWiringProblems.length > 0 ||
+  remoteArtifactProblems.length > 0 ||
+  serviceWiringProblems.length > 0 ||
   configStoreProblems.length > 0 ||
   menuWiringProblems.length > 0 ||
   menuTriggerProblems.length > 0 ||
@@ -2424,6 +2474,8 @@ if (
   for (const problem of degradeProblems) console.error(`CONFIG FALLBACK: ${problem}`)
   for (const problem of hostCatalogProblems) console.error(`HOST LOCALE CATALOG: ${problem}`)
   for (const problem of configWiringProblems) console.error(`CONFIG WIRING: ${problem}`)
+  for (const problem of remoteArtifactProblems) console.error(`REMOTE: ${problem}`)
+  for (const problem of serviceWiringProblems) console.error(`SERVICE WIRING: ${problem}`)
   for (const problem of configStoreProblems) console.error(`CONFIG STORE: ${problem}`)
   for (const problem of menuWiringProblems) console.error(`MENU WIRING: ${problem}`)
   for (const problem of menuTriggerProblems) console.error(`MENU TRIGGER: ${problem}`)

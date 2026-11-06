@@ -18,7 +18,8 @@ const REMOTE_METHODS = Object.freeze({
 interface SubagentService {
   startActivation(spec: {
     provider: string
-    label?: string
+    /** Required by the Host's activation spec even when the caller omits it. */
+    label: string
     /** Reserved identity; requires a local (continuable) backend. */
     childId?: string
     delivery: 'parent' | 'caller'
@@ -129,7 +130,9 @@ export class SelectQuoteSideTask extends Service {
     }
     const receipt = await subagents.startActivation({
       provider: 'fork',
-      ...(request.label === undefined ? {} : { label: request.label }),
+      // The Host requires a label; the browser always sends one, but a direct
+      // caller must not be able to omit a field the activation spec requires.
+      label: request.label?.trim() || SIDE_TASK_SERVICE,
       ...(childId === undefined ? {} : { childId }),
       delivery: 'caller',
       request: {

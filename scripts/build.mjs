@@ -125,6 +125,43 @@ function buildTypert() {
   console.log(`[dsh-select-quote] wrote ${resolve(libDir, 'typert.js')}`)
 }
 
+/**
+ * Host-for-Client Typert contribution. `README` documents `./remote` as the
+ * mountable entry a Client assembly imports, so it is built as its own ES
+ * module rather than only bundled into the browser half.
+ */
+function buildRemote() {
+  const outDir = resolve(libDir, '.remote-build')
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolveTsdownEntry(),
+      resolve(root, 'src/remote.ts'),
+      '--config',
+      resolve(root, 'tsdown.remote.config.ts'),
+      '--out-dir',
+      outDir,
+    ],
+    { cwd: root, stdio: 'inherit', env: process.env },
+  )
+  if (result.error) {
+    console.error('[dsh-select-quote] failed to build the remote contribution:', result.error)
+    process.exit(1)
+  }
+  if (result.status !== 0) process.exit(result.status ?? 1)
+
+  const output = ['remote.js', 'remote.mjs']
+    .map((name) => resolve(outDir, name))
+    .find((candidate) => existsSync(candidate))
+  if (output === undefined) {
+    console.error('[dsh-select-quote] remote build produced no entry in', outDir)
+    process.exit(1)
+  }
+  copyFileSync(output, resolve(libDir, 'remote.js'))
+  rmSync(outDir, { recursive: true, force: true })
+  console.log(`[dsh-select-quote] wrote ${resolve(libDir, 'remote.js')}`)
+}
+
 function findRawOutput() {  // `exports` of tsdown's config emit either a .js or .cjs depending on format
   // resolution, so probe both instead of assuming one.
   for (const name of ['index.js', 'index.cjs']) {
@@ -162,6 +199,7 @@ ${raw}
 if (process.argv.includes('--watch')) {
   buildHost()
   buildTypert()
+  buildRemote()
   rmSync(buildDir, { recursive: true, force: true })
   const child = spawn(process.execPath, [...tsdownArgs, '--watch'], {
     cwd: root,
@@ -197,6 +235,7 @@ if (process.argv.includes('--watch')) {
 } else {
   buildHost()
   buildTypert()
+  buildRemote()
   const result = spawnSync(process.execPath, tsdownArgs, {
     cwd: root,
     stdio: 'inherit',

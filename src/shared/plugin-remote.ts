@@ -178,7 +178,6 @@ export function createPluginRemote() {
               additionalProperties: false,
             },
           },
-          sourceLocation: { file: 'src/side-task-service.ts', line: 1, column: 1 },
         },
         [TRANSLATE_METHOD]: {
           service: TRANSLATE_SERVICE,
@@ -230,7 +229,6 @@ export function createPluginRemote() {
               additionalProperties: false,
             },
           },
-          sourceLocation: { file: 'src/translate-service.ts', line: 1, column: 1 },
         },
       },
     },
