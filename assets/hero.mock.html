@@ -84,12 +84,19 @@
         filter: blur(18px);
       }
       .window {
-        position: relative; width: 1300px; height: 850px; border-radius: 26px;
-        border: 1px solid rgba(25, 23, 19, 0.16); overflow: hidden;
-        background: #ffffff; color: #0f1115;
+        position: relative;
+        width: 1300px;
+        height: 850px;
+        border-radius: 26px;
+        border: 1px solid rgba(25, 23, 19, 0.16);
+        overflow: hidden;
+        background: #ffffff;
+        color: #0f1115;
         box-shadow: 0 44px 100px rgba(84, 58, 34, 0.28), 0 2px 0 rgba(255, 255, 255, 0.8) inset;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-        font-size: 14px; line-height: 22px; -webkit-font-smoothing: antialiased;
+        font-size: 20px;
+        line-height: 24px;
+        -webkit-font-smoothing: antialiased;
       }
       .titlebar {
         display: flex; align-items: center; gap: 11px; height: 52px; padding: 0 22px;
@@ -98,7 +105,7 @@
       }
       .dot { width: 12px; height: 12px; border-radius: 50%; }
       .dot.r { background: #ff6b6b; } .dot.y { background: #ffd166; } .dot.g { background: #4ade80; }
-      .titlebar span { margin-left: 8px; color: #6b7c93; font-size: 13px; letter-spacing: 0.02em; }
+      .titlebar span { margin-left: 8px; color: #6b7c93; font-size: 16px; letter-spacing: 0.02em; }
       .titlebar .agent-count {
         margin-left: auto; margin-right: 0; display: inline-flex; align-items: center; gap: 6px;
         color: #4176e6; font-size: 12px; background: #eef4ff; border: .5px solid #d7e5ff;
@@ -109,17 +116,28 @@
       /* ---------- main chat ---------- */
       .chat { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 26px 34px 22px; }
       .stream { width: 664px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-      .status { display: flex; align-items: center; gap: 8px; color: #81858c; font-size: 12px; line-height: 18px; }
+      .status {display: flex;align-items: center;gap: 8px;color: #81858c;font-size: 16px;line-height: 18px;}
       .status .n {
-        display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
-        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 6px; font-size: 11px; color: #61666b;
+        display: grid;
+        place-items: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border: .5px solid rgba(0, 0, 0, 0.10);
+        border-radius: 6px;
+        font-size: 14px;
+        color: #61666b;
       }
       .msg p { margin: 9px 0 0; color: #0f1115; }
       .bubble {
-        max-width: 78%; padding: 10px 16px; border-radius: 22px; background: #edf3fe;
-        color: #0f1115; line-height: 22px;
+        max-width: 78%;
+        padding: 10px 16px;
+        border-radius: 22px;
+        background: #edf3fe;
+        color: #0f1115;
+        line-height: 34px;
       }
-      .turn-user { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+      .turn-user {display: flex;flex-direction: column;align-items: flex-end;gap: 15px;}
       .mark {
         position: relative; background: #eaf3ff; border-radius: 2px;
         text-decoration: underline dashed #3b82f6; text-decoration-thickness: 2px;
@@ -133,27 +151,52 @@
         line-height: 1; pointer-events: none;
       }
       .summary {
-        display: flex; align-items: center; gap: 10px; width: 170px; padding: 8px 10px;
-        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 18px; background: #fff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 210px;
+        padding: 8px 10px;
+        border: .5px solid rgba(0, 0, 0, 0.10);
+        border-radius: 18px;
+        background: #fff;
       }
       .summary-icon {
-        flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
-        background: #f5f5f5; color: #4176e6; font-size: 13px; font-weight: 600;
+        flex: none;
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: #f5f5f5;
+        color: #4176e6;
+        font-size: 24px;
+        font-weight: 600;
       }
-      .summary-title { font-size: 14px; font-weight: 500; line-height: 20px; }
-      .summary-hint { font-size: 12px; line-height: 18px; color: #81858c; }
+      .summary-title {font-size: 16px;font-weight: 500;line-height: 24px;}
+      .summary-hint {font-size: 16px;line-height: 22px;color: #81858c;}
       .chip-ref {
-        display: inline-flex; align-items: center; margin: 0 2px; padding: 0 7px;
-        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 6px; background: #f5f5f5;
-        color: #4176e6; font-size: 12px; line-height: 19px; vertical-align: baseline;
+        display: inline-flex;
+        align-items: center;
+        margin: 0 2px;
+        padding: 4px 8px;
+        border: .5px solid rgba(0, 0, 0, 0.10);
+        border-radius: 6px;
+        background: #f5f5f5;
+        color: #4176e6;
+        font-size: 20px;
+        line-height: 24px;
+        vertical-align: baseline;
       }
       .main-composer {
-        width: 664px; margin: auto auto 0; padding: 10px 14px 10px;
-        border-radius: 20px; background: #fff;
+        width: 664px;
+        margin: auto auto 0;
+        padding: 16px 20px 10px;
+        border-radius: 20px;
+        background: #fff;
         box-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05);
       }
       .main-editor { color: #0f1115; min-height: 22px; }
-      .main-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+      .main-row { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; }
       .tools, .trailing { display: flex; align-items: center; gap: 10px; }
       .iconbtn {
         width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
@@ -163,11 +206,17 @@
         display: inline-flex; align-items: center; gap: 5px; color: #dd8629; font-size: 12px;
         padding: 3px 9px; border-radius: 999px; background: rgba(247, 173, 49, 0.10);
       }
-      .picker { display: inline-flex; align-items: center; gap: 6px; color: #61666b; font-size: 12px; }
+      .picker {display: inline-flex;align-items: center;gap: 6px;color: #61666b;font-size: 16px;}
       .picker .pdot { width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, #4176e6, #7aa7ff); }
       .send {
-        width: 30px; height: 30px; border-radius: 999px; background: #0f1115; color: #fff;
-        display: grid; place-items: center; font-size: 15px;
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        background: #0f1115;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 15px;
       }
 
       /* ---------- side task panel ---------- */
@@ -181,51 +230,99 @@
       }
       .side-copy { min-width: 0; }
       .side-tag {
-        display: inline-flex; align-items: center; gap: 6px; color: #2f6fed; font-size: 11px;
-        font-weight: 600; letter-spacing: 0.04em; background: #eaf1ff;
-        border: .5px solid #d7e5ff; border-radius: 999px; padding: 3px 9px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #2f6fed;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        background: #eaf1ff;
+        border: .5px solid #d7e5ff;
+        border-radius: 999px;
+        padding: 3px 9px;
       }
       .side-title {
-        margin-top: 8px; font-size: 13px; font-weight: 600; line-height: 20px;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        margin-top: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 24px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
-      .side-sub { margin-top: 2px; color: #81858c; font-size: 11px; line-height: 16px; }
+      .side-sub {margin-top: 2px;color: #81858c;font-size: 14px;line-height: 24px;}
       .side-close {
-        flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
-        color: #81858c; border: .5px solid rgba(0, 0, 0, 0.08);
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        color: #81858c;
+        border: .5px solid rgba(0, 0, 0, 0.08);
+        font-size: 24px;
       }
       .side-body {
-        flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 16px 16px 8px; overflow: hidden;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        padding: 16px 16px 8px;
+        overflow: hidden;
       }
       .quote-card {
-        display: flex; gap: 10px; padding: 10px 11px; background: #fff;
-        border: .5px solid rgba(0, 0, 0, 0.10); border-radius: 14px;
+        display: flex;
+        gap: 10px;
+        padding: 10px 11px;
+        background: #fff;
+        border: .5px solid rgba(0, 0, 0, 0.10);
+        border-radius: 14px;
       }
       .quote-badge {
-        flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center;
-        background: #eef4ff; color: #4176e6; font-size: 12px; font-weight: 600;
+        flex: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        background: #eef4ff;
+        color: #4176e6;
+        font-size: 24px;
+        font-weight: 600;
       }
-      .quote-label { color: #81858c; font-size: 11px; line-height: 16px; }
-      .quote-text { color: #0f1115; font-size: 12.5px; line-height: 19px; margin-top: 2px; }
+      .quote-label {color: #81858c;font-size: 16px;line-height: 16px;}
+      .quote-text {color: #0f1115;font-size: 16.5px;line-height: 24px;margin-top: 2px;}
       .side-user {
         align-self: flex-end; max-width: 92%; padding: 9px 13px; border-radius: 18px;
         background: #edf3fe; font-size: 13px; line-height: 20px;
       }
-      .side-answer { font-size: 13px; line-height: 21px; color: #0f1115; }
+      .side-answer {font-size: 20px;line-height: 30px;color: #0f1115;}
       .side-answer p + p { margin-top: 8px; }
       .side-meta {
-        display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
-        color: #81858c; font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+        color: #81858c;
+        font-size: 16px;
       }
       .side-meta .mdot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; }
       .side-composer {
-        margin: 0 14px 14px; padding: 10px 11px 9px; background: #fff; border-radius: 18px;
+        margin: 0 14px 22px;
+        padding: 20px 20px 12px;
+        background: #fff;
+        border-radius: 18px;
         box-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.16), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05);
       }
-      .side-editor { color: #9aa0a8; font-size: 12.5px; line-height: 19px; min-height: 19px; }
-      .side-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+      .side-editor {color: #9aa0a8;font-size: 20px;line-height: 19px;min-height: 19px;}
+      .side-row { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; }
       .side-picker {
-        display: inline-flex; align-items: center; gap: 5px; color: #61666b; font-size: 11.5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: #61666b;
+        font-size: 16px;
       }
       .side-picker .pdot { width: 11px; height: 11px; border-radius: 50%; background: linear-gradient(135deg, #4176e6, #7aa7ff); }
       .side-send {
@@ -296,11 +393,10 @@
                 <div class="main-row">
                   <div class="tools">
                     <span class="iconbtn">＋</span>
-                    <span class="iconbtn">◌</span>
                     <span class="mode">△ 完全访问</span>
                   </div>
                   <div class="trailing">
-                    <span class="picker"><span class="pdot"></span>DeepSeek-V4-Flash⌄</span>
+                    <span class="picker"><span class="pdot"></span>DeepSeek-V4-Flash</span>
                     <span class="send">↑</span>
                   </div>
                 </div>
@@ -317,14 +413,16 @@
                 <span class="side-close">×</span>
               </div>
               <div class="side-body">
-                <div class="quote-card">
-                  <div class="quote-badge">1</div>
-                  <div>
-                    <div class="quote-label">选中的文本</div>
-                    <div class="quote-text">选中的原文和评论会随下一条消息交给模型</div>
+                <div class="turn-user">
+                  <div class="summary">
+                    <div class="summary-icon">1</div>
+                    <div>
+                      <div class="summary-title">1 条批注</div>
+                      <div class="summary-hint">悬停查看批注</div>
+                    </div>
                   </div>
+                  <div class="bubble">这块原文和评论，具体是怎么一起发出去的？</div>
                 </div>
-                <div class="side-user">这块原文和评论，具体是怎么一起发出去的？</div>
                 <div class="side-answer">
                   <p>它们会随下一条消息发送：原文与评论进入协议块，正文只剩一个 <span class="chip-ref">批注 1</span> 标记。</p>
                   <p>我这边是 fork 出来的子代理，回答不会插回主会话。</p>
@@ -334,7 +432,7 @@
               <div class="side-composer">
                 <div class="side-editor">就这段原文继续追问…</div>
                 <div class="side-row">
-                  <span class="side-picker"><span class="pdot"></span>DeepSeek-V4-Flash⌄</span>
+                  <span class="side-picker"><span class="pdot"></span>DeepSeek-V4-Flash</span>
                   <span class="side-send">↑</span>
                 </div>
               </div>
@@ -343,5 +441,195 @@
         </div>
       </div>
     </div>
-  </body>
+  <!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+<!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+<!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+<!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+<!-- Code injected by live-server -->
+<script>
+	// <![CDATA[  <-- For SVG support
+	if ('WebSocket' in window) {
+		(function () {
+			function refreshCSS() {
+				var sheets = [].slice.call(document.getElementsByTagName("link"));
+				var head = document.getElementsByTagName("head")[0];
+				for (var i = 0; i < sheets.length; ++i) {
+					var elem = sheets[i];
+					var parent = elem.parentElement || head;
+					parent.removeChild(elem);
+					var rel = elem.rel;
+					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
+						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
+						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+					}
+					parent.appendChild(elem);
+				}
+			}
+			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
+			var address = protocol + window.location.host + window.location.pathname + '/ws';
+			var socket = new WebSocket(address);
+			socket.onmessage = function (msg) {
+				if (msg.data == 'reload') window.location.reload();
+				else if (msg.data == 'refreshcss') refreshCSS();
+			};
+			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
+				console.log('Live reload enabled.');
+				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
+			}
+		})();
+	}
+	else {
+		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
+	}
+	// ]]>
+</script>
+</body>
 </html>
