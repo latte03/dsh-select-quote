@@ -11,7 +11,7 @@
 
 import { findAnnotationMarkBefore, flashAnnotationMark } from './annotate-text.ts'
 import { runtime } from '../runtime.ts'
-import { badgeContainsPoint, badgeHitBox } from './badge-layout.ts'
+import { badgeContainsPoint, badgeElementBox, badgeHitBox } from './badge-layout.ts'
 import { placePopover } from './popoverPlacement.ts'
 import { scrollToAnnotation } from './scrollToAnnotation.ts'
 import { popoverEnter } from '../selection/popover-keys.ts'
@@ -893,11 +893,23 @@ export function bindAnnotationMarkPreview(): () => void {
     // The badge is the only click target; the marked prose stays selectable.
     // Keyboard/AT activation reports detail 0 and no usable coordinates.
     if (event.detail !== 0) {
-      const offset = {
-        dx: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-x')) || 0,
-        dy: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-y')) || 0,
-      }
-      const box = badgeHitBox(mark.getBoundingClientRect(), arrow ? 0 : index, offset)
+      // Hit-test against the badge element's own rect: it is painted at
+      // coordinates measured by `placeBadge()`, so the box is exact, while a
+      // geometric reconstruction from the mark's rect drifts on a wrapped mark
+      // (that rect is the union of the line fragments). Marks whose badge has
+      // not been attached yet keep the reconstructed box.
+      const badge = mark.querySelector<HTMLElement>(`.${styles.annBadge}`)
+      const badgeRect = badge?.getBoundingClientRect()
+      const box =
+        badgeRect !== undefined && (badgeRect.width > 0 || badgeRect.height > 0)
+          ? badgeElementBox(badgeRect)
+          : (() => {
+              const offset = {
+                dx: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-x')) || 0,
+                dy: Number.parseFloat(mark.style.getPropertyValue('--dsq-ann-badge-y')) || 0,
+              }
+              return badgeHitBox(mark.getBoundingClientRect(), arrow ? 0 : index, offset)
+            })()
       if (!badgeContainsPoint(box, event.clientX, event.clientY)) return
     }
     const selection = window.getSelection()

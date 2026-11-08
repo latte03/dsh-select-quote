@@ -45,8 +45,15 @@ export const HANDOFF_CSS = `
   /* Above the native selection highlight and the background of a later mark:
      both otherwise paint over the badge when their ranges meet. */
   z-index: 2;
-  /* The mark stays the click target; the badge is decoration. */
-  pointer-events: none;
+  /* The badge is the click target that opens the annotation preview; the
+     marked prose stays selectable (the bridge from chipPreview.ts rejects any
+     click that misses the badge's own box). It must not be transparent to
+     pointer events: the pill is painted outside the mark's line boxes at the
+     end of the text, so a pass-through click lands on the paragraph and the
+     mark never sees it — that is what silenced the preview after the badge
+     became a real element. */
+  pointer-events: auto;
+  cursor: pointer;
   /* Never part of a text selection. Otherwise Ctrl+A or a drag across the
      sentence includes the glyph, and the native highlight paints a coloured
      box behind a badge that is meant to look like a superscript label. */

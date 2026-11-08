@@ -2,11 +2,11 @@
  * Collision layout for the ordinal badges that ride at the end of an
  * annotation mark.
  *
- * Badges are pseudo-elements anchored to the last fragment of their mark, so
- * two annotations ending at the same text offset produce identical anchors and
- * one badge paints over the other. This module resolves only the geometry; the
- * caller measures anchors and applies the returned offsets as CSS custom
- * properties, keeping the text flow untouched.
+ * Badges are real elements anchored to the last fragment of their mark, so two
+ * annotations ending at the same text offset produce identical anchors and one
+ * badge paints over the other. This module resolves only the geometry; the
+ * caller measures anchors and applies the returned offsets to each badge's own
+ * transform, keeping the text flow untouched.
  */
 
 export interface BadgeAnchor {
@@ -83,6 +83,29 @@ export function badgeHitBox(
 
 export function badgeContainsPoint(box: BadgeBox, x: number, y: number): boolean {
   return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
+}
+
+/**
+ * Hit box of a badge that is a real element, from its own client rect.
+ *
+ * Preferred over `badgeHitBox()`: the badge is painted at measured coordinates
+ * (`placeBadge()` writes a transform), so its rect is the truth. A mark's own
+ * rect is the union of its line fragments, which makes a geometric
+ * reconstruction drift by hundreds of pixels once the mark wraps — the click
+ * then lands outside the reconstructed box and the preview never opens.
+ */
+export function badgeElementBox(rect: {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}): BadgeBox {
+  return {
+    left: rect.left - HIT_SLOP,
+    top: rect.top - HIT_SLOP,
+    right: rect.right + HIT_SLOP,
+    bottom: rect.bottom + HIT_SLOP,
+  }
 }
 
 function overlaps(a: BadgeAnchor, b: BadgeAnchor): boolean {

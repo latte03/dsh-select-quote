@@ -883,8 +883,39 @@ function checkTranscriptSurfaces(code) {
   if (code.includes('dsq_tCardStack')) {
     problems.push('per-annotation transcript cards are back — one block with a hover list is the contract')
   }
+  // The badge is the only mouse target that opens a mark's preview, and it is
+  // painted at measured coordinates OUTSIDE the mark's line boxes. Make it
+  // transparent to pointer events and the click falls through to the
+  // paragraph, `closest('[data-dsq-ann-mark]')` misses, and the preview goes
+  // silent — exactly what happened when the badge became a real element.
+  //
+  // The hit box has to come from the badge element itself: a mark's own rect is
+  // the union of its line fragments, so a reconstructed box drifts hundreds of
+  // pixels on a wrapped mark and rejects a click that did land on the badge.
+  const badgeCss = code.replace(/\/\*[\s\S]*?\*\//g, "")
+  const badgeRules = [...badgeCss.matchAll(/([^{}]*)\{([^}]*)\}/g)].filter(([, selector]) =>
+    selector.includes('.dsq_annBadge'),
+  )
+  if (badgeRules.length === 0) {
+    problems.push('the annotation badge has no CSS rule')
+  }
+  for (const [, selector, body] of badgeRules) {
+    if (/pointer-events:\s*none/.test(body)) {
+      problems.push(
+        `${selector.trim()} is transparent to pointer events — clicks fall through to the paragraph and the mark preview never opens`,
+      )
+    }
+  }
+  if (!badgeRules.some(([, , body]) => /pointer-events:\s*auto/.test(body))) {
+    problems.push('the annotation badge is not a click target — pointer-events:auto is missing')
+  }
   if (!code.includes('--dsq-ann-badge-x') || !code.includes('--dsq-ann-badge-y')) {
     problems.push('badge collision offsets are not wired into the annotation mark')
+  }
+  if (!code.includes('badgeElementBox')) {
+    problems.push(
+      'the mark preview hit test does not use the badge element box — a reconstructed box misses the badge on a wrapped mark',
+    )
   }
   if (!code.includes('dsh-select-quote: mark preview') || !code.includes('mark.previewAria')) {
     problems.push('transcript marks have no click/keyboard preview')

@@ -3,6 +3,7 @@ import {
   BADGE_HEIGHT,
   BADGE_WIDTH,
   badgeContainsPoint,
+  badgeElementBox,
   badgeHitBox,
   badgeWidth,
   placeBadges,
@@ -90,5 +91,25 @@ describe('badge hit box', () => {
     const box = badgeHitBox(mark, 1)
     expect(badgeContainsPoint(box, 180, 95)).toBe(false)
     expect(badgeContainsPoint(box, 230, 95)).toBe(false)
+  })
+})
+
+describe('badge element box', () => {
+  // A wrapped mark's own rect is the union of its line fragments, so the
+  // painted badge can sit far from it. The element's rect is the only box that
+  // follows the pill, and it is what the click bridge now uses.
+  const painted = { left: 200, top: 80, right: 215, bottom: 95 }
+
+  it('follows the painted pill with the same 3px slop', () => {
+    const box = badgeElementBox(painted)
+    expect(badgeContainsPoint(box, 207, 88)).toBe(true)
+    expect(badgeContainsPoint(box, 198, 88)).toBe(true)
+    expect(badgeContainsPoint(box, 218, 88)).toBe(true)
+  })
+
+  it('still rejects the prose around the pill', () => {
+    const box = badgeElementBox(painted)
+    expect(badgeContainsPoint(box, 190, 88)).toBe(false)
+    expect(badgeContainsPoint(box, 207, 70)).toBe(false)
   })
 })
