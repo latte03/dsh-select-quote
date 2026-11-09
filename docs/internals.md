@@ -241,6 +241,12 @@ Each item contains text selected from an earlier message ...
 - **快捷键桥**：工具条在非触屏时发布 `runtime.selection = { state, open, add }`。`state()` 按当前相位返回 `ready` / `busy`（评论步骤已开）/ `no-selection`。`open` 从**选区首行下边缘**（`selectionFirstLineRect()`）锚定，不用鼠标位置；`add` 读同一份选区后走 `beginComment()`，保存批注并打开评论框，与「批注」主键是同一条路径（默认留在当前会话）。`shortcut-menu.ts` 在 `shortcut` 开启时向 `ctx.shortcuts` 注册两条命令：`select-quote.openMenu` 与 `select-quote.addToTask`，都是 `regions: ['page']`、`modals: []`、label 走 i18n。默认键位按 profile 写死：桌面 macOS `⌘L` / `⇧⌘L`；桌面 Windows/Linux 的菜单是 primary+shift+L、添加是 primary+shift+Period（不用 Alt：`Ctrl+Alt+L` 在多种布局上是 AltGr 字符，且桌面壳会先于输入区判定消费快捷键）；Web macOS 是 primary+shift+L / primary+alt+L，Web Windows 同桌面；**Web Linux 只能声明宿主允许的组合**，`primary+Slash` 已被宿主的快捷键面板占用，所以菜单是 primary+shift+Comma、添加是 primary+shift+Period（声明 `KeyL` 会让 `register()` 抛错）。`resolve()` 在桥缺失或无选区时返回 `blocked` +「先在对话里选中一段文字」，评论步骤未完成时返回 `blocked` +「先完成当前批注」，否则 `handled` + `run`。注册/注销严格跟随设置，两条命令各自 try/catch；与别的插件撞键时只 warn，工具条与菜单继续可用。设置区的键位列表订阅 `ctx.shortcuts.catalog`（见机制 14），改键或冲突即时反映。
 - **桌面原生菜单**：Harness 的 Electron 主进程在 `webContents.on('context-menu')` 里对任何非空 selection 弹原生 Copy 菜单。渲染进程在 `contextmenu` 里同步 `preventDefault()` 会抑制它（2026-10-23 在 Harness 0.2.1-rc.2 实测：命中选区时只有本插件的菜单；点选区外时本插件不接管，原生 Copy 照常弹出）。这条依赖 Chromium 的 contextmenu 默认行为；宿主若改成异步或独立通道弹菜单，必须重新验证。
 - **边界**：触屏没有右键，也不发布快捷键桥（底部操作条仍然是唯一入口）；`triggerMode` 只影响入口，「批注」之后的所有流程与原来一致。
+- **键位速查**（README 只留一句指向这里；应用内「设置 → 快捷键」显示的是同一份 catalog 的**实际生效**键位，改键以那里为准）：
+
+  | 操作 | 桌面 macOS | 桌面 Win/Linux | Web macOS | Web Windows | Web Linux |
+  |---|---|---|---|---|---|
+  | 打开划词菜单 | `⌘L` | `Ctrl+Shift+L` | `⇧⌘L` | `Ctrl+Shift+L` | `Ctrl+Shift+,` |
+  | 批注 | `⇧⌘L` | `Ctrl+Shift+.` | `⌥⌘L` | `Ctrl+Shift+.` | `Ctrl+Shift+.` |
 
 **16. 侧边提问：先输入，发送时才创建 fork 子代理**
 

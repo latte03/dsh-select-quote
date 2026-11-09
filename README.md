@@ -1,6 +1,4 @@
-# dsh-select-quote
-
-简体中文 | [English](README.en.md)
+# dsh-select-quote · [English](README.en.md)
 
 [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) 客户端插件：划词批注与引用、就地翻译、侧边子代理提问。选中的原文连同评论随下一条消息交给模型，正文留下高亮与角标、可跳回原文。
 
@@ -20,33 +18,15 @@
 - **侧边子代理**：就某段原文单独追问，不打断主会话，可独立选模型，也可复用同一个
 - **八种界面语言**：简体中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português
 
-## 安装
+## 使用
 
-网页版：
+**安装**：`dsh plugin --profile web add dsh-select-quote`，再 `dsh --profile web`。桌面版在应用内输入包名安装后重启。
 
-```bash
-dsh plugin --profile web add dsh-select-quote
-dsh --profile web
-```
+**批注**：选中文字点「批注」即保存，`Enter` 或 `⌘/Ctrl + Enter` 提交、`Shift + Enter` 换行；点「N 条批注」可编辑或跳回；下拉挑会话后「放入」或「放入并前往」。
 
-桌面版在应用内输入 `dsh-select-quote` 安装后重启。开发命令（`check` / `sync:web` / `release`）、发布流程与内部约定见 [`docs/internals.md`](docs/internals.md)。
+**设置**：插件页 → `dsh-select-quote`，配置分五个 tab（入口 / 按钮 / 翻译 / 侧边提问 / 快捷键），每项自带说明，记住上次那一组。**至少留一枚按钮**——全部关掉工具条就空了，最后一个开关会拒绝关闭并给出提示。
 
-## 用法
-
-选中文字点「批注」即保存，`Enter` 或 `⌘/Ctrl + Enter` 提交、`Shift + Enter` 换行；点「N 条批注」可编辑或跳回；下拉挑会话后「放入」或「放入并前往」。
-
-| 操作 | 桌面 macOS | 桌面 Win/Linux | Web macOS | Web Windows | Web Linux |
-|---|---|---|---|---|---|
-| 打开划词菜单 | `⌘L` | `Ctrl+Shift+L` | `⇧⌘L` | `Ctrl+Shift+L` | `Ctrl+Shift+,` |
-| 批注 | `⇧⌘L` | `Ctrl+Shift+.` | `⌥⌘L` | `Ctrl+Shift+.` | `Ctrl+Shift+.` |
-
-## 设置
-
-插件页 → `dsh-select-quote`，配置分五个 tab：**入口**（触发方式、浮层位置、并入官方浮层）、**按钮**（四枚开关）、**翻译**（目标语言、同语言隐藏、模型、提示词）、**侧边提问**（子代理复用）、**快捷键**。每项自带说明，记住上次那一组。
-
-**至少留一枚按钮**：全部关掉工具条就空了，最后一个开关会拒绝关闭并给出提示。
-
-限制、依赖与已知问题见 [`docs/limitations.md`](docs/limitations.md)。
+**快捷键**见 [`docs/internals.md`](docs/internals.md) 的机制 15（应用内「设置 → 快捷键」显示的是实际生效键位）；**限制与已知问题**见 [`docs/limitations.md`](docs/limitations.md)；开发命令与内部约定同样在 `docs/internals.md`。
 
 ## License
 

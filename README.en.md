@@ -1,6 +1,4 @@
-# dsh-select-quote
-
-[简体中文](README.md) | English
+# dsh-select-quote · [简体中文](README.md)
 
 A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) client plugin: selection annotations and quotes, in-place translation, and sidebar subagent questions. The selected text and your comment ride along with the next message; the text keeps its highlight and ordinal mark for jumping back.
 
@@ -20,33 +18,15 @@ A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/q
 - **Sidebar subagents**: ask about one passage without interrupting the main conversation; pick a separate model, or reuse the same subagent
 - **Eight UI languages**: 简体中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português
 
-## Install
-
-Web:
-
-```bash
-dsh plugin --profile web add dsh-select-quote
-dsh --profile web
-```
-
-Desktop: enter `dsh-select-quote` inside the app, then restart the client. Development commands (`check` / `sync:web` / `release`), publishing and the internal conventions live in [`docs/internals.md`](docs/internals.md).
-
 ## Usage
 
-Click **Annotate** on a selection and it is saved at once; `Enter` or `⌘/Ctrl + Enter` submits, `Shift + Enter` adds a line. Click "N annotations" to edit or jump back. In the chevron panel, **Send** keeps you here and **Send and open** goes to the target.
+**Install**: `dsh plugin --profile web add dsh-select-quote`, then `dsh --profile web`. On the desktop build, enter the package name inside the app and restart.
 
-| Action | Desktop macOS | Desktop Win/Linux | Web macOS | Web Windows | Web Linux |
-|---|---|---|---|---|---|
-| Open selection menu | `⌘L` | `Ctrl+Shift+L` | `⇧⌘L` | `Ctrl+Shift+L` | `Ctrl+Shift+,` |
-| Annotate | `⇧⌘L` | `Ctrl+Shift+.` | `⌥⌘L` | `Ctrl+Shift+.` | `Ctrl+Shift+.` |
+**Annotate**: click **Annotate** on a selection and it is saved at once; `Enter` or `⌘/Ctrl + Enter` submits, `Shift + Enter` adds a line. Click "N annotations" to edit or jump back. In the chevron panel, **Send** keeps you here and **Send and open** goes to the target.
 
-## Settings
+**Settings**: plugin page → `dsh-select-quote`; the settings sit behind five tabs (Entry / Buttons / Translation / Side task / Shortcuts), each row explains itself, and the last tab you opened is remembered. **Keep at least one button on** — with every switch off the toolbar is empty, so the last switch refuses to turn off and says why.
 
-Plugin page → `dsh-select-quote`; the settings sit behind five tabs — **Entry** (trigger, placement, host-surface merge), **Buttons** (four switches), **Translation** (target, same-language hiding, model, prompt), **Side task** (subagent reuse) and **Shortcuts**. Each row explains itself, and the last tab you opened is remembered.
-
-**Keep at least one button on**: with every switch off the toolbar is empty, so the last switch refuses to turn off and says why.
-
-Limitations, host version requirements and known issues live in [`docs/limitations.md`](docs/limitations.md).
+**Shortcuts** are listed in mechanism 15 of [`docs/internals.md`](docs/internals.md) (the in-app Settings → Shortcuts shows the keys actually in effect); **limitations** live in [`docs/limitations.md`](docs/limitations.md); development commands and internal conventions are in `docs/internals.md` too.
 
 ## License
 
