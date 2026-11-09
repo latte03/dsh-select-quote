@@ -25,6 +25,14 @@ import { runtime } from '../runtime.ts'
 import { LanguageMenu } from '../selection/LanguageMenu.tsx'
 import { getShortcutRows, subscribeShortcutRows } from '../shortcut-menu.ts'
 import { styles } from '../styles.ts'
+import { SettingsTabs } from './SettingsTabs.tsx'
+import {
+  panelId,
+  readStoredGroup,
+  storeGroup,
+  tabId,
+  type SettingsGroupId,
+} from './settingsGroups.ts'
 import {
   DEFAULT_TRANSLATE_PROMPT,
   LANGUAGE_LABELS,
@@ -211,6 +219,16 @@ function ConfigSection({
    */
   const [keepOneNotice, setKeepOneNotice] = useState(false)
   /**
+   * Which group is on screen. Remembered across visits: the slot unmounts when
+   * the user leaves the plugins page, and a settings page is opened to change
+   * one known thing — reopening on the first tab loses that thread.
+   */
+  const [group, setGroup] = useState<SettingsGroupId>(readStoredGroup)
+  const selectGroup = useCallback((next: SettingsGroupId): void => {
+    setGroup(next)
+    storeGroup(next)
+  }, [])
+  /**
    * Every button switch goes through here instead of `form.set`: turning the
    * last one off would leave the toolbar with nothing but the gear and the
    * Host's pill with only its own quote cell — indistinguishable from a plugin
@@ -231,290 +249,327 @@ function ConfigSection({
 
   return (
     <div className={styles.settings}>
-      <div className={styles.settingsSection}>
-        <div className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.trigger')}</span>
-          <span className={styles.settingsHint}>{t('settings.triggerHint')}</span>
-        </div>
-        <Segmented
-          name="dsq-trigger-mode"
-          ariaLabel={t('settings.trigger')}
-          choices={CHOICES}
-          value={current.triggerMode}
-          label={(mode) => t(`settings.trigger.${mode}`)}
-          onChange={(mode) => void form.set('triggerMode', mode)}
-        />
-      </div>
-      {/* A right-click-only setup has no floating toolbar, so its side is not
-          a meaningful choice; the row appears with auto / both. Merging into
-          the Host's pill removes the toolbar for the same reason. */}
-      {current.triggerMode === 'contextmenu' || current.mergeHostSurface ? null : (
-        <div className={styles.settingsSection}>
-          <div className={styles.settingsCopy}>
-            <span className={styles.settingsLabel}>{t('settings.toolbarPlacement')}</span>
-            <span className={styles.settingsHint}>{t('settings.toolbarPlacementHint')}</span>
+      <SettingsTabs group={group} onSelect={selectGroup} t={t} />
+      {group === 'entry' ? (
+        <div
+          className={styles.group}
+          role="tabpanel"
+          id={panelId('entry')}
+          aria-labelledby={tabId('entry')}
+        >
+          <div className={styles.settingsSection}>
+            <div className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.trigger')}</span>
+              <span className={styles.settingsHint}>{t('settings.triggerHint')}</span>
+            </div>
+            <Segmented
+              name="dsq-trigger-mode"
+              ariaLabel={t('settings.trigger')}
+              choices={CHOICES}
+              value={current.triggerMode}
+              label={(mode) => t(`settings.trigger.${mode}`)}
+              onChange={(mode) => void form.set('triggerMode', mode)}
+            />
           </div>
-          <Segmented
-            name="dsq-toolbar-placement"
-            ariaLabel={t('settings.toolbarPlacement')}
-            choices={PLACEMENT_CHOICES}
-            value={current.toolbarPlacement}
-            label={(placement) => t(`settings.toolbarPlacement.${placement}`)}
-            onChange={(placement) => void form.set('toolbarPlacement', placement)}
-          />
-        </div>
-      )}
-      <div className={styles.settingsSection}>
-        <div className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.buttons')}</span>
-          <span className={styles.settingsHint}>{t('settings.buttonsHint')}</span>
-        </div>
-      </div>
-      <label className={styles.settingsSwitchRow}>
-        <span className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.showAnnotate')}</span>
-          <span className={styles.settingsHint}>{t('settings.showAnnotateHint')}</span>
-        </span>
-        <span className={styles.switch} data-on={current.showAnnotate}>
-          <input
-            type="checkbox"
-            className={styles.srOnly}
-            aria-label={t('settings.showAnnotate')}
-            checked={current.showAnnotate}
-            onChange={(event) => {
-              const next = event.target.checked
-              if (next === current.showAnnotate) return
-              void setSwitch('showAnnotate', next)
-            }}
-          />
-          <span className={styles.switchTrack} aria-hidden="true" />
-        </span>
-      </label>
-      <label className={styles.settingsSwitchRow}>
-        <span className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.showCopy')}</span>
-          <span className={styles.settingsHint}>{t('settings.showCopyHint')}</span>
-        </span>
-        <span className={styles.switch} data-on={current.showCopy}>
-          <input
-            type="checkbox"
-            className={styles.srOnly}
-            aria-label={t('settings.showCopy')}
-            checked={current.showCopy}
-            onChange={(event) => {
-              const next = event.target.checked
-              if (next === current.showCopy) return
-              void setSwitch('showCopy', next)
-            }}
-          />
-          <span className={styles.switchTrack} aria-hidden="true" />
-        </span>
-      </label>
-      <label className={styles.settingsSwitchRow}>
-        <span className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.showTranslate')}</span>
-          <span className={styles.settingsHint}>{t('settings.showTranslateHint')}</span>
-        </span>
-        <span className={styles.switch} data-on={current.showTranslate}>
-          <input
-            type="checkbox"
-            className={styles.srOnly}
-            aria-label={t('settings.showTranslate')}
-            checked={current.showTranslate}
-            onChange={(event) => {
-              const next = event.target.checked
-              if (next === current.showTranslate) return
-              void setSwitch('showTranslate', next)
-            }}
-          />
-          <span className={styles.switchTrack} aria-hidden="true" />
-        </span>
-      </label>
-      <label className={styles.settingsSwitchRow}>
-        <span className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.showAskInSide')}</span>
-          <span className={styles.settingsHint}>{t('settings.showAskInSideHint')}</span>
-        </span>
-        <span className={styles.switch} data-on={current.showAskInSide}>
-          <input
-            type="checkbox"
-            className={styles.srOnly}
-            aria-label={t('settings.showAskInSide')}
-            checked={current.showAskInSide}
-            onChange={(event) => {
-              const next = event.target.checked
-              if (next === current.showAskInSide) return
-              void setSwitch('showAskInSide', next)
-            }}
-          />
-          <span className={styles.switchTrack} aria-hidden="true" />
-        </span>
-      </label>
-      {keepOneNotice ? (
-        <p className={styles.settingsNotice} role="status">
-          {t('settings.keepOneButton')}
-        </p>
-      ) : null}
-      <div className={styles.settingsDivider} aria-hidden="true" />
-      <label className={styles.settingsSwitchRow}>
-        <span className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.mergeHostSurface')}</span>
-          <span className={styles.settingsHint}>{t('settings.mergeHostSurfaceHint')}</span>
-        </span>
-        <span className={styles.switch} data-on={current.mergeHostSurface}>
-          <input
-            type="checkbox"
-            className={styles.srOnly}
-            aria-label={t('settings.mergeHostSurface')}
-            checked={current.mergeHostSurface}
-            onChange={(event) => {
-              const next = event.target.checked
-              if (next === current.mergeHostSurface) return
-              void form.set('mergeHostSurface', next)
-            }}
-          />
-          <span className={styles.switchTrack} aria-hidden="true" />
-        </span>
-      </label>
-      <div className={styles.settingsDivider} aria-hidden="true" />
-      <label className={styles.settingsSwitchRow}>
-        <span className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.shortcut')}</span>
-          <span className={styles.settingsHint}>{t('settings.shortcutHint')}</span>
-        </span>
-        <span className={styles.switch} data-on={current.shortcut}>
-          <input
-            type="checkbox"
-            className={styles.srOnly}
-            aria-label={t('settings.shortcut')}
-            checked={current.shortcut}
-            onChange={(event) => {
-              const next = event.target.checked
-              if (next === current.shortcut) return
-              void form.set('shortcut', next)
-            }}
-          />
-          <span className={styles.switchTrack} aria-hidden="true" />
-        </span>
-      </label>
-      {current.shortcut ? (
-        <ul className={styles.settingsShortcuts} aria-label={t('settings.shortcutListAria')}>
-          {shortcuts.length === 0 ? (
-            <li className={styles.settingsHint}>{t('settings.shortcutUnavailable')}</li>
-          ) : (
-            shortcuts.map((row) => (
-              <li key={row.id} className={styles.settingsShortcutRow}>
-                <span className={styles.settingsShortcutName}>{row.label}</span>
-                <span className={styles.settingsShortcutKeys}>
-                  {row.enabled ? (
-                    row.keys.length > 0 ? (
-                      <kbd className={styles.keycap}>{row.keys.join('')}</kbd>
-                    ) : (
-                      t('settings.shortcutUnbound')
-                    )
-                  ) : (
-                    t('settings.shortcutConflict')
-                  )}
-                </span>
-              </li>
-            ))
+          {/* A right-click-only setup has no floating toolbar, so its side is not
+              a meaningful choice; the row appears with auto / both. Merging into
+              the Host's pill removes the toolbar for the same reason. */}
+          {current.triggerMode === 'contextmenu' || current.mergeHostSurface ? null : (
+            <div className={styles.settingsSection}>
+              <div className={styles.settingsCopy}>
+                <span className={styles.settingsLabel}>{t('settings.toolbarPlacement')}</span>
+                <span className={styles.settingsHint}>{t('settings.toolbarPlacementHint')}</span>
+              </div>
+              <Segmented
+                name="dsq-toolbar-placement"
+                ariaLabel={t('settings.toolbarPlacement')}
+                choices={PLACEMENT_CHOICES}
+                value={current.toolbarPlacement}
+                label={(placement) => t(`settings.toolbarPlacement.${placement}`)}
+                onChange={(placement) => void form.set('toolbarPlacement', placement)}
+              />
+            </div>
           )}
-        </ul>
+          <label className={styles.settingsSwitchRow}>
+            <span className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.mergeHostSurface')}</span>
+              <span className={styles.settingsHint}>{t('settings.mergeHostSurfaceHint')}</span>
+            </span>
+            <span className={styles.switch} data-on={current.mergeHostSurface}>
+              <input
+                type="checkbox"
+                className={styles.srOnly}
+                aria-label={t('settings.mergeHostSurface')}
+                checked={current.mergeHostSurface}
+                onChange={(event) => {
+                  const next = event.target.checked
+                  if (next === current.mergeHostSurface) return
+                  void form.set('mergeHostSurface', next)
+                }}
+              />
+              <span className={styles.switchTrack} aria-hidden="true" />
+            </span>
+          </label>
+        </div>
       ) : null}
-      <div className={styles.settingsDivider} aria-hidden="true" />
-      <div className={styles.settingsSection}>
-        <div className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.sideTaskMode')}</span>
-          <span className={styles.settingsHint}>{t('settings.sideTaskModeHint')}</span>
+      {group === 'buttons' ? (
+        <div
+          className={styles.group}
+          role="tabpanel"
+          id={panelId('buttons')}
+          aria-labelledby={tabId('buttons')}
+        >
+          <span className={styles.settingsHint}>{t('settings.buttonsHint')}</span>
+          <label className={styles.settingsSwitchRow}>
+            <span className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.showAnnotate')}</span>
+              <span className={styles.settingsHint}>{t('settings.showAnnotateHint')}</span>
+            </span>
+            <span className={styles.switch} data-on={current.showAnnotate}>
+              <input
+                type="checkbox"
+                className={styles.srOnly}
+                aria-label={t('settings.showAnnotate')}
+                checked={current.showAnnotate}
+                onChange={(event) => {
+                  const next = event.target.checked
+                  if (next === current.showAnnotate) return
+                  void setSwitch('showAnnotate', next)
+                }}
+              />
+              <span className={styles.switchTrack} aria-hidden="true" />
+            </span>
+          </label>
+          <label className={styles.settingsSwitchRow}>
+            <span className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.showCopy')}</span>
+              <span className={styles.settingsHint}>{t('settings.showCopyHint')}</span>
+            </span>
+            <span className={styles.switch} data-on={current.showCopy}>
+              <input
+                type="checkbox"
+                className={styles.srOnly}
+                aria-label={t('settings.showCopy')}
+                checked={current.showCopy}
+                onChange={(event) => {
+                  const next = event.target.checked
+                  if (next === current.showCopy) return
+                  void setSwitch('showCopy', next)
+                }}
+              />
+              <span className={styles.switchTrack} aria-hidden="true" />
+            </span>
+          </label>
+          <label className={styles.settingsSwitchRow}>
+            <span className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.showTranslate')}</span>
+              <span className={styles.settingsHint}>{t('settings.showTranslateHint')}</span>
+            </span>
+            <span className={styles.switch} data-on={current.showTranslate}>
+              <input
+                type="checkbox"
+                className={styles.srOnly}
+                aria-label={t('settings.showTranslate')}
+                checked={current.showTranslate}
+                onChange={(event) => {
+                  const next = event.target.checked
+                  if (next === current.showTranslate) return
+                  void setSwitch('showTranslate', next)
+                }}
+              />
+              <span className={styles.switchTrack} aria-hidden="true" />
+            </span>
+          </label>
+          <label className={styles.settingsSwitchRow}>
+            <span className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.showAskInSide')}</span>
+              <span className={styles.settingsHint}>{t('settings.showAskInSideHint')}</span>
+            </span>
+            <span className={styles.switch} data-on={current.showAskInSide}>
+              <input
+                type="checkbox"
+                className={styles.srOnly}
+                aria-label={t('settings.showAskInSide')}
+                checked={current.showAskInSide}
+                onChange={(event) => {
+                  const next = event.target.checked
+                  if (next === current.showAskInSide) return
+                  void setSwitch('showAskInSide', next)
+                }}
+              />
+              <span className={styles.switchTrack} aria-hidden="true" />
+            </span>
+          </label>
+          {keepOneNotice ? (
+            <p className={styles.settingsNotice} role="status">
+              {t('settings.keepOneButton')}
+            </p>
+          ) : null}
         </div>
-        <Segmented
-          name="dsq-side-task-mode"
-          ariaLabel={t('settings.sideTaskMode')}
-          choices={SIDE_TASK_CHOICES}
-          value={current.sideTaskMode}
-          label={(mode) => t(`settings.sideTaskMode.${mode}`)}
-          onChange={(mode) => void form.set('sideTaskMode', mode)}
-        />
-      </div>
-      <div className={styles.settingsDivider} aria-hidden="true" />
-      <div className={styles.settingsSection}>
-        <div className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.translateTarget')}</span>
-          <span className={styles.settingsHint}>{t('settings.translateTargetHint')}</span>
+      ) : null}
+      {group === 'shortcut' ? (
+        <div
+          className={styles.group}
+          role="tabpanel"
+          id={panelId('shortcut')}
+          aria-labelledby={tabId('shortcut')}
+        >
+          <label className={styles.settingsSwitchRow}>
+            <span className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.shortcut')}</span>
+              <span className={styles.settingsHint}>{t('settings.shortcutHint')}</span>
+            </span>
+            <span className={styles.switch} data-on={current.shortcut}>
+              <input
+                type="checkbox"
+                className={styles.srOnly}
+                aria-label={t('settings.shortcut')}
+                checked={current.shortcut}
+                onChange={(event) => {
+                  const next = event.target.checked
+                  if (next === current.shortcut) return
+                  void form.set('shortcut', next)
+                }}
+              />
+              <span className={styles.switchTrack} aria-hidden="true" />
+            </span>
+          </label>
+          {current.shortcut ? (
+            <ul className={styles.settingsShortcuts} aria-label={t('settings.shortcutListAria')}>
+              {shortcuts.length === 0 ? (
+                <li className={styles.settingsHint}>{t('settings.shortcutUnavailable')}</li>
+              ) : (
+                shortcuts.map((row) => (
+                  <li key={row.id} className={styles.settingsShortcutRow}>
+                    <span className={styles.settingsShortcutName}>{row.label}</span>
+                    <span className={styles.settingsShortcutKeys}>
+                      {row.enabled ? (
+                        row.keys.length > 0 ? (
+                          <kbd className={styles.keycap}>{row.keys.join('')}</kbd>
+                        ) : (
+                          t('settings.shortcutUnbound')
+                        )
+                      ) : (
+                        t('settings.shortcutConflict')
+                      )}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          ) : null}
         </div>
-        <LanguageMenu
-          value={current.translateTarget}
-          options={languageOptions}
-          ariaLabel={t('settings.translateTarget')}
-          triggerClassName={styles.settingsSelect}
-          onChange={(target) => void form.set('translateTarget', target)}
-        />
-      </div>
-      <label className={styles.settingsSwitchRow}>
-        <span className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.translateHideSameLanguage')}</span>
-          <span className={styles.settingsHint}>
-            {t('settings.translateHideSameLanguageHint')}
-          </span>
-        </span>
-        <span className={styles.switch} data-on={current.translateHideSameLanguage}>
-          <input
-            type="checkbox"
-            className={styles.srOnly}
-            aria-label={t('settings.translateHideSameLanguage')}
-            checked={current.translateHideSameLanguage}
-            onChange={(event) => {
-              const next = event.target.checked
-              if (next === current.translateHideSameLanguage) return
-              void form.set('translateHideSameLanguage', next)
-            }}
-          />
-          <span className={styles.switchTrack} aria-hidden="true" />
-        </span>
-      </label>
-      <div className={styles.settingsSection}>
-        <div className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.translateModel')}</span>
-          <span className={styles.settingsHint}>{t('settings.translateModelHint')}</span>
+      ) : null}
+      {group === 'side' ? (
+        <div
+          className={styles.group}
+          role="tabpanel"
+          id={panelId('side')}
+          aria-labelledby={tabId('side')}
+        >
+          <div className={styles.settingsSection}>
+            <div className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.sideTaskMode')}</span>
+              <span className={styles.settingsHint}>{t('settings.sideTaskModeHint')}</span>
+            </div>
+            <Segmented
+              name="dsq-side-task-mode"
+              ariaLabel={t('settings.sideTaskMode')}
+              choices={SIDE_TASK_CHOICES}
+              value={current.sideTaskMode}
+              label={(mode) => t(`settings.sideTaskMode.${mode}`)}
+              onChange={(mode) => void form.set('sideTaskMode', mode)}
+            />
+          </div>
         </div>
-        <div className={styles.settingsModel}>
-          <ModelSelect
-            directory={catalogue}
-            value={translateModel}
-            onChange={(choice) => {
-              // Two fields, two revisions; a partial write normalizes back to
-              // "follow the conversation" instead of pairing a wrong route.
-              void (async () => {
-                await form.set('translateProvider', choice?.provider ?? '')
-                await form.set('translateModel', choice?.model ?? '')
-              })()
-            }}
-          />
+      ) : null}
+      {group === 'translate' ? (
+        <div
+          className={styles.group}
+          role="tabpanel"
+          id={panelId('translate')}
+          aria-labelledby={tabId('translate')}
+        >
+          <div className={styles.settingsSection}>
+            <div className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.translateTarget')}</span>
+              <span className={styles.settingsHint}>{t('settings.translateTargetHint')}</span>
+            </div>
+            <LanguageMenu
+              value={current.translateTarget}
+              options={languageOptions}
+              ariaLabel={t('settings.translateTarget')}
+              triggerClassName={styles.settingsSelect}
+              onChange={(target) => void form.set('translateTarget', target)}
+            />
+          </div>
+          <label className={styles.settingsSwitchRow}>
+            <span className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.translateHideSameLanguage')}</span>
+              <span className={styles.settingsHint}>
+                {t('settings.translateHideSameLanguageHint')}
+              </span>
+            </span>
+            <span className={styles.switch} data-on={current.translateHideSameLanguage}>
+              <input
+                type="checkbox"
+                className={styles.srOnly}
+                aria-label={t('settings.translateHideSameLanguage')}
+                checked={current.translateHideSameLanguage}
+                onChange={(event) => {
+                  const next = event.target.checked
+                  if (next === current.translateHideSameLanguage) return
+                  void form.set('translateHideSameLanguage', next)
+                }}
+              />
+              <span className={styles.switchTrack} aria-hidden="true" />
+            </span>
+          </label>
+          <div className={styles.settingsSection}>
+            <div className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.translateModel')}</span>
+              <span className={styles.settingsHint}>{t('settings.translateModelHint')}</span>
+            </div>
+            <div className={styles.settingsModel}>
+              <ModelSelect
+                directory={catalogue}
+                value={translateModel}
+                onChange={(choice) => {
+                  // Two fields, two revisions; a partial write normalizes back to
+                  // "follow the conversation" instead of pairing a wrong route.
+                  void (async () => {
+                    await form.set('translateProvider', choice?.provider ?? '')
+                    await form.set('translateModel', choice?.model ?? '')
+                  })()
+                }}
+              />
+            </div>
+          </div>
+          <div className={styles.settingsField}>
+            <div className={styles.settingsCopy}>
+              <span className={styles.settingsLabel}>{t('settings.translatePrompt')}</span>
+              <span className={styles.settingsHint}>{t('settings.translatePromptHint')}</span>
+            </div>
+            <textarea
+              className={styles.settingsInput}
+              value={prompt}
+              maxLength={8000}
+              aria-label={t('settings.translatePrompt')}
+              placeholder={DEFAULT_TRANSLATE_PROMPT}
+              onFocus={() => {
+                promptFocused.current = true
+              }}
+              onBlur={() => {
+                promptFocused.current = false
+                if (prompt !== current.translatePrompt) {
+                  void form.set('translatePrompt', prompt)
+                }
+              }}
+              onChange={(event) => setPrompt(event.target.value)}
+            />
+          </div>
         </div>
-      </div>
-      <div className={styles.settingsField}>
-        <div className={styles.settingsCopy}>
-          <span className={styles.settingsLabel}>{t('settings.translatePrompt')}</span>
-          <span className={styles.settingsHint}>{t('settings.translatePromptHint')}</span>
-        </div>
-        <textarea
-          className={styles.settingsInput}
-          value={prompt}
-          maxLength={8000}
-          aria-label={t('settings.translatePrompt')}
-          placeholder={DEFAULT_TRANSLATE_PROMPT}
-          onFocus={() => {
-            promptFocused.current = true
-          }}
-          onBlur={() => {
-            promptFocused.current = false
-            if (prompt !== current.translatePrompt) {
-              void form.set('translatePrompt', prompt)
-            }
-          }}
-          onChange={(event) => setPrompt(event.target.value)}
-        />
-      </div>
+      ) : null}
     </div>
   )
 }

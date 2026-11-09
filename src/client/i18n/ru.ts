@@ -101,6 +101,12 @@ export const ru: LocaleDict = {
   'chip.jumpAria': 'Перейти к оригиналу',
   'chip.jumpMissing': 'Исходного фрагмента нет в загруженной истории',
 
+  'settings.groupEntry': 'Вызов',
+  'settings.groupButtons': 'Кнопки',
+  'settings.groupTranslate': 'Перевод',
+  'settings.groupSide': 'Боковая задача',
+  'settings.groupShortcut': 'Горячие клавиши',
+  'settings.groupsAria': 'Группы настроек',
   'settings.trigger': 'Триггер',
   'settings.triggerHint': 'На сенсорных экранах всегда используется нижняя панель.',
   'settings.trigger.auto': 'Автоматически',

@@ -29,11 +29,11 @@ dsh plugin --profile web add dsh-select-quote
 dsh --profile web
 ```
 
-桌面版在应用内输入 `dsh-select-quote` 安装后重启客户端；本地开发见 [`dev.patch.example.yml`](dev.patch.example.yml)。
+桌面版在应用内输入 `dsh-select-quote` 安装后重启；本地开发见 [`dev.patch.example.yml`](dev.patch.example.yml)。
 
 ## 用法
 
-选中文字点「批注」即保存，`Enter` 或 `⌘/Ctrl + Enter` 提交、`Shift + Enter` 换行；点「N 条批注」可编辑或跳回。下拉挑好会话后「放入」留在本页、「放入并前往」打开目标。
+选中文字点「批注」即保存，`Enter` 或 `⌘/Ctrl + Enter` 提交、`Shift + Enter` 换行；点「N 条批注」可编辑或跳回；下拉挑会话后「放入」或「放入并前往」。
 
 | 操作 | 桌面 macOS | 桌面 Win/Linux | Web macOS | Web Windows | Web Linux |
 |---|---|---|---|---|---|
@@ -42,7 +42,7 @@ dsh --profile web
 
 ## 设置
 
-插件页 → `dsh-select-quote`，配置显示在插件外层页面：
+插件页 → `dsh-select-quote`，分五个 tab（入口 / 按钮 / 翻译 / 侧边提问 / 快捷键），记住上次那一组：
 
 - **划词入口与位置**：自动浮出 / 右键菜单 / 两者都开；浮层在上方或下方，放不下自动翻面
 - **划词按钮**：显示或隐藏「批注」（含箭头与放入目标）、「复制」、「翻译」、「在侧边提问」；**至少留一个**，最后一个开关会拒绝关闭并给出提示
@@ -56,7 +56,7 @@ dsh --profile web
 - 「放入其他会话」依赖宿主的工作区与 `openSession`，旧版本自动隐藏入口
 - 批注卡挂在 `conversation.chat.user.before` 席位，不接管用户气泡；需要 dsh ≥ 0.2.2-rc.1
 - 划词只在对话正文与文件预览生效，文件树、编辑器、终端不介入
-- 翻译只发选区，不带会话上下文，约 6000 字、超时 90 秒
+- 翻译只发选区，不带上下文，约 6000 字、超时 90 秒
 
 ## 开发
 
@@ -66,7 +66,7 @@ pnpm run sync:web  # 推到已安装副本，桌面版用 sync:desktop
 pnpm run release   # 版本号 + tag
 ```
 
-`lib/` 随源码提交、运行时直读；发布用 `npm publish` 后同步 npmmirror。机制与排错见 [`docs/internals.md`](docs/internals.md)。
+`lib/` 随源码提交；发布用 `npm publish` 后同步 npmmirror。机制与排错见 [`docs/internals.md`](docs/internals.md)。
 
 ## 致谢
 

@@ -97,6 +97,12 @@ export const en: LocaleDict = {
   'chip.jumpAria': 'Jump to original',
   'chip.jumpMissing': 'The original passage is not in the loaded history',
 
+  'settings.groupEntry': 'Trigger',
+  'settings.groupButtons': 'Buttons',
+  'settings.groupTranslate': 'Translation',
+  'settings.groupSide': 'Side task',
+  'settings.groupShortcut': 'Shortcuts',
+  'settings.groupsAria': 'Settings groups',
   'settings.trigger': 'Trigger',
   'settings.triggerHint': 'Touch screens always use the bottom bar.',
   'settings.trigger.auto': 'Automatic',

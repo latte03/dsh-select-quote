@@ -97,6 +97,12 @@ export const pt: LocaleDict = {
   'chip.jumpAria': 'Ir para o original',
   'chip.jumpMissing': 'O texto original não está no histórico carregado',
 
+  'settings.groupEntry': 'Disparo',
+  'settings.groupButtons': 'Botões',
+  'settings.groupTranslate': 'Tradução',
+  'settings.groupSide': 'Tarefa lateral',
+  'settings.groupShortcut': 'Atalhos',
+  'settings.groupsAria': 'Grupos de ajustes',
   'settings.trigger': 'Gatilho',
   'settings.triggerHint': 'Em telas de toque, a barra inferior é sempre usada.',
   'settings.trigger.auto': 'Automático',

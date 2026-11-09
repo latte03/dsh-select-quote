@@ -42,7 +42,7 @@ Click **Annotate** on a selection and it is saved at once; `Enter` or `⌘/Ctrl 
 
 ## Settings
 
-Plugin page → `dsh-select-quote`; the configuration sits on the plugin's outer page:
+Plugin page → `dsh-select-quote`; the settings sit behind five tabs (Entry / Buttons / Translation / Side task / Shortcuts) and the last one you opened is remembered:
 
 - **Trigger and placement**: auto / right-click / both; the toolbar sits above or below the selection and flips when space runs out
 - **Selection buttons**: show or hide **Annotate** (chevron and send targets included), **Copy**, **Translate** and **Ask in side task**; **keep at least one on** — the last switch refuses to turn off and says why

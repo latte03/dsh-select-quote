@@ -23,13 +23,121 @@ export const SETTINGS_CSS = `
   gap: 8px 16px;
 }
 
+/* The tab strip that groups the page. Five short labels, one panel at a time.
+   The indicator is measured from the live label (see SettingsTabs.tsx) and only
+   ever moves with a transform, so switching cannot reflow the row. */
+.dsq_tabsStrip {
+  position: relative;
+  display: flex;
+  flex: none;
+  gap: 2px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--dsq-fill-hover);
+  /* Narrow columns scroll the strip instead of wrapping it: a two-row tab bar
+     stops reading as navigation. The cut edge fades so it still looks scrollable. */
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+
+.dsq_tabsStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.dsq_tabIndicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 6px;
+  background: var(--dsq-bg-raised);
+  box-shadow: 0 0 0 0.5px var(--dsq-line);
+  /* 280ms spring: the highlight arrives with a little weight instead of
+     gliding linearly. transform + width only — no layout, no repaint of text. */
+  transition:
+    transform 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+  pointer-events: none;
+}
+
+.dsq_tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--dsq-label-2);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  /* Colour follows the selection; the press below is the only transform, so a
+     tap reads as a tap and the row itself never shifts. */
+  transition:
+    color 200ms ease,
+    transform 120ms ease,
+    filter 120ms ease;
+}
+
+.dsq_tab[data-active='true'] {
+  color: var(--dsq-label);
+  /* Weight stays put on purpose: the indicator is measured from the label's
+     box, so a 400→500 swap would resize the tab under the highlight. */
+}
+
+.dsq_tab:hover {
+  color: var(--dsq-label);
+}
+
+.dsq_tab:active {
+  transform: translateY(1px) scale(0.98);
+  filter: brightness(0.95);
+}
+
+.dsq_tab:has(:focus-visible),
+.dsq_tab:focus-visible {
+  outline: 2px solid var(--dsq-focus-ring-soft);
+  outline-offset: -2px;
+}
+
+/* One panel per tab. It enters with a short lift; there is no exit, the panel
+   is simply not rendered — a departure animation would need the old subtree
+   kept alive for 200ms and the page can be switched faster than that. */
+.dsq_group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: dsq-panel-in 200ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+@keyframes dsq-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .dsq_settingsCopy {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 3px;
 }
-
 .dsq_settingsSection .dsq_settingsCopy {
   flex: 1 1 240px;
 }
@@ -211,6 +319,25 @@ export const SETTINGS_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .dsq_deleteConfirmLabel {
     transition: none;
+  }
+
+  /* The tab strip keeps the highlight (it carries the selection) but stops
+     travelling, and the panel appears without the lift. */
+  .dsq_tabIndicator {
+    transition: none;
+  }
+
+  .dsq_tab {
+    transition: none;
+  }
+
+  .dsq_tab:active {
+    transform: none;
+    filter: none;
+  }
+
+  .dsq_group {
+    animation: none;
   }
 
   .dsq_segThumb {

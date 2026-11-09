@@ -95,6 +95,12 @@ export const zh: LocaleDict = {
   'chip.jumpAria': '跳转到原文',
   'chip.jumpMissing': '原文不在当前已加载的历史中',
 
+  'settings.groupEntry': '入口',
+  'settings.groupButtons': '按钮',
+  'settings.groupTranslate': '翻译',
+  'settings.groupSide': '侧边提问',
+  'settings.groupShortcut': '快捷键',
+  'settings.groupsAria': '配置分组',
   'settings.trigger': '划词入口',
   'settings.triggerHint': '触屏始终使用底部操作条。',
   'settings.trigger.auto': '自动浮出',

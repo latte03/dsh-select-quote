@@ -95,6 +95,12 @@ export const ja: LocaleDict = {
   'chip.jumpAria': '原文へ移動',
   'chip.jumpMissing': '原文は読み込み済みの履歴にありません',
 
+  'settings.groupEntry': '呼び出し',
+  'settings.groupButtons': 'ボタン',
+  'settings.groupTranslate': '翻訳',
+  'settings.groupSide': 'サイドタスク',
+  'settings.groupShortcut': 'ショートカット',
+  'settings.groupsAria': '設定のグループ',
   'settings.trigger': '選択の入口',
   'settings.triggerHint': 'タッチ画面では常に下部バーを使います。',
   'settings.trigger.auto': '自動表示',

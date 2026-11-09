@@ -97,6 +97,12 @@ export const fr: LocaleDict = {
   'chip.jumpAria': 'Aller à l’original',
   'chip.jumpMissing': 'Le passage original n’est pas dans l’historique chargé',
 
+  'settings.groupEntry': 'Déclencheur',
+  'settings.groupButtons': 'Boutons',
+  'settings.groupTranslate': 'Traduction',
+  'settings.groupSide': 'Tâche latérale',
+  'settings.groupShortcut': 'Raccourcis',
+  'settings.groupsAria': 'Groupes de réglages',
   'settings.trigger': 'Déclencheur',
   'settings.triggerHint': 'Sur écran tactile, la barre inférieure est toujours utilisée.',
   'settings.trigger.auto': 'Automatique',

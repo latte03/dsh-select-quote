@@ -97,6 +97,12 @@ export const de: LocaleDict = {
   'chip.jumpAria': 'Zum Original springen',
   'chip.jumpMissing': 'Die Originalstelle ist nicht im geladenen Verlauf',
 
+  'settings.groupEntry': 'Auslöser',
+  'settings.groupButtons': 'Schaltflächen',
+  'settings.groupTranslate': 'Übersetzung',
+  'settings.groupSide': 'Nebenaufgabe',
+  'settings.groupShortcut': 'Tastenkürzel',
+  'settings.groupsAria': 'Einstellungsgruppen',
   'settings.trigger': 'Auslöser',
   'settings.triggerHint': 'Auf Touchscreens wird immer die untere Leiste verwendet.',
   'settings.trigger.auto': 'Automatisch',
