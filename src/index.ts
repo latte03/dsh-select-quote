@@ -20,6 +20,9 @@ export interface Config {
   /** Our actions ride inside the Host's selection surface (see `client/config.ts`). */
   mergeHostSurface: Volatile<boolean>
   shortcut: Volatile<boolean>
+  showCopy: Volatile<boolean>
+  showTranslate: Volatile<boolean>
+  showAskInSide: Volatile<boolean>
   sideTaskMode: Volatile<'separate' | 'reuse'>
   translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
   translateHideSameLanguage: Volatile<boolean>
@@ -35,6 +38,9 @@ export const Config = z.object({
   // button becomes ours to render; off keeps the Host pill exactly as shipped.
   mergeHostSurface: z.boolean().default(false).volatile(),
   shortcut: z.boolean().default(false).volatile(),
+  showCopy: z.boolean().default(true).volatile(),
+  showTranslate: z.boolean().default(true).volatile(),
+  showAskInSide: z.boolean().default(true).volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
   translateTarget: z
     .union(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'])

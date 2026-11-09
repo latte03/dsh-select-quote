@@ -36,6 +36,12 @@ export interface SelectQuoteConfig {
    */
   mergeHostSurface: boolean
   shortcut: boolean
+  /** Show the Copy entry in the selection toolbar and right-click menu. */
+  showCopy: boolean
+  /** Show the Translate entry in the selection toolbar and right-click menu. */
+  showTranslate: boolean
+  /** Show the side-task question entry. */
+  showAskInSide: boolean
   sideTaskMode: SideTaskMode
   translateTarget: TranslateTarget
   /** Hide the translate entry when the selection already is the target language. */
@@ -52,6 +58,9 @@ export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   toolbarPlacement: 'below',
   mergeHostSurface: false,
   shortcut: false,
+  showCopy: true,
+  showTranslate: true,
+  showAskInSide: true,
   sideTaskMode: 'separate',
   translateTarget: 'auto',
   translateHideSameLanguage: false,
@@ -94,6 +103,16 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
         : DEFAULT_CONFIG.mergeHostSurface,
     shortcut:
       typeof record.shortcut === 'boolean' ? record.shortcut : DEFAULT_CONFIG.shortcut,
+    showCopy:
+      typeof record.showCopy === 'boolean' ? record.showCopy : DEFAULT_CONFIG.showCopy,
+    showTranslate:
+      typeof record.showTranslate === 'boolean'
+        ? record.showTranslate
+        : DEFAULT_CONFIG.showTranslate,
+    showAskInSide:
+      typeof record.showAskInSide === 'boolean'
+        ? record.showAskInSide
+        : DEFAULT_CONFIG.showAskInSide,
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
       ? (record.sideTaskMode as SideTaskMode)
       : DEFAULT_CONFIG.sideTaskMode,
@@ -151,6 +170,9 @@ export function publishConfig(value: unknown): SelectQuoteConfig {
     next.toolbarPlacement === current.toolbarPlacement &&
     next.mergeHostSurface === current.mergeHostSurface &&
     next.shortcut === current.shortcut &&
+    next.showCopy === current.showCopy &&
+    next.showTranslate === current.showTranslate &&
+    next.showAskInSide === current.showAskInSide &&
     next.sideTaskMode === current.sideTaskMode &&
     next.translateTarget === current.translateTarget &&
     next.translateHideSameLanguage === current.translateHideSameLanguage &&

@@ -55,6 +55,20 @@ describe('selection actions', () => {
     ).toEqual(['copy', 'annotate', 'side'])
   })
 
+  it('hides Copy and the side question when their settings are off', () => {
+    expect(
+      selectionActions(snapshot(), undefined, { hideCopy: true, hideSide: true }).map(
+        (action) => action.key,
+      ),
+    ).toEqual(['translate', 'annotate'])
+  })
+
+  it('hides Translate when its setting is off, independently of the language', () => {
+    expect(
+      selectionActions(snapshot(), undefined, { hideTranslate: true }).map((action) => action.key),
+    ).toEqual(['copy', 'annotate', 'side'])
+  })
+
   it('omits the side question for a file selected in the Sidebar', () => {
     expect(
       selectionActions(snapshot(undefined, 'sidebarFile')).map((action) => action.key),
