@@ -35,6 +35,7 @@ const EXPECTED = [
   { kind: 'slots.register', label: 'shell.overlay / select-quote-toolbar' },
   { kind: 'slots.register', label: 'conversation.input.overlay / select-quote-card' },
   { kind: 'slots.register', label: 'conversation.input.overlay / select-quote-session-bridge' },
+  { kind: 'slots.register', label: 'conversation.chat.text-interaction / quote' },
   { kind: 'slots.register', label: 'conversation.chat.user.before / undefined' },
   { kind: 'slots.register', label: 'plugins.bundle.config / dsh-select-quote' },
   { kind: 'locale.language', label: 'ja' },
@@ -919,6 +920,34 @@ function checkTranscriptSurfaces(code) {
   }
   if (!code.includes('dsh-select-quote: mark preview') || !code.includes('mark.previewAria')) {
     problems.push('transcript marks have no click/keyboard preview')
+  }
+  // The actions that ride inside the Host's selection pill live in the Host's
+  // own container, which paints nothing — no fill, no padding, no radius, no
+  // shadow. So this row has to bring the material itself, and it has to paint
+  // it on the element: a negative-z ::before paints into the Host column's
+  // stacking order and the surface disappears (only the shadow survives).
+  const hostPillRules = [...badgeCss.matchAll(/([^{}]*)[{]([^}]*)[}]/g)].filter(([, selector]) =>
+    selector.includes('.dsq_hostPill'),
+  )
+  if (hostPillRules.length === 0) {
+    problems.push('the Host selection pill has no CSS rule')
+  }
+  const hostPillMain = hostPillRules.find(([, selector]) => selector.trim() === '.dsq_hostPill')
+  if (hostPillMain === undefined) {
+    problems.push('the Host selection pill has no rule of its own — only shared list entries')
+  } else {
+    const body = hostPillMain[2]
+    if (!/background:/.test(body) || !/backdrop-filter:/.test(body)) {
+      problems.push(
+        'the Host selection pill paints no material — its fill and backdrop blur must sit on the element itself',
+      )
+    }
+    if (!/border-radius:/.test(body) || !/padding:/.test(body)) {
+      problems.push('.dsq_hostPill has no geometry — the Host container supplies none')
+    }
+    if (!/animation:/.test(body)) {
+      problems.push('.dsq_hostPill has no entrance — the Host container animates nothing')
+    }
   }
   return problems
 }
@@ -2321,11 +2350,12 @@ if (
 ) {
   degradeProblems.push('a settings section was registered although no config form is served')
 }
-// Core slots: the root toolbar, the composer card, the session bridge and the
-// history card seat. The settings section is the only one that needs a form.
-if (degradeRecord.filter((entry) => entry.kind === 'slots.register').length !== 4) {
+// Core slots: the root toolbar, the composer card, the session bridge, the
+// history card seat and the Host selection pill. The settings section is the
+// only one that needs a form.
+if (degradeRecord.filter((entry) => entry.kind === 'slots.register').length !== 5) {
   degradeProblems.push(
-    `without configForms the client registered ${degradeRecord.filter((entry) => entry.kind === 'slots.register').length} slots, want the 4 core ones`,
+    `without configForms the client registered ${degradeRecord.filter((entry) => entry.kind === 'slots.register').length} slots, want the 5 core ones`,
   )
 }
 if (!degradeRecord.some((entry) => entry.kind === 'inject' && entry.label === 'configForms')) {

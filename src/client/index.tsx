@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { QuoteCard } from './composer/AnnotationPanel.tsx'
 import { attachConfigForm, getConfig } from './config.ts'
 import { SelectionToolbar } from './selection/SelectionToolbar.tsx'
+import { HostQuoteSurface } from './selection/HostQuoteSurface.tsx'
 import { ConfigRow } from './settings/ConfigRow.tsx'
 import { installSelectionShortcut } from './shortcut-menu.ts'
 import { PACKAGE_NAME, ROW_ID } from '../shared/identity.ts'
@@ -638,6 +639,25 @@ function applyBody(ctx: Context): void {
         order: 100,
       },
       SelectionToolbar,
+    ),
+  )
+
+  // Host selection pill: `conversation.chat.text-interaction` is a keyed slot,
+  // and the Host's own `message-quotes` holds key `quote` at the default
+  // priority 0. Registering the same key at -1 shadows it (the lowest priority
+  // renders), which is the only way to put our buttons next to the Host's quote
+  // button — one entry per key, so it cannot be an addition. The component
+  // always paints the quote button faithfully and adds our action row only when
+  // `mergeHostSurface` is on, so registration is unconditional and the config
+  // decides what the pill contains.
+  ctx.slots.inject('conversation.chat.text-interaction', () =>
+    ctx.slots.register(
+      {
+        name: 'conversation.chat.text-interaction',
+        key: 'quote',
+        priority: -1,
+      },
+      HostQuoteSurface,
     ),
   )
 

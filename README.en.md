@@ -66,7 +66,8 @@ There are three ways to open the menu after selecting text: auto (default), righ
 Plugin page → `dsh-select-quote`; configuration is shown directly on the plugin's outer page:
 
 - **Selection trigger**: auto / right-click menu / both, auto by default
-- **Toolbar placement**: above (default) or below, for auto or both; flips automatically when space runs out
+- **Toolbar placement**: below (default) or above, for auto or both; flips automatically when space runs out (hidden while the toolbar is merged into the host surface)
+- **Merge into the host surface**: put our buttons inside the built-in selection pill (Quote text plus copy / translate / annotate / hand off), instead of a second pill next to the text; off by default
 - **Shortcuts**: enable the two commands and see the effective keys; change them in the host's Shortcuts settings
 - **Sidebar subagent**: fresh each time (default) or reuse one; in reuse mode the directory keeps a single entry, and context and model stay at first creation
 - **Translation target**: auto (default, follows the UI language; translates to English when the source is already in that language) or one of eight fixed languages

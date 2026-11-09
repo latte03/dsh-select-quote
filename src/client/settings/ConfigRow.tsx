@@ -219,8 +219,9 @@ function ConfigSection({
         />
       </div>
       {/* A right-click-only setup has no floating toolbar, so its side is not
-          a meaningful choice; the row appears with auto / both. */}
-      {current.triggerMode === 'contextmenu' ? null : (
+          a meaningful choice; the row appears with auto / both. Merging into
+          the Host's pill removes the toolbar for the same reason. */}
+      {current.triggerMode === 'contextmenu' || current.mergeHostSurface ? null : (
         <div className={styles.settingsSection}>
           <div className={styles.settingsCopy}>
             <span className={styles.settingsLabel}>{t('settings.toolbarPlacement')}</span>
@@ -236,6 +237,26 @@ function ConfigSection({
           />
         </div>
       )}
+      <label className={styles.settingsSwitchRow}>
+        <span className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.mergeHostSurface')}</span>
+          <span className={styles.settingsHint}>{t('settings.mergeHostSurfaceHint')}</span>
+        </span>
+        <span className={styles.switch} data-on={current.mergeHostSurface}>
+          <input
+            type="checkbox"
+            className={styles.srOnly}
+            aria-label={t('settings.mergeHostSurface')}
+            checked={current.mergeHostSurface}
+            onChange={(event) => {
+              const next = event.target.checked
+              if (next === current.mergeHostSurface) return
+              void form.set('mergeHostSurface', next)
+            }}
+          />
+          <span className={styles.switchTrack} aria-hidden="true" />
+        </span>
+      </label>
       <div className={styles.settingsDivider} aria-hidden="true" />
       <label className={styles.settingsSwitchRow}>
         <span className={styles.settingsCopy}>

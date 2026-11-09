@@ -95,7 +95,11 @@ function ActionLabel({ action }: { action: SelectionAction }): ReactNode {
   )
 }
 
-function ActionRow({
+/**
+ * One row of action buttons. Exported because the Host's merged selection pill
+ * (`HostQuoteSurface`) paints the same row inside its own container.
+ */
+export function ActionRow({
   actions,
   stacked,
   onHandoffPick,

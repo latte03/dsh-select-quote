@@ -139,7 +139,8 @@ export const SELECTION_CSS = `
 .dsq_ctxMenu,
 .dsq_modelMenu,
 .dsq_langMenu,
-.dsq_targetPicker {
+.dsq_targetPicker,
+.dsq_hostPill {
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
   /* Every surface above takes the same elevation; declaring it once here is
@@ -424,5 +425,50 @@ export const SELECTION_CSS = `
 .dsq_ctxItem:focus-visible {
   outline: 2px solid var(--dsq-focus-ring);
   outline-offset: -2px;
+}
+
+/* Layer 3 — components. Our actions inside the Host's selection pill
+   (conversation.chat.text-interaction). The Host's own container paints
+   nothing at all — no background, no padding, no border, no shadow — so the
+   row brings the material with it, out of the same two tokens every other
+   surface here uses.
+   The material sits ON this element instead of the shared ::before layer on
+   purpose: the node lives inside the Host's chat column, and a negative-z
+   child there paints into that column's own stacking order, which swallowed
+   the layer (the pill came up with its shadow but no surface). Backdrop-filter
+   blurs what is painted behind the element, never its own buttons, so nothing
+   is lost by painting it here.
+   Entrance only: the Host mounts this node per gesture and unmounts it the
+   moment the gesture ends, so there is no exit frame to animate. Transform
+   only — an animated opacity would cut the backdrop sampling. */
+.dsq_hostPill {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  pointer-events: auto;
+  background: var(--dsq-menu);
+  backdrop-filter: var(--dsq-menu-backdrop);
+  -webkit-backdrop-filter: var(--dsq-menu-backdrop);
+  animation: dsq-menu-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dsq_hostPill .dsq_button {
+  /* The Host's own pill is a text button on the canvas material; our buttons
+     borrow its scale instead of the toolbar's slightly larger one. */
+  font-size: 13px;
+  line-height: 18px;
+  gap: 5px;
+}
+
+/* Lucide's quote mark ships pointing left; mirrored it points into the text it
+   is about to take, which is the direction this button reads in. Dimmed and one
+   step smaller than the label so the pill still reads as text first. */
+.dsq_pillQuote {
+  transform: scaleX(-1);
+  opacity: 0.68;
 }
 `

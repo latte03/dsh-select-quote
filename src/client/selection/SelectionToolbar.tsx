@@ -7,7 +7,6 @@ import {
   useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
 import { getConfig, resolveTriggers, subscribeConfig } from '../config.ts'
@@ -27,6 +26,8 @@ import {
 } from './actions.ts'
 import { SelectionMenu } from './SelectionMenu.tsx'
 import { popoverEnter } from './popover-keys.ts'
+import { publishHostSurface } from './host-surface.ts'
+import { guardSurfacePress } from './pointer-guard.ts'
 import { ToolbarView } from './ToolbarView.tsx'
 import { useAnnotationFlow } from './useAnnotationFlow.ts'
 import { useCommentPlacement } from './useCommentPlacement.ts'
@@ -222,6 +223,25 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       if (phaseRef.current === 'idle' && !menuRef.current) setActive(null)
       return
     }
+    // Merged mode: the Host paints its own pill next to the selection and our
+    // actions ride inside it (see `HostQuoteSurface`), so an idle selection
+    // must not raise a second surface here. A step that is already running
+    // (comment, translate, right-click menu) is ours alone and keeps its host.
+    if (
+      !touch &&
+      getConfig().mergeHostSurface &&
+      phaseRef.current === 'idle' &&
+      // A latched menu keeps its own host alive: this component returns null
+      // when `active` drops, and the menu is rendered by it. Without the guard
+      // a right-click raised the menu and the refresh queued by the same
+      // gesture (pointerdown/pointerup both schedule one) dropped `active`
+      // right after it — the menu appeared and vanished in the same frame.
+      // Same guard as the contextmenu-only branch above.
+      !menuRef.current
+    ) {
+      setActive(null)
+      return
+    }
     const current = activeRef.current
     // A different passage means the old translation no longer belongs here.
     if (phaseRef.current === 'translate' && current && current.text !== next.text) {
@@ -347,25 +367,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     if (!touch) placeCommentPop()
   }, [phase, comment, side.sideText, placeCommentPop, touch])
 
-  const handleToolbarPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    // Text fields must keep their native press: focus and caret placement are
-    // the default action. Cancelling it everywhere left the composer unable to
-    // regain focus once the model chip had taken it. The selectable regions
-    // (quote and translation body) behave the same way: their press starts a
-    // native text selection, which is the only way to copy part of a result.
-    const target = event.target
-    if (
-      target instanceof Element &&
-      target.closest(
-        'textarea, input, [contenteditable="true"], [data-dsq-selectable]',
-      ) !== null
-    ) {
-      event.stopPropagation()
-      return
-    }
-    event.preventDefault()
-    event.stopPropagation()
-  }, [])
+  const handleToolbarPointerDown = useCallback(guardSurfacePress, [])
 
   /** Dismissal without an action hands control back to the normal toolbar rules. */
   const closeMenu = useCallback(() => {
@@ -422,6 +424,45 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       translate.begin,
     ],
   )
+
+  /**
+   * The action row for one latched selection. Single source for both surfaces:
+   * this toolbar's buttons and the Host's merged pill ask for it. The Remote
+   * mount publishes its bridges after activation, so availability is re-read on
+   * every call instead of memoised — an entry point that is unavailable at boot
+   * must become usable as soon as the bridge lands.
+   */
+  const buildEntries = useCallback(
+    (snapshot: SelectionSnapshot): SelectionActionEntry[] =>
+      selectionActions(
+        snapshot,
+        handoff.options,
+        {
+          hideTranslate:
+            config.translateHideSameLanguage &&
+            isAlreadyTargetLanguage(snapshot.text, config.translateTarget, activeLocale()),
+        },
+        {
+          sideTask: runtime.sideTask !== undefined,
+          translate: runtime.translate !== undefined,
+        },
+      ).map((action) => ({
+        ...action,
+        onClick: () => runAction(action.key, snapshot),
+      })),
+    [
+      config.translateHideSameLanguage,
+      config.translateTarget,
+      handoff.options,
+      runAction,
+    ],
+  )
+
+  // The Host's selection pill is a different React tree and cannot read this
+  // component's state; it asks through this bridge for the entries above.
+  // Publishing is cheap and unconditional — the pill decides, from the config,
+  // whether to paint them.
+  useEffect(() => publishHostSurface({ actions: buildEntries }), [buildEntries])
 
   const handleCommentKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -492,15 +533,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     sideTask: runtime.sideTask !== undefined,
     translate: runtime.translate !== undefined,
   }
-  const actions: SelectionActionEntry[] = selectionActions(
-    active,
-    handoff.options,
-    visibilityFor(active.text),
-    availability,
-  ).map((action) => ({
-    ...action,
-    onClick: () => runAction(action.key, active),
-  }))
+  const actions: SelectionActionEntry[] = buildEntries(active)
 
   return (
     <>

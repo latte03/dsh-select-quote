@@ -11,7 +11,8 @@ describe('normalizeConfig', () => {
   it('keeps known values and each field independently', () => {
     expect(normalizeConfig({ triggerMode: 'both' })).toEqual({
       triggerMode: 'both',
-      toolbarPlacement: 'above',
+      toolbarPlacement: 'below',
+      mergeHostSurface: false,
       shortcut: false,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
@@ -22,7 +23,8 @@ describe('normalizeConfig', () => {
     })
     expect(normalizeConfig({ shortcut: true })).toEqual({
       triggerMode: 'auto',
-      toolbarPlacement: 'above',
+      toolbarPlacement: 'below',
+      mergeHostSurface: false,
       shortcut: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
@@ -40,7 +42,7 @@ describe('normalizeConfig', () => {
 
   it('accepts both toolbar sides and rejects unknown ones', () => {
     expect(normalizeConfig({ toolbarPlacement: 'below' }).toolbarPlacement).toBe('below')
-    expect(normalizeConfig({ toolbarPlacement: 'left' }).toolbarPlacement).toBe('above')
+    expect(normalizeConfig({ toolbarPlacement: 'left' }).toolbarPlacement).toBe('below')
   })
 
   it('keeps a known translation target and rejects unknown codes', () => {
@@ -55,6 +57,11 @@ describe('normalizeConfig', () => {
     expect(
       normalizeConfig({ translateHideSameLanguage: 'yes' }).translateHideSameLanguage,
     ).toBe(false)
+  })
+
+  it('keeps the merge switch only when boolean', () => {
+    expect(normalizeConfig({ mergeHostSurface: true }).mergeHostSurface).toBe(true)
+    expect(normalizeConfig({ mergeHostSurface: 'yes' }).mergeHostSurface).toBe(false)
   })
 
   it('keeps the translation route and prompt only when they are strings', () => {

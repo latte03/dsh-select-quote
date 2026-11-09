@@ -17,6 +17,8 @@ import { PACKAGE_NAME } from './shared/identity.ts'
 export interface Config {
   triggerMode: Volatile<'auto' | 'contextmenu' | 'both'>
   toolbarPlacement: Volatile<'above' | 'below'>
+  /** Our actions ride inside the Host's selection surface (see `client/config.ts`). */
+  mergeHostSurface: Volatile<boolean>
   shortcut: Volatile<boolean>
   sideTaskMode: Volatile<'separate' | 'reuse'>
   translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
@@ -28,7 +30,10 @@ export interface Config {
 
 export const Config = z.object({
   triggerMode: z.union(['auto', 'contextmenu', 'both']).default('auto').volatile(),
-  toolbarPlacement: z.union(['above', 'below']).default('above').volatile(),
+  toolbarPlacement: z.union(['above', 'below']).default('below').volatile(),
+  // The merged surface takes over the Host's `quote` cell, so its own quote
+  // button becomes ours to render; off keeps the Host pill exactly as shipped.
+  mergeHostSurface: z.boolean().default(false).volatile(),
   shortcut: z.boolean().default(false).volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
   translateTarget: z

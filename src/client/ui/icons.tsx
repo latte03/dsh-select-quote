@@ -36,6 +36,7 @@ export type IconName =
   | 'arrow-up-right'
   | 'circle-alert'
   | 'bot'
+  | 'quote'
 
 const SHAPES: Record<IconName, string> = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
@@ -58,6 +59,8 @@ const SHAPES: Record<IconName, string> = {
   'arrow-up-right': '<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
   'circle-alert': '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
   bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+  quote:
+    '<path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/>',
 }
 
 /** Markup form for plain-DOM call sites; `insertAdjacentHTML('afterbegin', …)`. */

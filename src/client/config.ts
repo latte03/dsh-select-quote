@@ -29,6 +29,12 @@ export type { TranslateTarget }
 export interface SelectQuoteConfig {
   triggerMode: TriggerMode
   toolbarPlacement: ToolbarPlacement
+  /**
+   * Put our actions inside the Host's selection surface instead of raising a
+   * second overlay next to it. Our own entry then owns the `quote` cell, so the
+   * Host's quote button is ours to render (see `HostQuoteSurface`).
+   */
+  mergeHostSurface: boolean
   shortcut: boolean
   sideTaskMode: SideTaskMode
   translateTarget: TranslateTarget
@@ -43,7 +49,8 @@ export interface SelectQuoteConfig {
 
 export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   triggerMode: 'auto',
-  toolbarPlacement: 'above',
+  toolbarPlacement: 'below',
+  mergeHostSurface: false,
   shortcut: false,
   sideTaskMode: 'separate',
   translateTarget: 'auto',
@@ -81,6 +88,10 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
     toolbarPlacement: TOOLBAR_PLACEMENTS.has(record.toolbarPlacement as string)
       ? (record.toolbarPlacement as ToolbarPlacement)
       : DEFAULT_CONFIG.toolbarPlacement,
+    mergeHostSurface:
+      typeof record.mergeHostSurface === 'boolean'
+        ? record.mergeHostSurface
+        : DEFAULT_CONFIG.mergeHostSurface,
     shortcut:
       typeof record.shortcut === 'boolean' ? record.shortcut : DEFAULT_CONFIG.shortcut,
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
@@ -138,6 +149,7 @@ export function publishConfig(value: unknown): SelectQuoteConfig {
   if (
     next.triggerMode === current.triggerMode &&
     next.toolbarPlacement === current.toolbarPlacement &&
+    next.mergeHostSurface === current.mergeHostSurface &&
     next.shortcut === current.shortcut &&
     next.sideTaskMode === current.sideTaskMode &&
     next.translateTarget === current.translateTarget &&

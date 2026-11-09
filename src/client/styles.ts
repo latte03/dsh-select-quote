@@ -22,9 +22,23 @@ export function cx(...parts: Array<string | false | null | undefined>): string {
 const CSS = [TOKENS_CSS, atomRules, COMPONENTS_CSS, HOST_CSS].join('\n\n')
 
 const TAG_ID = 'dsh-select-quote/toolbar.css'
+/**
+ * Install this module's sheet, replacing one an earlier copy of the module left
+ * behind.
+ *
+ * The Host reloads client modules every 500ms while the document stays put, so
+ * the tag outlives the code that wrote it: returning early on a found tag froze
+ * the page on the first sheet ever injected, and every CSS fix after that one
+ * reached nobody until a full reload. Rewriting when the text differs keeps the
+ * page on the sheet this code builds.
+ */
 export function ensureToolbarStyles(): void {
   if (typeof document === 'undefined') return
-  if (document.querySelector(`style[data-plugin-css="${TAG_ID}"]`)) return
+  const existing = document.querySelector<HTMLStyleElement>(`style[data-plugin-css="${TAG_ID}"]`)
+  if (existing !== null) {
+    if (existing.textContent !== CSS) existing.textContent = CSS
+    return
+  }
   const tag = document.createElement('style')
   tag.dataset.plugin = 'dsh-select-quote'
   tag.dataset.pluginCss = TAG_ID
@@ -35,6 +49,8 @@ export function ensureToolbarStyles(): void {
 export const styles = {
   toolbar: 'dsq_toolbar',
   toolbarInner: 'dsq_toolbarInner',
+  hostPill: 'dsq_hostPill',
+  pillQuote: 'dsq_pillQuote',
   button: 'dsq_button',
   buttonAddComment: 'dsq_buttonAddComment',
   kbd: 'dsq_kbd',
