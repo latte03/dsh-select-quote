@@ -298,7 +298,7 @@ Each item contains text selected from an earlier message ...
 - **指示器只动 transform/width**：和 `Segmented` 同一套测量（`getBoundingClientRect` + `ResizeObserver`），但曲线是 280ms `cubic-bezier(0.32, 0.72, 0, 1)`（spring），并且**激活 tab 不改字重**——400→500 会改变标签盒宽，把指示器测偏。动效参数借用自 Lumno 扩展的 options 页。
 - **一次只渲染一个面板**：非活动组不进 DOM。面板进入是 200ms 的 translateY(4px)+opacity，**不做离场**（要留住旧子树 200ms，而用户切得比这快）。设置页不是磨砂浮层，所以这里用 opacity 不违反「磨砂层动画不带 opacity」那条。
 - **记住上次的组**：配置区在 `plugins.bundle.config` 的 `whileServed` 里，离开插件页就卸载，`useState` 会重置。所以写 `localStorage` 的 `dsh-select-quote.settings-group`；读写都包 try/catch，存储被禁只损失「记得哪个 tab」，不影响任何配置。
-- **窄列**：`.dsq_tabsStrip` 横向滚、不换行（换成两行就不再像导航），溢出边用 `mask-image` 渐隐提示可滚。
+- **窄列**：`.dsq_tabsStrip` 横向滚、不换行（换成两行就不再像导航），滚动条隐藏。
 
 ## 浮层名词与层带
 

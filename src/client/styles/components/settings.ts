@@ -37,11 +37,9 @@ export const SETTINGS_CSS = `
   border-radius: 8px;
   background: var(--dsq-fill-hover);
   /* Narrow columns scroll the strip instead of wrapping it: a two-row tab bar
-     stops reading as navigation. The cut edge fades so it still looks scrollable. */
+     stops reading as navigation. */
   overflow-x: auto;
   scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
 }
 
 .dsq_tabsStrip::-webkit-scrollbar {
