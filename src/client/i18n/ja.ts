@@ -114,7 +114,7 @@ export const ja: LocaleDict = {
   'settings.showAskInSideHint': '選択ツールバーとメニューにサイドタスクの質問を表示します。',
   'settings.showAnnotate': '注釈',
   'settings.showAnnotateHint': 'ツールバーとメニューに注釈を表示します（矢印と送信先を含む）。',
-  'settings.keepOneButton': 'ボタンは1つ以上オンにしてください。すべてオフにするとプラグイン未導入と同じになります。',
+  'settings.keepOneButton': 'ボタンは1つ以上オンにしてください。すべてオフにするとツールバーが空になります。',
   'settings.mergeHostSurface': '公式の選択メニューに統合',
   'settings.mergeHostSurfaceHint': '弊社のボタンを公式の選択メニュー内に表示し、別のバーは出しません。',
   'settings.shortcut': 'ショートカット',

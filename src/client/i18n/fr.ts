@@ -118,7 +118,7 @@ export const fr: LocaleDict = {
   'settings.showAnnotate': 'Annoter',
   'settings.showAnnotateHint':
     'Affiche Annoter dans la barre et le menu, flèche et destinations comprises.',
-  'settings.keepOneButton': "Laissez au moins un bouton actif ; tout couper donne l'impression que le plugin n'est pas installé.",
+  'settings.keepOneButton': 'Laissez au moins un bouton actif, sinon la barre reste vide.',
   'settings.mergeHostSurface': 'Fusionner dans la barre de l’hôte',
   'settings.mergeHostSurfaceHint': 'Nos boutons s’affichent dans la barre de l’hôte, sans seconde barre.',
   'settings.shortcut': 'Raccourci',

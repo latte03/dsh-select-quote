@@ -117,7 +117,7 @@ export const en: LocaleDict = {
   'settings.showAnnotate': 'Annotate',
   'settings.showAnnotateHint':
     'Show Annotate in the toolbar and menu, chevron and send targets included.',
-  'settings.keepOneButton': 'Keep at least one button on; otherwise the plugin looks uninstalled.',
+  'settings.keepOneButton': 'Keep at least one button on, or the toolbar stays empty.',
   'settings.mergeHostSurface': 'Merge into the host surface',
   'settings.mergeHostSurfaceHint': 'Our actions ride in the host’s selection pill instead of a second bar.',
   'settings.shortcut': 'Shortcut',

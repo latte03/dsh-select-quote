@@ -114,7 +114,7 @@ export const zh: LocaleDict = {
   'settings.showAskInSideHint': '在划词工具条和右键菜单里显示「在侧边提问」。',
   'settings.showAnnotate': '批注',
   'settings.showAnnotateHint': '在划词工具条和右键菜单里显示「批注」，包括下拉箭头与放入目标。',
-  'settings.keepOneButton': '至少要留一个按钮，全部关掉就跟没装这个插件一样了。',
+  'settings.keepOneButton': '至少要留一个按钮，否则工具条会空掉。',
   'settings.mergeHostSurface': '并入官方浮层',
   'settings.mergeHostSurfaceHint': '我们的按钮放进官方划词浮层，原文旁不再另起一条。',
   'settings.shortcut': '快捷键',

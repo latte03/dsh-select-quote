@@ -120,7 +120,7 @@ export const ru: LocaleDict = {
   'settings.showAskInSideHint': 'Показывать вопрос в боковой задаче на панели и в меню.',
   'settings.showAnnotate': 'Пометить',
   'settings.showAnnotateHint': 'Показывать «Пометить» на панели и в меню, со стрелкой и адресатами.',
-  'settings.keepOneButton': 'Оставьте хотя бы одну кнопку включённой; если выключить все, плагин выглядит неустановленным.',
+  'settings.keepOneButton': 'Оставьте хотя бы одну кнопку включённой, иначе панель останется пустой.',
   'settings.mergeHostSurface': 'Объединить с панелью хоста',
   'settings.mergeHostSurfaceHint': 'Наши кнопки появляются внутри панели хоста, без второй панели.',
   'settings.shortcut': 'Горячая клавиша',

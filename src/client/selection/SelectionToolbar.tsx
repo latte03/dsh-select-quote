@@ -24,6 +24,7 @@ import {
   selectionActions,
   type SelectionActionEntry,
   type SelectionActionKey,
+  type SelectionActionVisibility,
   type SelectionDestinationKey,
 } from './actions.ts'
 import { SelectionMenu } from './SelectionMenu.tsx'
@@ -459,9 +460,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   )
 
   const visibilityFor = useCallback(
-    (
-      text: string,
-    ): { hideTranslate: boolean; hideCopy: boolean; hideSide: boolean; hideAnnotate: boolean } => ({
+    (text: string): SelectionActionVisibility => ({
       hideCopy: !config.showCopy,
       hideTranslate:
         !config.showTranslate ||

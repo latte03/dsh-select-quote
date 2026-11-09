@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | English
 
-A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) client plugin: adds **selection annotations and quotes**, **in-place translation**, and **sidebar subagent questions** to DSH, and opens links in your **default browser**. The selected text and your comment ride along with the next message; conversation text keeps its highlight and ordinal mark for jumping back, while a Sidebar file selection is quoted as plain text. The menu can appear on selection or open from the right-click menu, and translation can use its own model.
+A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) client plugin: selection annotations and quotes, in-place translation, and sidebar subagent questions. The selected text and your comment ride along with the next message; the text keeps its highlight and ordinal mark for jumping back.
 
 [![DSH Open Plugins](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-select-quote.json)](https://dshopen.org/zh/plugins/dsh-select-quote/)
 [![awesome-dsh-plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/)
@@ -13,14 +13,11 @@ A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/q
 
 ## Features
 
-- **Selection toolbar**: select text in the conversation or in a file preview in the right Sidebar to get **Open link / Copy / Translate / Annotate / Ask in sidebar**. File previews omit **Ask in sidebar**. The toolbar can sit above or below the selection
-- **In-place translation**: translates the selection into the target language, streaming next to it. While the model is thinking, a progress icon shows live reasoning; once the translation lands, the reasoning collapses but stays available. The target follows the UI language by default and can be switched on the spot; the result copies in one click. Reopening the same text with the same settings reuses the in-memory cache for the session without calling the model
-- **Right-click menu and shortcuts**: the same actions open from the selection's context menu or from the keyboard; key bindings are configurable in the host's settings
-- **Annotation summary**: the composer shows "N annotations" above it; expand to edit or jump back to the source. Deleting asks for a second "Confirm removal" click; the summary clears when the message is sent
-- **Marks in the text**: annotated text keeps a tint and an ordinal mark. Click the mark to see the source and comment; pending annotations can be edited or removed from the mark's popover, matching the summary card
-- **Send to another session**: puts the selected text and comment into another session's composer, either staying on the current page or going there directly, including a workspace's "New session". The source keeps an arrow mark; the target card shows "From: <session>" and both sides can jump back. Once the target sends, the source mark is labeled "Sent"
-- **Model references**: when a model points at an annotation in its answer, it renders as a chip with a preview
-- **Sidebar subagents**: ask about a conversation passage in the sidebar without interrupting the main conversation. Pick a separate model and reasoning level, or reuse the same subagent (the directory keeps a single entry)
+- **Selection toolbar**: select text in the conversation or in a Sidebar file preview to get **Open link / Copy / Translate / Annotate / Ask in sidebar**
+- **In-place translation**: streams next to the selection; the target follows the UI language by default and the result copies in one click, with per-session cache reuse
+- **Annotate and send**: **Annotate this conversation** is the main button, its chevron sends the passage elsewhere; the source keeps an arrow mark, the target shows "From: <session>", and both sides jump back
+- **Marks and summary**: annotated text keeps a tint and an ordinal mark; "N annotations" above the composer edits, deletes, or jumps back, and clears on send
+- **Sidebar subagents**: ask about one passage without interrupting the main conversation; pick a separate model, or reuse the same subagent
 - **Eight UI languages**: 简体中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português
 
 ## Install
@@ -32,29 +29,11 @@ dsh plugin --profile web add dsh-select-quote
 dsh --profile web
 ```
 
-Desktop: enter `dsh-select-quote` inside the app, or find it in the plugin page and install; restart the client to take effect.
-
-Local development:
-
-```bash
-git clone https://github.com/latte03/dsh-select-quote && cd dsh-select-quote
-pnpm install && pnpm run build
-cp dev.patch.example.yml dev.patch.yml   # replace <CHECKOUT> with this checkout's absolute path
-dsh web --patch "$PWD/dev.patch.yml"
-```
-
-Open `http://127.0.0.1:3080` to try it. `dev.patch.yml` is a local, untracked file; the repository only ships the template.
+Desktop: enter `dsh-select-quote` inside the app, then restart the client. Local development is described in [`dev.patch.example.yml`](dev.patch.example.yml).
 
 ## Usage
 
-1. Select text in the conversation or in a file preview in the right Sidebar → click **Annotate** (the main button); the annotation is saved immediately. Add a comment in the box; `Enter` or `⌘/Ctrl + Enter` submits, `Shift + Enter` inserts a newline
-2. Hover (or tap on touch) the summary above the composer to expand the list: edit, delete, or jump back to the text. Click a mark in the text to preview its annotation
-3. Send as usual: annotations go to the model with the message, the summary disappears, the marks stay; model references render as chips
-4. **Ask in sidebar** opens the composer first; the subagent is created and shown in the right sidebar only after you press send. The directory names it "Ask in sidebar · question summary"
-5. **Translate** opens the translation popover and starts streaming right away: switch languages in the header, **Stop** cancels; use the copy icon at the bottom right when done; Esc or an outside click closes it
-6. **Annotate this conversation** is the main button; its chevron opens the **Send to** panel, whose first row is this conversation. Pick a session, then **Send** to stay here or **Send and open** to go there: **Send** stays on the current page, **Send and open** opens the target. Entries in the target composer carry "From"; click one to return to the source
-
-There are three ways to open the menu after selecting text: auto (default), right-click on the selection, or a shortcut. Touch always uses the bottom action bar.
+Click **Annotate** on a selection and it is saved at once; `Enter` or `⌘/Ctrl + Enter` submits, `Shift + Enter` adds a line. Click "N annotations" to edit or jump back. In the chevron panel, **Send** keeps you here and **Send and open** goes to the target.
 
 | Action | Desktop macOS | Desktop Win/Linux | Web macOS | Web Windows | Web Linux |
 |---|---|---|---|---|---|
@@ -63,50 +42,35 @@ There are three ways to open the menu after selecting text: auto (default), righ
 
 ## Settings
 
-Plugin page → `dsh-select-quote`; configuration is shown directly on the plugin's outer page:
+Plugin page → `dsh-select-quote`; the configuration sits on the plugin's outer page:
 
-- **Selection trigger**: auto / right-click menu / both, auto by default
-- **Toolbar placement**: below (default) or above, for auto or both; flips automatically when space runs out (hidden while the toolbar is merged into the host surface)
-- **Selection buttons**: show or hide **Annotate** (chevron and send targets included), **Copy**, **Translate** and **Ask in side task** in the selection toolbar and right-click menu; all four are on by default. **Keep at least one on** — with every switch off the plugin looks uninstalled, so the last switch refuses to turn off and says why
-- **Merge into the host surface**: put our buttons inside the built-in selection pill (Quote text plus copy / translate / annotate with its destination picker), instead of a second pill next to the text; off by default
-- **Settings shortcut**: the gear at the end of the row jumps straight to this plugin's page, where the configuration lives
-- **Shortcuts**: enable the two commands and see the effective keys; change them in the host's Shortcuts settings
-- **Sidebar subagent**: fresh each time (default) or reuse one; in reuse mode the directory keeps a single entry, and context and model stay at first creation
-- **Translation target**: auto (default, follows the UI language; translates to English when the source is already in that language) or one of eight fixed languages
-- **Hide translate for same language**: when on, the toolbar and right-click menu omit **Translate** if the selection is already in the target language; auto target compares against the UI language (off by default)
-- **Translation model**: follows the current conversation by default, or pick a faster model just for translation
-- **Custom prompt**: the input's placeholder is the built-in prompt; leave it empty to use the built-in one, or fill it in to override the whole prompt. `{target}` is replaced with the target language
-
-## Languages
-
-The UI follows dsh's language setting; the plugin UI, its page title, and its description switch together across eight languages (see above).
+- **Trigger and placement**: auto / right-click / both; the toolbar sits above or below the selection and flips when space runs out
+- **Selection buttons**: show or hide **Annotate** (chevron and send targets included), **Copy**, **Translate** and **Ask in side task**; **keep at least one on** — the last switch refuses to turn off and says why
+- **Merge into the host surface**: our buttons ride in the built-in selection pill instead of a second bar (off by default)
+- **Sidebar subagent**: fresh each time (default) or reuse one
+- **Translation**: target language, hide for the same language, a separate model, and a custom prompt (`{target}` is replaced)
 
 ## Known limitations
 
-- **Annotations persist per session**: after a refresh or restart, unsent annotations come back (last 20 sessions, 7 days); sending clears them, and forked sessions do not inherit them
-- **Send-to-session depends on the current dsh version**: it needs the host's workspace and `openSession` APIs; older versions hide the entry. Unsent handoffs are pruned in pairs after 20 sessions / 7 days; once the target sends, the source mark stays forever. Jumping back from the target only guarantees history that is loaded; a miss shows a notice
-- **Leaves the user bubble alone**: the card mounts on the `conversation.chat.user.before` decoration seat, so the bubble, attachments and time/copy row stay the host's; the protocol block is stripped by a `uiConversation.userText` rule. Requires dsh ≥ 0.2.2-rc.1
-- **Selection scope**: the conversation and file previews in the right Sidebar; the file tree, editors, terminals and other panels are left alone. File previews have no **Ask in sidebar**, and selecting text never changes the file. Keyboard users need caret browsing or assistive technology to create a selection
-- **Sidebar questions must be sent**: the host does not allow creating a subagent in an empty session; reuse mode has no model entry
-- **Translation sends only the selection**: the request carries no conversation context and does not write an annotation; copy the translation if the model needs it. One request is capped at about 6,000 characters and times out after 90 seconds; failures show an error summary in the popover, with details in the console
-- **Web Linux shortcuts are limited**: the host accepts only `Ctrl+/`, `Ctrl+Shift+,`, and `Ctrl+Shift+.`; this plugin uses the latter two
+- Unsent annotations come back after a refresh (last 20 sessions / 7 days); sending clears them and forked sessions do not inherit them
+- Send-to-session needs the host's workspace and `openSession`; older versions hide the entry
+- The card mounts on `conversation.chat.user.before` and leaves the user bubble alone; requires dsh ≥ 0.2.2-rc.1
+- Selection works in the conversation and file previews only, not in the file tree, editors or terminals
+- Translation sends only the selection, with no conversation context; about 6,000 characters and a 90-second timeout
 
 ## Development
 
 ```bash
-pnpm run check          # typecheck + test + build + verify; run before committing
-pnpm run watch          # incremental rebuild
-pnpm run sync:web       # push to the installed web client (desktop: sync:desktop)
-pnpm run release        # check → CHANGELOG → version + tag
+pnpm run check     # typecheck + test + build + verify; run before committing
+pnpm run sync:web  # push to the installed copy (desktop: sync:desktop)
+pnpm run release   # version + tag
 ```
 
-`lib/` is committed with the source and read at runtime. Publishing uses `npm publish --registry=https://registry.npmjs.org/`, then syncs the npmmirror mirror.
-
-For internals, conventions, and troubleshooting, see [`docs/internals.md`](docs/internals.md); historical investigations live in [`docs/archive/`](docs/archive/).
+`lib/` is committed with the source and read at runtime; publishing uses `npm publish`, then syncs the npmmirror copy. Internals and troubleshooting live in [`docs/internals.md`](docs/internals.md).
 
 ## Acknowledgements
 
-[@imallakov](https://github.com/imallakov) (multilingual support and cross-platform builds), [@Ladersbt](https://github.com/Ladersbt) (chip preview feedback), [@EliteOtaku](https://github.com/EliteOtaku) (desktop issue diagnosis).
+[@imallakov](https://github.com/imallakov) (multilingual support and cross-platform builds), [@Ladersbt](https://github.com/Ladersbt), [@EliteOtaku](https://github.com/EliteOtaku).
 
 ## License
 

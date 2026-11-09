@@ -116,7 +116,7 @@ export const es: LocaleDict = {
   'settings.showAskInSideHint': 'Muestra la pregunta en tarea lateral en la barra y el menú.',
   'settings.showAnnotate': 'Anotar',
   'settings.showAnnotateHint': 'Muestra Anotar en la barra y el menú, con la flecha y los destinos.',
-  'settings.keepOneButton': 'Deja al menos un botón activo; con todos apagados parece que el plugin no está instalado.',
+  'settings.keepOneButton': 'Deja al menos un botón activo o la barra quedará vacía.',
   'settings.mergeHostSurface': 'Fusionar con la barra del host',
   'settings.mergeHostSurfaceHint': 'Nuestros botones van dentro de la barra del host, sin una segunda barra.',
   'settings.shortcut': 'Atajo',
