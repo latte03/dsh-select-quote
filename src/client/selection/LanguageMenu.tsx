@@ -43,7 +43,15 @@ export function LanguageMenu<T extends string>({
   triggerClassName,
 }: LanguageMenuProps<T>): ReactNode {
   const [open, setOpen] = useState(false)
-  const [position, setPosition] = useState<{ left: number; top: number; width: number } | null>(
+  // `side` drives which edge the menu grows out of (`data-side` in the styles):
+  // placePopover flips to 'top' when there is no room below, and an origin that
+  // ignores the flip makes the menu look like it slid out of nowhere.
+  const [position, setPosition] = useState<{
+    left: number
+    top: number
+    width: number
+    side: 'bottom' | 'top'
+  } | null>(
     null,
   )
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -67,7 +75,7 @@ export function LanguageMenu<T extends string>({
       'bottom',
       ANCHOR_GAP,
     )
-    setPosition({ left: placed.left, top: placed.top, width })
+    setPosition({ left: placed.left, top: placed.top, width, side: placed.side })
     const checked = menu.querySelector<HTMLButtonElement>('[aria-selected="true"]')
     ;(checked ?? menu.querySelector<HTMLButtonElement>('[role="option"]'))?.focus({
       preventScroll: true,
@@ -176,6 +184,7 @@ export function LanguageMenu<T extends string>({
               role="listbox"
               aria-label={ariaLabel}
               data-dsq-menu="true"
+              data-side={position?.side ?? 'bottom'}
               style={{
                 left: position?.left ?? 0,
                 top: position?.top ?? 0,

@@ -43,6 +43,30 @@ export const SELECTION_CSS = `
 
 /* Right-click / shortcut menu: transform only, for the same reason as the
    toolbar — an animated opacity would cut the material layer's backdrop. */
+/* Dropdown entry, anchored at the trigger: the panel starts 6px on the far
+   side of where it lands and settles back, the geometry Lumno's options page
+   uses (180ms, emphasized). Two keyframes because a CSS animation cannot read
+   the placement; the component passes data-side from placePopover.
+   Transform only: dsq_modelMenu / dsq_langMenu paint their material on a
+   ::before with backdrop-filter, so an animated opacity would cut the blur. */
+@keyframes dsq-dropdown-in-below {
+  from {
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes dsq-dropdown-in-above {
+  from {
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    transform: none;
+  }
+}
+
 @keyframes dsq-menu-in {
   from {
     transform: translateY(4px) scale(0.97);
@@ -58,7 +82,7 @@ export const SELECTION_CSS = `
   }
   to {
     transform: translateY(0) scale(1);
-  }
+  }  }
 }
 
 /* 内容层的 rise：悬停面板的列表在用；工具条改用容器 scale 后这条在这里待命。 */

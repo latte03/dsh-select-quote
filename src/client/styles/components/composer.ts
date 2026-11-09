@@ -346,6 +346,15 @@ export const COMPOSER_CSS = `
   overflow-y: auto;
   overscroll-behavior: contain;
   pointer-events: auto;
+  /* Grows out of the edge it is anchored to; data-side comes from the same
+     placePopover result that positioned it, so the origin follows a flip. */
+  animation: dsq-dropdown-in-below 180ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  transform-origin: top right;
+}
+
+.dsq_langMenu[data-side='top'] {
+  animation-name: dsq-dropdown-in-above;
+  transform-origin: bottom right;
 }
 
 .dsq_langOption {
@@ -375,5 +384,12 @@ export const COMPOSER_CSS = `
   place-items: center;
   width: 16px;
   color: var(--dsq-accent);
+}
+/* The dropdown's 180ms settle is decoration; with reduced motion the panel
+   should simply be there, still anchored at the same corner. */
+@media (prefers-reduced-motion: reduce) {
+  .dsq_langMenu {
+    animation: none;
+  }
 }
 `

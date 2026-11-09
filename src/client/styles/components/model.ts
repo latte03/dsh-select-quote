@@ -92,7 +92,9 @@ export const MODEL_CSS = `
   border-radius: 12px;
   outline: none;
   pointer-events: auto;
-  animation: dsq-menu-in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Always opens above its trigger (see ModelSelect: top = rect.top - 8), so
+     it grows out of the bottom-right corner the way a dropdown should. */
+  animation: dsq-dropdown-in-above 180ms cubic-bezier(0.2, 0.9, 0.2, 1);
   transform-origin: bottom right;
 }
 
@@ -343,5 +345,12 @@ export const MODEL_CSS = `
   flex: 0 0 14px;
   place-items: center;
   color: var(--dsq-label);
+}
+/* The dropdown's 180ms settle is decoration; with reduced motion the panel
+   should simply be there, still anchored at the same corner. */
+@media (prefers-reduced-motion: reduce) {
+  .dsq_modelMenu {
+    animation: none;
+  }
 }
 `
