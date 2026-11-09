@@ -237,6 +237,73 @@ function ConfigSection({
           />
         </div>
       )}
+      <div className={styles.settingsSection}>
+        <div className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.buttons')}</span>
+          <span className={styles.settingsHint}>{t('settings.buttonsHint')}</span>
+        </div>
+      </div>
+      <label className={styles.settingsSwitchRow}>
+        <span className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.showCopy')}</span>
+          <span className={styles.settingsHint}>{t('settings.showCopyHint')}</span>
+        </span>
+        <span className={styles.switch} data-on={current.showCopy}>
+          <input
+            type="checkbox"
+            className={styles.srOnly}
+            aria-label={t('settings.showCopy')}
+            checked={current.showCopy}
+            onChange={(event) => {
+              const next = event.target.checked
+              if (next === current.showCopy) return
+              void form.set('showCopy', next)
+            }}
+          />
+          <span className={styles.switchTrack} aria-hidden="true" />
+        </span>
+      </label>
+      <label className={styles.settingsSwitchRow}>
+        <span className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.showTranslate')}</span>
+          <span className={styles.settingsHint}>{t('settings.showTranslateHint')}</span>
+        </span>
+        <span className={styles.switch} data-on={current.showTranslate}>
+          <input
+            type="checkbox"
+            className={styles.srOnly}
+            aria-label={t('settings.showTranslate')}
+            checked={current.showTranslate}
+            onChange={(event) => {
+              const next = event.target.checked
+              if (next === current.showTranslate) return
+              void form.set('showTranslate', next)
+            }}
+          />
+          <span className={styles.switchTrack} aria-hidden="true" />
+        </span>
+      </label>
+      <label className={styles.settingsSwitchRow}>
+        <span className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.showAskInSide')}</span>
+          <span className={styles.settingsHint}>{t('settings.showAskInSideHint')}</span>
+        </span>
+        <span className={styles.switch} data-on={current.showAskInSide}>
+          <input
+            type="checkbox"
+            className={styles.srOnly}
+            aria-label={t('settings.showAskInSide')}
+            checked={current.showAskInSide}
+            onChange={(event) => {
+              const next = event.target.checked
+              if (next === current.showAskInSide) return
+              void form.set('showAskInSide', next)
+            }}
+          />
+          <span className={styles.switchTrack} aria-hidden="true" />
+        </span>
+      </label>
+      <div className={styles.settingsDivider} aria-hidden="true" />
       <label className={styles.settingsSwitchRow}>
         <span className={styles.settingsCopy}>
           <span className={styles.settingsLabel}>{t('settings.mergeHostSurface')}</span>

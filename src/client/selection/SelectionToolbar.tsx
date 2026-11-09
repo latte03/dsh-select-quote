@@ -458,6 +458,23 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     ],
   )
 
+  const visibilityFor = useCallback(
+    (text: string): { hideTranslate: boolean; hideCopy: boolean; hideSide: boolean } => ({
+      hideCopy: !config.showCopy,
+      hideTranslate:
+        !config.showTranslate ||
+        (config.translateHideSameLanguage &&
+          isAlreadyTargetLanguage(text, config.translateTarget, activeLocale())),
+      hideSide: !config.showAskInSide,
+    }),
+    [
+      config.showAskInSide,
+      config.showCopy,
+      config.showTranslate,
+      config.translateHideSameLanguage,
+      config.translateTarget,
+    ],
+  )
   /**
    * The action row for one latched selection. Single source for both surfaces:
    * this toolbar's buttons and the Host's merged pill ask for it. The Remote
@@ -470,11 +487,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       selectionActions(
         snapshot,
         handoff.options,
-        {
-          hideTranslate:
-            config.translateHideSameLanguage &&
-            isAlreadyTargetLanguage(snapshot.text, config.translateTarget, activeLocale()),
-        },
+        visibilityFor(snapshot.text),
         {
           sideTask: runtime.sideTask !== undefined,
           translate: runtime.translate !== undefined,
@@ -486,10 +499,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           runAction(action.key, snapshot, 'toolbar', destination),
       })),
     [
+      config.showAskInSide,
+      config.showCopy,
+      config.showTranslate,
       config.translateHideSameLanguage,
       config.translateTarget,
       handoff.options,
       runAction,
+      visibilityFor,
     ],
   )
 
@@ -613,11 +630,6 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
 
   if (!active) return null
 
-  const visibilityFor = (text: string): { hideTranslate: boolean } => ({
-    hideTranslate:
-      config.translateHideSameLanguage &&
-      isAlreadyTargetLanguage(text, config.translateTarget, activeLocale()),
-  })
   const toolbarStyle: CSSProperties = { left: active.left, top: active.top }
   // The Remote mount publishes these bridges after activation, so re-read them
   // on every render instead of memoising: an entry point that is unavailable at

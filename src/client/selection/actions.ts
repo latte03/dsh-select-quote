@@ -113,6 +113,10 @@ export interface SelectionActionEntry extends SelectionAction {
 export interface SelectionActionVisibility {
   /** Hide translate when the selection already is the target language. */
   readonly hideTranslate?: boolean
+  /** Hide the Copy entry (settings switch). */
+  readonly hideCopy?: boolean
+  /** Hide the side-task question entry (settings switch). */
+  readonly hideSide?: boolean
 }
 
 /**
@@ -140,7 +144,9 @@ export function selectionActions(
     ...(linkTarget(snapshot.text, snapshot.anchorHref) === null
       ? []
       : [{ key: 'open' as const, icon: 'external-link' as const, label: t('toolbar.openLink') }]),
-    { key: 'copy', icon: 'copy', label: t('toolbar.copy') },
+    ...(visibility?.hideCopy
+      ? []
+      : [{ key: 'copy' as const, icon: 'copy' as const, label: t('toolbar.copy') }]),
     ...(visibility?.hideTranslate
       ? []
       : [
@@ -185,7 +191,7 @@ export function selectionActions(
     },
     // A file quoted from the Sidebar preview has no conversation message to
     // fork around, so the side-question entry point stays in the transcript.
-    ...(snapshot.surface === 'sidebarFile'
+    ...(snapshot.surface === 'sidebarFile' || visibility?.hideSide
       ? []
       : [
           {

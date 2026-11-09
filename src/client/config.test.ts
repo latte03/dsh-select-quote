@@ -14,6 +14,9 @@ describe('normalizeConfig', () => {
       toolbarPlacement: 'below',
       mergeHostSurface: false,
       shortcut: false,
+      showCopy: true,
+      showTranslate: true,
+      showAskInSide: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
       translateHideSameLanguage: false,
@@ -26,6 +29,9 @@ describe('normalizeConfig', () => {
       toolbarPlacement: 'below',
       mergeHostSurface: false,
       shortcut: true,
+      showCopy: true,
+      showTranslate: true,
+      showAskInSide: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
       translateHideSameLanguage: false,
@@ -62,6 +68,17 @@ describe('normalizeConfig', () => {
   it('keeps the merge switch only when boolean', () => {
     expect(normalizeConfig({ mergeHostSurface: true }).mergeHostSurface).toBe(true)
     expect(normalizeConfig({ mergeHostSurface: 'yes' }).mergeHostSurface).toBe(false)
+  })
+
+  it('keeps each button switch only when boolean', () => {
+    const off = normalizeConfig({ showCopy: false, showTranslate: false, showAskInSide: false })
+    expect([off.showCopy, off.showTranslate, off.showAskInSide]).toEqual([false, false, false])
+    const malformed = normalizeConfig({ showCopy: 'no', showTranslate: 0, showAskInSide: null })
+    expect([malformed.showCopy, malformed.showTranslate, malformed.showAskInSide]).toEqual([
+      true,
+      true,
+      true,
+    ])
   })
 
   it('keeps the translation route and prompt only when they are strings', () => {
