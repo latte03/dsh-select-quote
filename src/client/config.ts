@@ -42,6 +42,12 @@ export interface SelectQuoteConfig {
   showTranslate: boolean
   /** Show the side-task question entry. */
   showAskInSide: boolean
+  /**
+   * Show the annotation entry, chevron and destination rows included. This is
+   * the plugin's own action — with every switch off the toolbar would carry
+   * nothing but the gear, which is the same as not having the plugin.
+   */
+  showAnnotate: boolean
   sideTaskMode: SideTaskMode
   translateTarget: TranslateTarget
   /** Hide the translate entry when the selection already is the target language. */
@@ -61,6 +67,7 @@ export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   showCopy: true,
   showTranslate: true,
   showAskInSide: true,
+  showAnnotate: true,
   sideTaskMode: 'separate',
   translateTarget: 'auto',
   translateHideSameLanguage: false,
@@ -79,6 +86,42 @@ const TOOLBAR_PLACEMENTS: ReadonlySet<string> = new Set<ToolbarPlacement>(['abov
 
 const SIDE_TASK_MODES: ReadonlySet<string> = new Set<SideTaskMode>(['separate', 'reuse'])
 
+/** The four per-button switches the settings page shows. */
+export type ButtonSwitch = 'showCopy' | 'showTranslate' | 'showAskInSide' | 'showAnnotate'
+
+export const BUTTON_SWITCHES: readonly ButtonSwitch[] = [
+  'showAnnotate',
+  'showCopy',
+  'showTranslate',
+  'showAskInSide',
+]
+
+/** True when at least one selection button would still be painted. */
+export function hasAnyButton(config: Readonly<Record<ButtonSwitch, boolean>>): boolean {
+  return BUTTON_SWITCHES.some((key) => config[key])
+}
+
+/**
+ * Keep the selection row from emptying out.
+ *
+ * Every switch off leaves the toolbar with nothing but the gear and the Host's
+ * pill with only its own quote cell — indistinguishable from an uninstalled
+ * plugin, and there is no button left to explain why. So the last switch that
+ * is still on cannot be turned off: the stored value stays, and the settings
+ * row says which one it is instead of silently reverting.
+ */
+/** A switch keeps its value only when the form really sent a boolean. */
+function bool(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function keepOneButton(
+  switches: Record<ButtonSwitch, boolean>,
+): Record<ButtonSwitch, boolean> {
+  if (hasAnyButton(switches)) return switches
+  return { ...switches, showAnnotate: true }
+}
+
 /** Which entry points the current mode turns on. */
 export interface TriggerPlan {
   auto: boolean
@@ -90,6 +133,12 @@ export interface TriggerPlan {
 export function normalizeConfig(value: unknown): SelectQuoteConfig {
   if (typeof value !== 'object' || value === null) return { ...DEFAULT_CONFIG }
   const record = value as Record<string, unknown>
+  const switches = keepOneButton({
+    showCopy: bool(record.showCopy, DEFAULT_CONFIG.showCopy),
+    showTranslate: bool(record.showTranslate, DEFAULT_CONFIG.showTranslate),
+    showAskInSide: bool(record.showAskInSide, DEFAULT_CONFIG.showAskInSide),
+    showAnnotate: bool(record.showAnnotate, DEFAULT_CONFIG.showAnnotate),
+  })
   return {
     triggerMode: TRIGGER_MODES.has(record.triggerMode as string)
       ? (record.triggerMode as TriggerMode)
@@ -103,16 +152,10 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
         : DEFAULT_CONFIG.mergeHostSurface,
     shortcut:
       typeof record.shortcut === 'boolean' ? record.shortcut : DEFAULT_CONFIG.shortcut,
-    showCopy:
-      typeof record.showCopy === 'boolean' ? record.showCopy : DEFAULT_CONFIG.showCopy,
-    showTranslate:
-      typeof record.showTranslate === 'boolean'
-        ? record.showTranslate
-        : DEFAULT_CONFIG.showTranslate,
-    showAskInSide:
-      typeof record.showAskInSide === 'boolean'
-        ? record.showAskInSide
-        : DEFAULT_CONFIG.showAskInSide,
+    showCopy: switches.showCopy,
+    showTranslate: switches.showTranslate,
+    showAskInSide: switches.showAskInSide,
+    showAnnotate: switches.showAnnotate,
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
       ? (record.sideTaskMode as SideTaskMode)
       : DEFAULT_CONFIG.sideTaskMode,
@@ -173,6 +216,7 @@ export function publishConfig(value: unknown): SelectQuoteConfig {
     next.showCopy === current.showCopy &&
     next.showTranslate === current.showTranslate &&
     next.showAskInSide === current.showAskInSide &&
+    next.showAnnotate === current.showAnnotate &&
     next.sideTaskMode === current.sideTaskMode &&
     next.translateTarget === current.translateTarget &&
     next.translateHideSameLanguage === current.translateHideSameLanguage &&

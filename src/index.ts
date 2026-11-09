@@ -23,6 +23,7 @@ export interface Config {
   showCopy: Volatile<boolean>
   showTranslate: Volatile<boolean>
   showAskInSide: Volatile<boolean>
+  showAnnotate: Volatile<boolean>
   sideTaskMode: Volatile<'separate' | 'reuse'>
   translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
   translateHideSameLanguage: Volatile<boolean>
@@ -41,6 +42,7 @@ export const Config = z.object({
   showCopy: z.boolean().default(true).volatile(),
   showTranslate: z.boolean().default(true).volatile(),
   showAskInSide: z.boolean().default(true).volatile(),
+  showAnnotate: z.boolean().default(true).volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
   translateTarget: z
     .union(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'])

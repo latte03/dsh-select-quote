@@ -117,6 +117,11 @@ export interface SelectionActionVisibility {
   readonly hideCopy?: boolean
   /** Hide the side-task question entry (settings switch). */
   readonly hideSide?: boolean
+  /**
+   * Hide the annotation entry (settings switch). The chevron and the menu's
+   * destination rows ride on the same entry, so both go with it.
+   */
+  readonly hideAnnotate?: boolean
 }
 
 /**
@@ -163,32 +168,36 @@ export function selectionActions(
     // conversation being read (the main click — nothing is written elsewhere)
     // and send it to a different one (the chevron). Both halves share the same
     // comment, so they share one button and one label.
-    {
-      key: 'annotate' as const,
-      icon: 'plus' as const,
-      // The trailing half names where it goes right now; the chevron changes it.
-      label: `${t('toolbar.annotate')} ${t('annotate.here')}`,
-      labelParts: [
-        { text: `${t('toolbar.annotate')} ` },
-        { text: t('annotate.here'), accent: true },
-      ],
-      ...(handoff?.available
-        ? {
-            destinations: [
-              ...(handoff.targetName === undefined
-                ? []
-                : [
-                    {
-                      key: 'target' as const,
-                      label: handoff.label,
-                      labelParts: splitLabelAt(handoff.label, handoff.targetName),
-                    },
-                  ]),
-              { key: 'picker' as const, label: handoff.menuLabel ?? t('handoff.menu') },
+    ...(visibility?.hideAnnotate
+      ? []
+      : [
+          {
+            key: 'annotate' as const,
+            icon: 'plus' as const,
+            // The trailing half names where it goes right now; the chevron changes it.
+            label: `${t('toolbar.annotate')} ${t('annotate.here')}`,
+            labelParts: [
+              { text: `${t('toolbar.annotate')} ` },
+              { text: t('annotate.here'), accent: true },
             ],
-          }
-        : {}),
-    },
+            ...(handoff?.available
+              ? {
+                  destinations: [
+                    ...(handoff.targetName === undefined
+                      ? []
+                      : [
+                          {
+                            key: 'target' as const,
+                            label: handoff.label,
+                            labelParts: splitLabelAt(handoff.label, handoff.targetName),
+                          },
+                        ]),
+                    { key: 'picker' as const, label: handoff.menuLabel ?? t('handoff.menu') },
+                  ],
+                }
+              : {}),
+          },
+        ]),
     // A file quoted from the Sidebar preview has no conversation message to
     // fork around, so the side-question entry point stays in the transcript.
     ...(snapshot.surface === 'sidebarFile' || visibility?.hideSide

@@ -459,15 +459,19 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   )
 
   const visibilityFor = useCallback(
-    (text: string): { hideTranslate: boolean; hideCopy: boolean; hideSide: boolean } => ({
+    (
+      text: string,
+    ): { hideTranslate: boolean; hideCopy: boolean; hideSide: boolean; hideAnnotate: boolean } => ({
       hideCopy: !config.showCopy,
       hideTranslate:
         !config.showTranslate ||
         (config.translateHideSameLanguage &&
           isAlreadyTargetLanguage(text, config.translateTarget, activeLocale())),
       hideSide: !config.showAskInSide,
+      hideAnnotate: !config.showAnnotate,
     }),
     [
+      config.showAnnotate,
       config.showAskInSide,
       config.showCopy,
       config.showTranslate,
@@ -499,6 +503,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           runAction(action.key, snapshot, 'toolbar', destination),
       })),
     [
+      config.showAnnotate,
       config.showAskInSide,
       config.showCopy,
       config.showTranslate,

@@ -235,6 +235,7 @@ export const styles = {
   settingsShortcutKeys: 'dsq_settingsShortcutKeys',
   keycap: 'dsq_keycap',
   settingsDivider: 'dsq_settingsDivider',
+  settingsNotice: 'dsq_settingsNotice',
   settingsSwitchRow: 'dsq_settingsSwitchRow',
   switch: 'dsq_switch',
   switchTrack: 'dsq_switchTrack',

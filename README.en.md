@@ -67,7 +67,7 @@ Plugin page → `dsh-select-quote`; configuration is shown directly on the plugi
 
 - **Selection trigger**: auto / right-click menu / both, auto by default
 - **Toolbar placement**: below (default) or above, for auto or both; flips automatically when space runs out (hidden while the toolbar is merged into the host surface)
-- **Selection buttons**: show or hide **Copy**, **Translate** and **Ask in side task** in the selection toolbar and right-click menu; all three are on by default
+- **Selection buttons**: show or hide **Annotate** (chevron and send targets included), **Copy**, **Translate** and **Ask in side task** in the selection toolbar and right-click menu; all four are on by default. **Keep at least one on** — with every switch off the plugin looks uninstalled, so the last switch refuses to turn off and says why
 - **Merge into the host surface**: put our buttons inside the built-in selection pill (Quote text plus copy / translate / annotate with its destination picker), instead of a second pill next to the text; off by default
 - **Settings shortcut**: the gear at the end of the row jumps straight to this plugin's page, where the configuration lives
 - **Shortcuts**: enable the two commands and see the effective keys; change them in the host's Shortcuts settings

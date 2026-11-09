@@ -113,7 +113,11 @@ export const en: LocaleDict = {
   'settings.showTranslate': 'Translate',
   'settings.showTranslateHint': 'Show Translate in the selection toolbar and menu.',
   'settings.showAskInSide': 'Ask in side task',
-  'settings.showAskInSideHint': 'Show the side-task question action.',
+  'settings.showAskInSideHint': 'Show the side-task question in the toolbar and menu.',
+  'settings.showAnnotate': 'Annotate',
+  'settings.showAnnotateHint':
+    'Show Annotate in the toolbar and menu, chevron and send targets included.',
+  'settings.keepOneButton': 'Keep at least one button on; otherwise the plugin looks uninstalled.',
   'settings.mergeHostSurface': 'Merge into the host surface',
   'settings.mergeHostSurfaceHint': 'Our actions ride in the host’s selection pill instead of a second bar.',
   'settings.shortcut': 'Shortcut',

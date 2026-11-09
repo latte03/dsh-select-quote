@@ -242,6 +242,19 @@ export const SETTINGS_CSS = `
   background: var(--dsq-line);
 }
 
+/* Shown when the last button switch was refused: the toolbar would otherwise
+   be as empty as an uninstalled plugin. Colours stay on the --dsq-* aliases. */
+.dsq_settingsNotice {
+  margin: -8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--dsq-accent) 32%, transparent);
+  border-radius: var(--dsq-radius-sm);
+  background: var(--dsq-accent-tint);
+  color: var(--dsq-label);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* The whole row is the target: label text, hint, and the switch itself. */
 .dsq_settingsSwitchRow {
   display: flex;

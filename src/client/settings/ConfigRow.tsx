@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  hasAnyButton,
   normalizeConfig,
+  type ButtonSwitch,
   type SideTaskMode,
   type ToolbarPlacement,
   type TranslateTarget,
@@ -202,6 +204,31 @@ function ConfigSection({
     if (!promptFocused.current) setPrompt(current.translatePrompt)
   }, [current.translatePrompt])
 
+  /**
+   * True once the user tried to switch off the last button still on. The row
+   * refuses and says why; `keepOneButton()` in `config.ts` is the same rule,
+   * kept there so a stale form value cannot empty the row either.
+   */
+  const [keepOneNotice, setKeepOneNotice] = useState(false)
+  /**
+   * Every button switch goes through here instead of `form.set`: turning the
+   * last one off would leave the toolbar with nothing but the gear and the
+   * Host's pill with only its own quote cell — indistinguishable from a plugin
+   * that is not installed, with no button left to click back to the settings.
+   */
+  const setSwitch = useCallback(
+    async (field: ButtonSwitch, next: boolean): Promise<void> => {
+      const remaining = { ...current, [field]: next }
+      if (!next && !hasAnyButton(remaining)) {
+        setKeepOneNotice(true)
+        return
+      }
+      setKeepOneNotice(false)
+      await form.set(field, next)
+    },
+    [current, form],
+  )
+
   return (
     <div className={styles.settings}>
       <div className={styles.settingsSection}>
@@ -245,6 +272,26 @@ function ConfigSection({
       </div>
       <label className={styles.settingsSwitchRow}>
         <span className={styles.settingsCopy}>
+          <span className={styles.settingsLabel}>{t('settings.showAnnotate')}</span>
+          <span className={styles.settingsHint}>{t('settings.showAnnotateHint')}</span>
+        </span>
+        <span className={styles.switch} data-on={current.showAnnotate}>
+          <input
+            type="checkbox"
+            className={styles.srOnly}
+            aria-label={t('settings.showAnnotate')}
+            checked={current.showAnnotate}
+            onChange={(event) => {
+              const next = event.target.checked
+              if (next === current.showAnnotate) return
+              void setSwitch('showAnnotate', next)
+            }}
+          />
+          <span className={styles.switchTrack} aria-hidden="true" />
+        </span>
+      </label>
+      <label className={styles.settingsSwitchRow}>
+        <span className={styles.settingsCopy}>
           <span className={styles.settingsLabel}>{t('settings.showCopy')}</span>
           <span className={styles.settingsHint}>{t('settings.showCopyHint')}</span>
         </span>
@@ -257,7 +304,7 @@ function ConfigSection({
             onChange={(event) => {
               const next = event.target.checked
               if (next === current.showCopy) return
-              void form.set('showCopy', next)
+              void setSwitch('showCopy', next)
             }}
           />
           <span className={styles.switchTrack} aria-hidden="true" />
@@ -277,7 +324,7 @@ function ConfigSection({
             onChange={(event) => {
               const next = event.target.checked
               if (next === current.showTranslate) return
-              void form.set('showTranslate', next)
+              void setSwitch('showTranslate', next)
             }}
           />
           <span className={styles.switchTrack} aria-hidden="true" />
@@ -297,12 +344,17 @@ function ConfigSection({
             onChange={(event) => {
               const next = event.target.checked
               if (next === current.showAskInSide) return
-              void form.set('showAskInSide', next)
+              void setSwitch('showAskInSide', next)
             }}
           />
           <span className={styles.switchTrack} aria-hidden="true" />
         </span>
       </label>
+      {keepOneNotice ? (
+        <p className={styles.settingsNotice} role="status">
+          {t('settings.keepOneButton')}
+        </p>
+      ) : null}
       <div className={styles.settingsDivider} aria-hidden="true" />
       <label className={styles.settingsSwitchRow}>
         <span className={styles.settingsCopy}>

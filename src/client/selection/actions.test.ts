@@ -69,6 +69,16 @@ describe('selection actions', () => {
     ).toEqual(['copy', 'annotate', 'side'])
   })
 
+  it('hides Annotate with its chevron and destination rows when its setting is off', () => {
+    const actions = selectionActions(
+      snapshot(),
+      { available: true, label: 'Send to x', menuLabel: 'Send to session…' },
+      { hideAnnotate: true },
+    )
+    expect(actions.map((action) => action.key)).toEqual(['copy', 'translate', 'side'])
+    expect(actions.some((action) => action.destinations !== undefined)).toBe(false)
+  })
+
   it('omits the side question for a file selected in the Sidebar', () => {
     expect(
       selectionActions(snapshot(undefined, 'sidebarFile')).map((action) => action.key),

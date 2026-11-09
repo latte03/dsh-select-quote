@@ -113,7 +113,12 @@ export const fr: LocaleDict = {
   'settings.showTranslate': 'Traduire',
   'settings.showTranslateHint': 'Affiche Traduire dans la barre de sélection et le menu.',
   'settings.showAskInSide': 'Demander dans une tâche latérale',
-  'settings.showAskInSideHint': "Affiche l'action de question latérale.",
+  'settings.showAskInSideHint':
+    'Affiche la question en tâche latérale dans la barre et le menu.',
+  'settings.showAnnotate': 'Annoter',
+  'settings.showAnnotateHint':
+    'Affiche Annoter dans la barre et le menu, flèche et destinations comprises.',
+  'settings.keepOneButton': "Laissez au moins un bouton actif ; tout couper donne l'impression que le plugin n'est pas installé.",
   'settings.mergeHostSurface': 'Fusionner dans la barre de l’hôte',
   'settings.mergeHostSurfaceHint': 'Nos boutons s’affichent dans la barre de l’hôte, sans seconde barre.',
   'settings.shortcut': 'Raccourci',

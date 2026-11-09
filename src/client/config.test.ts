@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CONFIG, normalizeConfig, resolveTriggers } from './config.ts'
+import { DEFAULT_CONFIG, hasAnyButton, normalizeConfig, resolveTriggers } from './config.ts'
 
 describe('normalizeConfig', () => {
   it('falls back to the defaults for a missing or malformed snapshot', () => {
@@ -17,6 +17,7 @@ describe('normalizeConfig', () => {
       showCopy: true,
       showTranslate: true,
       showAskInSide: true,
+      showAnnotate: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
       translateHideSameLanguage: false,
@@ -32,6 +33,7 @@ describe('normalizeConfig', () => {
       showCopy: true,
       showTranslate: true,
       showAskInSide: true,
+      showAnnotate: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
       translateHideSameLanguage: false,
@@ -71,14 +73,55 @@ describe('normalizeConfig', () => {
   })
 
   it('keeps each button switch only when boolean', () => {
-    const off = normalizeConfig({ showCopy: false, showTranslate: false, showAskInSide: false })
-    expect([off.showCopy, off.showTranslate, off.showAskInSide]).toEqual([false, false, false])
+    const off = normalizeConfig({
+      showCopy: false,
+      showTranslate: false,
+      showAskInSide: false,
+      showAnnotate: false,
+    })
+    // Four switches off would empty the toolbar, so normalisation keeps the
+    // plugin's own action — the one the whole plugin exists for.
+    expect([off.showCopy, off.showTranslate, off.showAskInSide, off.showAnnotate]).toEqual([
+      false,
+      false,
+      false,
+      true,
+    ])
+    const three = normalizeConfig({
+      showCopy: false,
+      showTranslate: false,
+      showAskInSide: false,
+    })
+    expect([three.showCopy, three.showTranslate, three.showAskInSide, three.showAnnotate]).toEqual([
+      false,
+      false,
+      false,
+      true,
+    ])
+    const last = normalizeConfig({
+      showCopy: false,
+      showTranslate: true,
+      showAskInSide: false,
+      showAnnotate: false,
+    })
+    expect([last.showCopy, last.showTranslate, last.showAskInSide, last.showAnnotate]).toEqual([
+      false,
+      true,
+      false,
+      false,
+    ])
     const malformed = normalizeConfig({ showCopy: 'no', showTranslate: 0, showAskInSide: null })
     expect([malformed.showCopy, malformed.showTranslate, malformed.showAskInSide]).toEqual([
       true,
       true,
       true,
     ])
+  })
+
+  it('reports which switches would still paint a button', () => {
+    expect(hasAnyButton({ showCopy: false, showTranslate: false, showAskInSide: false, showAnnotate: true })).toBe(true)
+    expect(hasAnyButton({ showCopy: false, showTranslate: false, showAskInSide: false, showAnnotate: false })).toBe(false)
+    expect(hasAnyButton(DEFAULT_CONFIG)).toBe(true)
   })
 
   it('keeps the translation route and prompt only when they are strings', () => {
