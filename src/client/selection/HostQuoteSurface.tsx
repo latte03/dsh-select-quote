@@ -9,26 +9,35 @@
  * over. There is no way to sit *next to* the Host's button: a second entry for
  * the same key has to outrank it and then paint everything itself.
  *
- * So this component paints both halves: the quote button the Host used to
+ * So this component paints the whole pill: the quote button the Host used to
  * paint (same behaviour — read the selection, insert a `QuoteNode`, clear and
- * dismiss) and, when `mergeHostSurface` is on, this plugin's own action row.
- * The row is not rebuilt here: it is asked for from the mounted coordinator
- * through `host-surface.ts`, so labels, availability and handoff options stay
- * identical to the floating toolbar's.
+ * dismiss) as the first cell of the row, and, when `mergeHostSurface` is on,
+ * this plugin's own actions after it. The row is not rebuilt here: it is asked
+ * for from the mounted coordinator through `host-surface.ts`, so labels,
+ * availability and handoff options stay identical to the floating toolbar's.
  *
  * Registration is unconditional because a slot entry cannot be added or
  * removed at runtime; `mergeHostSurface` decides what the pill contains, and
- * with it off the pill is a faithful stand-in for the Host's own button.
+ * with it off the quote cell is the only one — a faithful stand-in for the
+ * Host's own button.
  */
 
-import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { getConfig, subscribeConfig } from '../config.ts'
 import { readSelectionSnapshot } from '../dom/selection.ts'
 import { t } from '../i18n.ts'
-import { A, cx, styles } from '../styles.ts'
-import { LucideIcon } from '../ui/icons.tsx'
+import { styles } from '../styles.ts'
+import { runtime } from '../runtime.ts'
 import type { SelectionActionEntry } from './actions.ts'
-import { hostSurface } from './host-surface.ts'
+import { hostSurface, publishHostDismiss } from './host-surface.ts'
 import { guardSurfacePress } from './pointer-guard.ts'
 import { ActionRow } from './ToolbarView.tsx'
 
@@ -60,6 +69,10 @@ export function HostQuoteSurface({
   inputActions,
 }: HostQuoteSurfaceProps): ReactNode {
   const config = useSyncExternalStore(subscribeConfig, getConfig, getConfig)
+  const pillRef = useRef<HTMLDivElement | null>(null)
+  /** Width the row needs with its labels; only readable while they are painted. */
+  const naturalWidthRef = useRef(0)
+  const [compact, setCompact] = useState(false)
 
   // The pill mounts once per gesture, while the selection it dispatched on is
   // still live (the Host reads the same range on click), so the snapshot can be
@@ -69,18 +82,6 @@ export function HostQuoteSurface({
   const snapshot = readSelectionSnapshot(null)
   const bridge = config.mergeHostSurface ? hostSurface() : null
   const actions = snapshot !== null && bridge !== null ? bridge.actions(snapshot) : []
-  // Our own phases (comment, translate, side question, hand-off picker) open
-  // their own surface. The Host pill does not know about them and never
-  // dismisses on its own, so every action the row runs has to close it, or two
-  // surfaces would sit on top of each other. The native selection is left
-  // alone: the flows measure and save it themselves.
-  const entries: readonly SelectionActionEntry[] = actions.map((entry) => ({
-    ...entry,
-    onClick: () => {
-      entry.onClick()
-      dismiss?.()
-    },
-  }))
 
   const quote = useCallback(() => {
     const text = readText?.() ?? null
@@ -93,22 +94,91 @@ export function HostQuoteSurface({
     dismiss?.()
   }, [readText, dismiss, clearSelection, inputActions])
 
+  /**
+   * One row: the Host's quote cell, then our actions.
+   *
+   * The quote cell sits immediately before 批注 so the two "take this text"
+   * actions read together; with merging off it is the only cell.
+   *
+   * Our own phases (comment, translate, side question, hand-off picker) open
+   * their own surface. The Host pill does not know about them and never
+   * dismisses on its own, so every cell closes it first, or two surfaces would
+   * sit on top of each other. The native selection is left alone: the flows
+   * measure and save it themselves.
+   */
+  const entries: readonly SelectionActionEntry[] = (() => {
+    const cells: SelectionActionEntry[] = actions.map((entry) => ({
+      ...entry,
+      onClick: () => {
+        entry.onClick()
+        dismiss?.()
+      },
+    }))
+    const quoteCell: SelectionActionEntry = {
+      key: 'quote',
+      icon: 'message-square-quote',
+      label: t('toolbar.quote'),
+      onClick: () => {
+        quote()
+        dismiss?.()
+      },
+    }
+    const at = cells.findIndex((cell) => cell.key === 'annotate')
+    return at < 0 ? [...cells, quoteCell] : [...cells.slice(0, at), quoteCell, ...cells.slice(at)]
+  })()
+
+  // The chevron's target picker is painted by the coordinator; the pill only
+  // hands over the request. It stays open underneath, so the row does not look
+  // like it closed the moment its chevron was pressed.
+  const destinations = useCallback(
+    (action: SelectionActionEntry, at?: { x: number; y: number }) => {
+      if (snapshot === null) return
+      bridge?.destinations(snapshot, action, at)
+    },
+    [bridge, snapshot],
+  )
+
+  // Published so a flow started from this row can close the pill; the Host owns
+  // the surface and only this component holds its dismiss.
+  useEffect(() => {
+    publishHostDismiss(() => dismiss?.())
+    return () => publishHostDismiss(null)
+  }, [dismiss])
+
+  /**
+   * The Host caps its surface to the width of the column it floats over, and the
+   * row does not shrink — so labels spill out of the pill instead of the pill
+   * growing. When the natural row is wider than that box, drop to icons: each
+   * cell keeps its tooltip and aria-label, and the destination chevron stays.
+   */
+  useLayoutEffect(() => {
+    const el = pillRef.current
+    if (!el) return
+    const box = el.parentElement
+    const available = Math.max(160, (box?.clientWidth ?? window.innerWidth) - 8)
+    if (!compact) naturalWidthRef.current = el.scrollWidth
+    const shouldCompact = naturalWidthRef.current > available
+    if (shouldCompact !== compact) setCompact(shouldCompact)
+  })
+
   return (
-    <div className={styles.hostPill} onPointerDown={guardSurfacePress}>
-      <button
-        type="button"
-        className={cx(A.plain, A.inlineRow, styles.button)}
-        onClick={quote}
-      >
-        <LucideIcon name="quote" size={14} className={styles.pillQuote} />
-        {t('toolbar.quote')}
-      </button>
-      {entries.length > 0 ? (
-        <>
-          <span className={styles.divider} aria-hidden="true" />
-          <ActionRow actions={entries} stacked={false} />
-        </>
-      ) : null}
+    <div ref={pillRef} className={styles.hostPill} onPointerDown={guardSurfacePress}>
+      <ActionRow
+        actions={entries}
+        stacked={false}
+        compact={compact}
+        onDestinations={destinations}
+        // The gear belongs to our row: with merging off the pill is the Host's
+        // own quote button and must not grow any of our chrome.
+        {...(actions.length > 0
+          ? {
+              onSettings: () => {
+                dismiss?.()
+                runtime.openPluginSettings?.()
+              },
+            }
+          : {})}
+      />
     </div>
   )
 }

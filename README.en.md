@@ -13,7 +13,7 @@ A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/q
 
 ## Features
 
-- **Selection toolbar**: select text in the conversation or in a file preview in the right Sidebar to get **Open link / Copy / Translate / Add annotation / Ask in sidebar**. File previews omit **Ask in sidebar**. The toolbar can sit above or below the selection
+- **Selection toolbar**: select text in the conversation or in a file preview in the right Sidebar to get **Open link / Copy / Translate / Annotate / Ask in sidebar**. File previews omit **Ask in sidebar**. The toolbar can sit above or below the selection
 - **In-place translation**: translates the selection into the target language, streaming next to it. While the model is thinking, a progress icon shows live reasoning; once the translation lands, the reasoning collapses but stays available. The target follows the UI language by default and can be switched on the spot; the result copies in one click. Reopening the same text with the same settings reuses the in-memory cache for the session without calling the model
 - **Right-click menu and shortcuts**: the same actions open from the selection's context menu or from the keyboard; key bindings are configurable in the host's settings
 - **Annotation summary**: the composer shows "N annotations" above it; expand to edit or jump back to the source. Deleting asks for a second "Confirm removal" click; the summary clears when the message is sent
@@ -47,19 +47,19 @@ Open `http://127.0.0.1:3080` to try it. `dev.patch.yml` is a local, untracked fi
 
 ## Usage
 
-1. Select text in the conversation or in a file preview in the right Sidebar → click **Add annotation**; the annotation is saved immediately. Add a comment in the box; `Enter` or `⌘/Ctrl + Enter` submits, `Shift + Enter` inserts a newline
+1. Select text in the conversation or in a file preview in the right Sidebar → click **Annotate** (the main button); the annotation is saved immediately. Add a comment in the box; `Enter` or `⌘/Ctrl + Enter` submits, `Shift + Enter` inserts a newline
 2. Hover (or tap on touch) the summary above the composer to expand the list: edit, delete, or jump back to the text. Click a mark in the text to preview its annotation
 3. Send as usual: annotations go to the model with the message, the summary disappears, the marks stay; model references render as chips
 4. **Ask in sidebar** opens the composer first; the subagent is created and shown in the right sidebar only after you press send. The directory names it "Ask in sidebar · question summary"
 5. **Translate** opens the translation popover and starts streaming right away: switch languages in the header, **Stop** cancels; use the copy icon at the bottom right when done; Esc or an outside click closes it
-6. **Send to session** picks a target: **Send** stays on the current page, **Send and open** opens the target. Entries in the target composer carry "From"; click one to return to the source
+6. **Annotate this conversation** is the main button; its chevron opens the **Send to** panel, whose first row is this conversation. Pick a session, then **Send** to stay here or **Send and open** to go there: **Send** stays on the current page, **Send and open** opens the target. Entries in the target composer carry "From"; click one to return to the source
 
 There are three ways to open the menu after selecting text: auto (default), right-click on the selection, or a shortcut. Touch always uses the bottom action bar.
 
 | Action | Desktop macOS | Desktop Win/Linux | Web macOS | Web Windows | Web Linux |
 |---|---|---|---|---|---|
 | Open selection menu | `⌘L` | `Ctrl+Shift+L` | `⇧⌘L` | `Ctrl+Shift+L` | `Ctrl+Shift+,` |
-| Add annotation | `⇧⌘L` | `Ctrl+Shift+.` | `⌥⌘L` | `Ctrl+Shift+.` | `Ctrl+Shift+.` |
+| Annotate | `⇧⌘L` | `Ctrl+Shift+.` | `⌥⌘L` | `Ctrl+Shift+.` | `Ctrl+Shift+.` |
 
 ## Settings
 
@@ -67,7 +67,8 @@ Plugin page → `dsh-select-quote`; configuration is shown directly on the plugi
 
 - **Selection trigger**: auto / right-click menu / both, auto by default
 - **Toolbar placement**: below (default) or above, for auto or both; flips automatically when space runs out (hidden while the toolbar is merged into the host surface)
-- **Merge into the host surface**: put our buttons inside the built-in selection pill (Quote text plus copy / translate / annotate / hand off), instead of a second pill next to the text; off by default
+- **Merge into the host surface**: put our buttons inside the built-in selection pill (Quote text plus copy / translate / annotate with its destination picker), instead of a second pill next to the text; off by default
+- **Settings shortcut**: the gear at the end of the row jumps straight to this plugin's page, where the configuration lives
 - **Shortcuts**: enable the two commands and see the effective keys; change them in the host's Shortcuts settings
 - **Sidebar subagent**: fresh each time (default) or reuse one; in reuse mode the directory keeps a single entry, and context and model stay at first creation
 - **Translation target**: auto (default, follows the UI language; translates to English when the source is already in that language) or one of eight fixed languages

@@ -38,7 +38,11 @@ export interface WorkspaceListSnapshot {
   readonly pinnedSessionIds?: readonly string[]
 }
 
-export type TargetKind = 'existing' | 'new'
+/**
+ * `existing` is another session, `new` a fresh one, `here` the conversation
+ * being read — the picker's first row, which keeps the passage where it is.
+ */
+export type TargetKind = 'existing' | 'new' | 'here'
 
 export interface TargetSession {
   readonly kind: TargetKind
@@ -52,6 +56,8 @@ export interface TargetSession {
 }
 
 export interface TargetDirectory {
+  /** The conversation being read; the picker opens with it as the first row. */
+  readonly here: TargetSession | null
   /** The pseudo target, or null when the source has no workspace and no cwd. */
   readonly newSession: TargetSession | null
   /** Sessions of the source's own workspace, newest first. */
@@ -70,6 +76,7 @@ export interface TargetDirectory {
 }
 
 const EMPTY_DIRECTORY: TargetDirectory = {
+  here: null,
   newSession: null,
   current: [],
   other: [],
@@ -168,8 +175,21 @@ export function buildTargetDirectory(input: {
         }
       : null
 
+  const here: TargetSession | null = currentSessionId
+    ? {
+        kind: 'here',
+        sessionId: currentSessionId,
+        title: '',
+        ...(currentWorkspace
+          ? { workspaceId: currentWorkspace.workspaceId, workspaceTitle: currentWorkspace.title }
+          : {}),
+        updatedAt: updatedAtOf(source),
+      }
+    : null
+
   const defaultTarget = current[0] ?? newSession ?? other[0] ?? ungrouped[0] ?? null
   return {
+    here,
     newSession,
     current,
     other,
@@ -184,6 +204,7 @@ export function buildTargetDirectory(input: {
 /** Every row in render order (search and keyboard navigation flatten this). */
 export function flattenTargets(directory: TargetDirectory): readonly TargetSession[] {
   return [
+    ...(directory.here ? [directory.here] : []),
     ...(directory.newSession ? [directory.newSession] : []),
     ...directory.current,
     ...directory.other,
@@ -193,7 +214,7 @@ export function flattenTargets(directory: TargetDirectory): readonly TargetSessi
 
 /** Stable identity for selection and focus (`new` or the session id). */
 export function targetId(target: TargetSession): string {
-  return target.kind === 'new' ? 'new' : target.sessionId
+  return target.kind === 'new' ? 'new' : target.kind === 'here' ? 'here' : target.sessionId
 }
 
 export function findTarget(

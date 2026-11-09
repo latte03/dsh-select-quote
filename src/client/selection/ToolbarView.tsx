@@ -22,8 +22,9 @@ import { LANGUAGE_LABELS, TRANSLATE_LANGUAGES } from '../translate.ts'
 import { LucideIcon } from '../ui/icons.tsx'
 import { Kbd } from '../ui/Kbd.tsx'
 import type { VisualViewportMetrics } from '../ui/touch.ts'
-import type { SelectionAction, SelectionActionEntry } from './actions.ts'
+import type { SelectionAction, SelectionActionEntry, SelectionLabelPart } from './actions.ts'
 import { LanguageMenu } from './LanguageMenu.tsx'
+import { SplitLabel } from './SplitLabel.tsx'
 import type { TranslationActions } from './translation-view.ts'
 import type { SelectionPhase } from './useSelectionWatcher.ts'
 
@@ -73,104 +74,172 @@ export interface ToolbarViewProps {
   readonly onSideKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
   readonly onSendSide: () => void
   readonly onCancelSide: () => void
-  /** Opens the target picker from the handoff button's chevron. */
-  readonly onHandoffPick?: () => void
+  /** Icon-only row: the toolbar is wider than the space it floats over. */
+  readonly compact?: boolean
+  /** Opens the destination picker behind an entry's chevron. */
+  readonly onDestinations?: (
+    action: SelectionActionEntry,
+    at?: { x: number; y: number },
+  ) => void
+  /** Jumps to this plugin's settings page (the row's trailing gear). */
+  readonly onSettings?: () => void
   /** Present only while the handoff phase owns the surface. */
   readonly handoff?: HandoffPanelActions | null
   /** Present only while the translate phase owns the surface. */
   readonly translate?: TranslationActions | null
 }
 
-/** Label text with the handoff target name painted in the accent color. */
-function ActionLabel({ action }: { action: SelectionAction }): ReactNode {
-  if (!action.labelParts) return action.label
-  return action.labelParts.map((part, index) =>
-    part.accent ? (
-      <span key={index} className={styles.handoffTargetName}>
-        {part.text}
-      </span>
-    ) : (
-      <Fragment key={index}>{part.text}</Fragment>
-    ),
-  )
+/** Plain wording of a cell, for the icon-only (compact) button's label. */
+function labelTextOf(cell: ActionCell): string {
+  if (cell.parts !== undefined) return cell.parts.map((part) => part.text).join('')
+  return cell.label ?? cell.action.label
+}
+
+/** One painted button: an entry itself, or one of its destinations. */
+interface ActionCell {
+  readonly id: string
+  readonly action: SelectionActionEntry
+  /** Destination wording; absent for the entry's own button. */
+  readonly label: string | null
+  /** Split wording for the destination name (accent segment). */
+  readonly parts?: readonly SelectionLabelPart[]
+  readonly onClick: (() => void) | undefined
+  /** First cell of an entry, which is what a divider separates. */
+  readonly starts: boolean
+  /** Paint the destinations behind a chevron instead of as extra cells. */
+  readonly chevron: boolean
 }
 
 /**
  * One row of action buttons. Exported because the Host's merged selection pill
  * (`HostQuoteSurface`) paints the same row inside its own container.
+ *
+ * An entry that carries destinations is a split control: the button runs the
+ * entry itself (for 批注 that means "stay in the conversation being read") and
+ * the chevron opens everywhere else the passage can go. The touch bar has no
+ * chevron — vertical space is free and a menu would only cost a tap — so each
+ * destination becomes a row of its own.
  */
 export function ActionRow({
   actions,
   stacked,
-  onHandoffPick,
+  compact = false,
+  onDestinations,
+  onSettings,
 }: {
   actions: readonly SelectionActionEntry[]
   stacked: boolean
-  onHandoffPick?: () => void
+  /** Icon-only cells: the row is wider than the space it floats over. */
+  compact?: boolean
+  /** Opens the destination picker of a split entry (its chevron). */
+  onDestinations?: (action: SelectionActionEntry, at?: { x: number; y: number }) => void
+  /** Jumps to this plugin's settings; the gear is the row's last button. */
+  onSettings?: () => void
 }): ReactNode {
-  return actions.map((action, index) => {
-    const handoff = action.key === 'handoff' && onHandoffPick !== undefined
-    return (
-      <Fragment key={action.key}>
-        {!stacked && index > 0 ? <span className={styles.divider} aria-hidden="true" /> : null}
+  const cells: ActionCell[] = []
+  for (const action of actions) {
+    const destinations = action.destinations ?? []
+    cells.push({
+      id: action.key,
+      action,
+      label: null,
+      ...(action.labelParts === undefined ? {} : { parts: action.labelParts }),
+      onClick: action.onClick,
+      starts: true,
+      chevron: !stacked && destinations.length > 0 && onDestinations !== undefined,
+    })
+    if (!stacked) continue
+    for (const destination of destinations) {
+      cells.push({
+        id: `${action.key}:${destination.key}`,
+        action,
+        label: destination.label,
+        ...(destination.labelParts === undefined ? {} : { parts: destination.labelParts }),
+        onClick: () => action.pick?.(destination.key),
+        starts: false,
+        chevron: false,
+      })
+    }
+  }
+  const row = cells.map((cell, index) => (
+    <Fragment key={cell.id}>
+      {!stacked && !compact && index > 0 && cell.starts ? (
+        <span className={styles.divider} aria-hidden="true" />
+      ) : null}
+      <button
+        type="button"
+        className={cx(
+          A.plain,
+          stacked ? A.col : A.inlineRow,
+          stacked ? styles.touchAction : styles.button,
+          compact && !stacked && cx(A.gridMid, styles.buttonCompact),
+        )}
+        aria-label={compact && !stacked ? labelTextOf(cell) : undefined}
+        title={compact && !stacked ? labelTextOf(cell) : undefined}
+        aria-haspopup={cell.chevron ? 'dialog' : undefined}
+        // aria-disabled rather than `disabled`: a disabled button drops hover
+        // in some browsers, and the tooltip is the whole point here. Clicks
+        // are ignored below instead.
+        aria-disabled={cell.action.disabled ? 'true' : undefined}
+        data-dsq-tip={cell.action.disabled ? cell.action.disabledReason : undefined}
+        data-dsq-destinations={cell.chevron ? 'true' : undefined}
+        onClick={cell.action.disabled ? undefined : cell.onClick}
+      >
+        <LucideIcon name={cell.action.icon} size={stacked ? 18 : 14} />
+        {compact && !stacked ? null : stacked ? (
+          <span>{cell.parts ? <SplitLabel parts={cell.parts} /> : (cell.label ?? cell.action.label)}</span>
+        ) : cell.parts ? (
+          <SplitLabel parts={cell.parts} />
+        ) : (
+          cell.label ?? cell.action.label
+        )}
+      </button>
+      {cell.chevron ? (
         <button
           type="button"
-          className={cx(
-            A.plain,
-            stacked ? A.col : A.inlineRow,
-            stacked ? styles.touchAction : styles.button,
-          )}
-          aria-haspopup={handoff ? 'dialog' : undefined}
-          // aria-disabled rather than `disabled`: a disabled button drops hover
-          // in some browsers, and the tooltip is the whole point here. Clicks
-          // are ignored below instead.
-          aria-disabled={action.disabled ? 'true' : undefined}
-          data-dsq-tip={action.disabled ? action.disabledReason : undefined}
-          data-dsq-handoff-trigger={handoff ? 'true' : undefined}
-          onClick={
-            action.disabled
-              ? undefined
-              : action.onClick
-          }
+          className={cx(A.plain, A.gridMid, styles.handoffChevron)}
+          aria-haspopup="dialog"
+          aria-label={t('handoff.dialogAria')}
+          title={t('handoff.dialogAria')}
+          data-dsq-destinations-picker="true"
+          onClick={(event) => {
+            event.stopPropagation()
+            const rect = event.currentTarget.getBoundingClientRect()
+            onDestinations?.(cell.action, { x: rect.left, y: rect.bottom })
+          }}
         >
-          <LucideIcon name={action.icon} size={stacked ? 18 : 14} />
-          {stacked ? (
-            <span>
-              <ActionLabel action={action} />
-            </span>
-          ) : (
-            <ActionLabel action={action} />
-          )}
+          <LucideIcon name="chevron-down" size={12} />
         </button>
-        {handoff ? (
+      ) : null}
+    </Fragment>
+  ))
+  return (
+    <>
+      {row}
+      {onSettings === undefined ? null : (
+        <>
+          {!stacked && cells.length > 0 ? (
+            <span className={styles.divider} aria-hidden="true" />
+          ) : null}
           <button
             type="button"
             className={cx(
               A.plain,
-              stacked ? cx(A.inlineRow, styles.touchAction) : cx(A.gridMid, styles.handoffChevron),
+              stacked ? A.col : A.inlineRow,
+              stacked ? styles.touchAction : styles.button,
             )}
-            aria-haspopup="dialog"
-            aria-label={t('handoff.dialogAria')}
-            title={t('handoff.dialogAria')}
-            data-dsq-handoff-picker="true"
-            onClick={(event) => {
-              event.stopPropagation()
-              onHandoffPick()
-            }}
+            aria-label={t('toolbar.settings')}
+            title={t('toolbar.settings')}
+            data-dsq-settings="true"
+            onClick={onSettings}
           >
-            {stacked ? (
-              <>
-                <LucideIcon name="chevron-down" size={18} />
-                <span>{t('handoff.menu')}</span>
-              </>
-            ) : (
-              <LucideIcon name="chevron-down" size={12} />
-            )}
+            <LucideIcon name="settings" size={stacked ? 18 : 14} />
+            {stacked ? <span>{t('toolbar.settings')}</span> : null}
           </button>
-        ) : null}
-      </Fragment>
-    )
-  })
+        </>
+      )}
+    </>
+  )
 }
 
 /** Handoff phase: target chip, optional comment, 放入 / 放入并前往. */
@@ -590,7 +659,9 @@ export function ToolbarView({
   onSideKeyDown,
   onSendSide,
   onCancelSide,
-  onHandoffPick,
+  compact,
+  onDestinations,
+  onSettings,
   handoff,
   translate,
 }: ToolbarViewProps): ReactNode {
@@ -626,7 +697,7 @@ export function ToolbarView({
             data-touch="true"
             onPointerDown={onToolbarPointerDown}
           >
-            <ActionRow actions={actions} stacked onHandoffPick={onHandoffPick} />
+            <ActionRow actions={actions} stacked compact={compact} onDestinations={onDestinations} onSettings={onSettings} />
           </div>
         ) : null}
         {phase !== 'idle' ? (
@@ -743,7 +814,7 @@ export function ToolbarView({
           onPointerDown={onToolbarPointerDown}
         >
           <div className={cx(A.inlineRow, styles.toolbarInner)}>
-            <ActionRow actions={actions} stacked={false} onHandoffPick={onHandoffPick} />
+            <ActionRow actions={actions} stacked={false} compact={compact} onDestinations={onDestinations} onSettings={onSettings} />
           </div>
         </div>
       ) : (

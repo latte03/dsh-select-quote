@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { SelectionSnapshot } from '../dom/selection.ts'
-import { selectionActions, splitLabelAt } from './actions.ts'
+import {
+  destinationRows,
+  selectionActions,
+  splitLabelAt,
+  type SelectionActionEntry,
+} from './actions.ts'
 
 function snapshot(
   anchorHref?: string,
@@ -23,7 +28,7 @@ describe('selection actions', () => {
     expect(selectionActions(snapshot()).map((action) => action.key)).toEqual([
       'copy',
       'translate',
-      'add',
+      'annotate',
       'side',
     ])
   })
@@ -33,7 +38,7 @@ describe('selection actions', () => {
       'open',
       'copy',
       'translate',
-      'add',
+      'annotate',
       'side',
     ])
   })
@@ -41,19 +46,70 @@ describe('selection actions', () => {
   it('offers nothing to open for a non-http anchor', () => {
     expect(
       selectionActions(snapshot('javascript:alert(1)')).map((action) => action.key),
-    ).toEqual(['copy', 'translate', 'add', 'side'])
+    ).toEqual(['copy', 'translate', 'annotate', 'side'])
   })
 
   it('drops translate when the selection already is the target language', () => {
     expect(
       selectionActions(snapshot(), undefined, { hideTranslate: true }).map((action) => action.key),
-    ).toEqual(['copy', 'add', 'side'])
+    ).toEqual(['copy', 'annotate', 'side'])
   })
 
   it('omits the side question for a file selected in the Sidebar', () => {
     expect(
       selectionActions(snapshot(undefined, 'sidebarFile')).map((action) => action.key),
-    ).toEqual(['copy', 'translate', 'add'])
+    ).toEqual(['copy', 'translate', 'annotate'])
+  })
+})
+
+describe('annotation destinations', () => {
+  it('splits 批注 into here plus the places it can go', () => {
+    const entry = selectionActions(snapshot(), {
+      available: true,
+      label: '放入 修复登录',
+      targetName: '修复登录',
+      menuLabel: '放入会话…',
+    }).find((action) => action.key === 'annotate')
+    expect(entry?.destinations?.map((destination) => destination.key)).toEqual([
+      'target',
+      'picker',
+    ])
+  })
+
+  it('offers no destinations without a hand-off directory', () => {
+    const entry = selectionActions(snapshot()).find((action) => action.key === 'annotate')
+    expect(entry?.destinations).toBeUndefined()
+  })
+})
+
+describe('destinationRows', () => {
+  const split = (): SelectionActionEntry => ({
+    key: 'annotate',
+    icon: 'plus',
+    label: '批注',
+    destinations: [
+      { key: 'target', label: '放入 修复登录' },
+      { key: 'picker', label: '放入会话…' },
+    ],
+    onClick: () => {},
+  })
+
+  it('expands one entry into a row per destination', () => {
+    const picked: string[] = []
+    const rows = destinationRows(split(), (destination) => picked.push(destination))
+    expect(rows.map((row) => row.label)).toEqual(['放入 修复登录', '放入会话…'])
+    rows[1]?.onClick()
+    expect(picked).toEqual(['picker'])
+  })
+
+  it('leaves an entry without destinations whole', () => {
+    const plain: SelectionActionEntry = {
+      key: 'copy',
+      icon: 'copy',
+      label: '复制',
+      onClick: () => {},
+    }
+    expect(destinationRows(plain, () => {})).toEqual([plain])
   })
 })
 

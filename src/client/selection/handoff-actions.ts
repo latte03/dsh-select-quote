@@ -95,6 +95,12 @@ export async function putHandoff(input: {
       ]
     : [{ text: input.snapshot.text }]
 
+  // "This conversation" is the picker's local row: it produces an annotation in
+  // place, never a hand-off, so it must not reach the writer.
+  if (input.target.kind === 'here') {
+    return { ok: false, error: 'the current conversation needs no hand-off' }
+  }
+
   let targetId = input.target.sessionId
   if (input.target.kind === 'new') {
     targetId = await resolveNewSessionId(input.directory, input.target)

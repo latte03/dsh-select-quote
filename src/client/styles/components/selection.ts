@@ -142,6 +142,9 @@ export const SELECTION_CSS = `
 .dsq_targetPicker,
 .dsq_hostPill {
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  /* Surfaces float over arbitrary content (a code preview, a terminal dump);
+     they must not inherit that content's font. */
+  font-family: var(--dsq-font);
   --dsq-shadow: var(--dsw-elevation-prominent, 0 0 0 .5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.04), 0 0 20px rgba(0, 0, 0, 0.05));
   /* Every surface above takes the same elevation; declaring it once here is
      what keeps the component blocks free of a copied box-shadow. */
@@ -220,6 +223,12 @@ export const SELECTION_CSS = `
   gap: 6px;
   white-space: nowrap;
 }
+/* Icon-only cells (a narrow column): no room for the label's padding. */
+.dsq_buttonCompact {
+  padding: 4px 7px;
+  gap: 0;
+}
+
 .dsq_button:hover {
   background: var(--dsq-fill-hover);
 }
@@ -464,11 +473,4 @@ export const SELECTION_CSS = `
   gap: 5px;
 }
 
-/* Lucide's quote mark ships pointing left; mirrored it points into the text it
-   is about to take, which is the direction this button reads in. Dimmed and one
-   step smaller than the label so the pill still reads as text first. */
-.dsq_pillQuote {
-  transform: scaleX(-1);
-  opacity: 0.68;
-}
 `

@@ -4,7 +4,31 @@ import { t } from '../i18n.ts'
 import type { IconName } from '../ui/icons.tsx'
 
 /** The entry points offered for a selection, whichever surface shows them. */
-export type SelectionActionKey = 'open' | 'copy' | 'translate' | 'add' | 'handoff' | 'side'
+export type SelectionActionKey =
+  | 'open'
+  | 'copy'
+  | 'translate'
+  | 'annotate'
+  | 'side'
+  /** The Host's own quote cell, painted only inside its merged pill. */
+  | 'quote'
+
+/**
+ * Where a quoted passage goes after the comment is written.
+ *
+ * `here` is the default and is not a menu row: the annotation button itself
+ * keeps the passage in the conversation being read. The chevron only offers
+ * the places that are somewhere else.
+ */
+export type SelectionDestinationKey = 'target' | 'picker'
+
+/** One row behind an entry's chevron: a destination for the quoted passage. */
+export interface SelectionDestination {
+  readonly key: SelectionDestinationKey
+  readonly label: string
+  /** Split label, so the row can accent the session name it points at. */
+  readonly labelParts?: readonly SelectionLabelPart[]
+}
 
 /** One render segment of an action label; the accent one is the target name. */
 export interface SelectionLabelPart {
@@ -31,13 +55,22 @@ export interface SelectionAction {
   readonly disabled?: boolean
   /** Tooltip shown on hover while `disabled`. */
   readonly disabledReason?: string
+  /**
+   * Places this entry can send the passage to, painted behind one chevron.
+   *
+   * Empty or absent means the entry is a plain button. The main click always
+   * means `here` — the current conversation — so the destinations are strictly
+   * the "somewhere else" half of the same intent.
+   */
+  readonly destinations?: readonly SelectionDestination[]
 }
 
 /**
- * Cross-session handoff entry. `label` is the main button (normally the
- * latched default target), `menuLabel` the right-click row that always opens
- * the picker. `available` is false when the host lacks the workspace services
- * or the source session has no workspace and no cwd.
+ * Cross-session handoff entry. `label` is the menu row that sends the passage
+ * to the latched default target (only painted when there is one), `menuLabel`
+ * the row that always opens the picker. `available` is false when the host
+ * lacks the workspace services or the source session has no workspace and no
+ * cwd — then the annotation button has no chevron at all.
  */
 export interface HandoffActionOptions {
   readonly available: boolean
@@ -69,6 +102,11 @@ export function splitLabelAt(
 
 export interface SelectionActionEntry extends SelectionAction {
   readonly onClick: () => void
+  /**
+   * Runs the entry for one destination. Bound by the coordinator, because only
+   * it knows how to write a passage into another session.
+   */
+  readonly pick?: (destination: SelectionDestinationKey) => void
 }
 
 /** Per-selection visibility switches that depend on the text itself. */
@@ -115,18 +153,36 @@ export function selectionActions(
               : {}),
           },
         ]),
-    { key: 'add', icon: 'plus', label: t('toolbar.addToTask') },
-    ...(handoff?.available
-      ? [
-          {
-            key: 'handoff' as const,
-            icon: 'arrow-up-right' as const,
-            label: handoff.label,
-            labelParts: splitLabelAt(handoff.label, handoff.targetName),
-            menuLabel: handoff.menuLabel ?? handoff.label,
-          },
-        ]
-      : []),
+    // Annotation is one intent with two halves: keep the passage in the
+    // conversation being read (the main click — nothing is written elsewhere)
+    // and send it to a different one (the chevron). Both halves share the same
+    // comment, so they share one button and one label.
+    {
+      key: 'annotate' as const,
+      icon: 'plus' as const,
+      // The trailing half names where it goes right now; the chevron changes it.
+      label: `${t('toolbar.annotate')} ${t('annotate.here')}`,
+      labelParts: [
+        { text: `${t('toolbar.annotate')} ` },
+        { text: t('annotate.here'), accent: true },
+      ],
+      ...(handoff?.available
+        ? {
+            destinations: [
+              ...(handoff.targetName === undefined
+                ? []
+                : [
+                    {
+                      key: 'target' as const,
+                      label: handoff.label,
+                      labelParts: splitLabelAt(handoff.label, handoff.targetName),
+                    },
+                  ]),
+              { key: 'picker' as const, label: handoff.menuLabel ?? t('handoff.menu') },
+            ],
+          }
+        : {}),
+    },
     // A file quoted from the Sidebar preview has no conversation message to
     // fork around, so the side-question entry point stays in the transcript.
     ...(snapshot.surface === 'sidebarFile'
@@ -142,4 +198,35 @@ export function selectionActions(
           },
         ]),
   ]
+}
+
+/**
+ * Expand a composite entry into one menu row per destination.
+ *
+ * A vertical menu has no room for a chevron, and burying the destinations of
+ * the annotation button behind another click would leave 放入 unreachable from
+ * the right-click menu. Rows keep both halves one click away, and they are
+ * built from the same list the chevron paints.
+ */
+export function destinationRows(
+  action: SelectionActionEntry,
+  run: (destination: SelectionDestinationKey) => void,
+): readonly SelectionActionEntry[] {
+  const destinations = action.destinations
+  if (destinations === undefined || destinations.length === 0) return [action]
+  return destinations.map((destination) => ({
+    key: action.key,
+    icon: action.icon,
+    label: destination.label,
+    ...(destination.labelParts === undefined ? {} : { labelParts: destination.labelParts }),
+    ...(action.disabled === true
+      ? {
+          disabled: true,
+          ...(action.disabledReason === undefined
+            ? {}
+            : { disabledReason: action.disabledReason }),
+        }
+      : {}),
+    onClick: () => run(destination.key),
+  }))
 }

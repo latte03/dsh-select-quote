@@ -57,8 +57,12 @@ describe('buildTargetDirectory', () => {
     expect(directory.defaultTarget?.sessionId).toBe('s2')
     expect(directory.newSession?.workspaceId).toBe('w1')
     expect(directory.canHandoff).toBe(true)
-    // New session first, then current/other/ungrouped.
-    expect(flattenTargets(directory)[0]?.kind).toBe('new')
+    // The conversation being read is the first row, then "new session", then
+    // current / other / ungrouped.
+    const rows = flattenTargets(directory)
+    expect(rows[0]?.kind).toBe('here')
+    expect(rows[0]?.sessionId).toBe('src')
+    expect(rows[1]?.kind).toBe('new')
   })
 
   it('drops the current session, subagents, archived sessions and blanks', () => {

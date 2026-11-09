@@ -185,9 +185,11 @@ export function useHandoffFlow(input: HandoffFlowInput) {
         directory,
         selectedId: current
           ? targetId(current)
-          : directory.defaultTarget
-            ? targetId(directory.defaultTarget)
-            : undefined,
+          : directory.here
+            ? 'here'
+            : directory.defaultTarget
+              ? targetId(directory.defaultTarget)
+              : undefined,
       })
     },
     [directory, updatePicker],

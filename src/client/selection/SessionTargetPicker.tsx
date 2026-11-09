@@ -53,13 +53,17 @@ interface Section {
 }
 
 function labelOf(target: TargetSession): string {
-  return target.kind === 'new' ? t('handoff.newSession') : target.title
+  if (target.kind === 'new') return t('handoff.newSession')
+  // The conversation being read: the picker's first row, and the default.
+  if (target.kind === 'here') return t('annotate.here')
+  return target.title
 }
 
 function metaOf(target: TargetSession): string {
   if (target.kind === 'new') {
     return target.workspaceTitle ?? t('handoff.currentWorkspace')
   }
+  if (target.kind === 'here') return target.workspaceTitle ?? t('handoff.currentWorkspace')
   // The workspace name is the only disambiguator for duplicate titles.
   return target.workspaceTitle ?? ''
 }
@@ -90,6 +94,9 @@ export function SessionTargetPicker({
       return `${labelOf(target)} ${target.workspaceTitle ?? ''}`.toLowerCase().includes(needle)
     }
     return [
+      // The conversation being read comes first: it is the default, and the row
+      // that keeps the passage where it is.
+      ...(directory.here ? [{ label: null, targets: [directory.here] }] : []),
       ...(directory.newSession ? [{ label: null, targets: [directory.newSession] }] : []),
       { label: t('handoff.currentWorkspace'), targets: directory.current },
       { label: t('handoff.otherWorkspaces'), targets: directory.other },
@@ -253,6 +260,10 @@ export function SessionTargetPicker({
             {section.targets.map((target) => {
               const id = targetId(target)
               const isNew = target.kind === 'new'
+              const isHere = target.kind === 'here'
+              // Both pseudo rows read as one level: an icon, the accent label and
+              // no timestamp.
+              const pseudo = isNew || isHere
               return (
                 <button
                   key={id}
@@ -263,7 +274,7 @@ export function SessionTargetPicker({
                   type="button"
                   role="option"
                   aria-selected={selected === id}
-                  className={cx(A.row, styles.targetOption, isNew && styles.targetNew)}
+                  className={cx(A.row, styles.targetOption, pseudo && styles.targetNew)}
                   onPointerDown={(event) => event.preventDefault()}
                   onClick={() => choose(target)}
                   onPointerEnter={(event) => {
@@ -271,14 +282,16 @@ export function SessionTargetPicker({
                     event.currentTarget.focus({ preventScroll: true })
                   }}
                 >
-                  {isNew ? <LucideIcon name="plus" size={14} /> : null}
+                  {pseudo ? (
+                    <LucideIcon name={isNew ? 'plus' : 'message-square'} size={14} />
+                  ) : null}
                   <span className={cx(A.col, styles.targetOptionMain)}>
-                    <span className={cx(styles.targetTitleMain, isNew && styles.targetNew)}>
+                    <span className={cx(styles.targetTitleMain, pseudo && styles.targetNew)}>
                       {labelOf(target)}
                     </span>
                     {metaOf(target) ? <span className={styles.targetMeta}>{metaOf(target)}</span> : null}
                   </span>
-                  {!isNew ? (
+                  {!pseudo ? (
                     <span className={styles.targetTime}>
                       {relativeTime(target.updatedAt, Date.now(), activeLocale())}
                     </span>

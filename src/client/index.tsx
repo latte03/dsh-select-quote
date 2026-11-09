@@ -661,6 +661,19 @@ function applyBody(ctx: Context): void {
     ),
   )
 
+  // The gear in the selection row jumps to this plugin's page in the Host's
+  // plugin panel — that page is where the `plugins.bundle.config` section is
+  // rendered, so it is the settings page a user can actually reach. Published
+  // as a runtime bridge because the toolbar lives outside this closure.
+  ctx.inject(['pluginNavigation'], (scope) => {
+    scope.effect(() => {
+      runtime.openPluginSettings = () => scope.pluginNavigation.openBundle(PACKAGE_NAME)
+      return () => {
+        delete runtime.openPluginSettings
+      }
+    }, 'dsh-select-quote: plugin settings entry')
+  })
+
   // Session: pending annotation summary inside the composer (~1/5 width).
   ctx.slots.inject('conversation.input.overlay', () =>
     ctx.slots.register(

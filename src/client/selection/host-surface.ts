@@ -23,9 +23,33 @@ export interface HostSurfaceBridge {
    * drift from the toolbar's labels, availability rules or handoff options.
    */
   actions(snapshot: SelectionSnapshot): readonly SelectionActionEntry[]
+  /**
+   * Open the destination list of one split entry at a viewport point. The pill
+   * paints the chevron but not the list: the coordinator owns the menu slot, so
+   * the list inherits its latch, its dismissal rules and its placement.
+   */
+  destinations(
+    snapshot: SelectionSnapshot,
+    action: SelectionActionEntry,
+    at?: { x: number; y: number },
+  ): void
 }
 
 let current: HostSurfaceBridge | null = null
+let hostDismiss: (() => void) | null = null
+
+/**
+ * The mounted pill's own dismiss, so a flow started from its row can close it.
+ * Without this the pill would stay on screen while our comment popover or the
+ * target picker takes over the same spot.
+ */
+export function publishHostDismiss(dismiss: (() => void) | null): void {
+  hostDismiss = dismiss
+}
+
+export function dismissHostPill(): void {
+  hostDismiss?.()
+}
 
 /** Publish the mounted coordinator's bridge; the disposer only clears its own. */
 export function publishHostSurface(bridge: HostSurfaceBridge): () => void {

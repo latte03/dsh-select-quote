@@ -20,13 +20,15 @@ import { activeLocale } from '../i18n.ts'
 import { ModelSelect } from '../model/ModelSelect.tsx'
 import { isAlreadyTargetLanguage } from '../translate.ts'
 import {
+  destinationRows,
   selectionActions,
   type SelectionActionEntry,
   type SelectionActionKey,
+  type SelectionDestinationKey,
 } from './actions.ts'
 import { SelectionMenu } from './SelectionMenu.tsx'
 import { popoverEnter } from './popover-keys.ts'
-import { publishHostSurface } from './host-surface.ts'
+import { dismissHostPill, publishHostSurface } from './host-surface.ts'
 import { guardSurfacePress } from './pointer-guard.ts'
 import { ToolbarView } from './ToolbarView.tsx'
 import { useAnnotationFlow } from './useAnnotationFlow.ts'
@@ -64,6 +66,11 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
   const commentRef = useRef<HTMLTextAreaElement | null>(null)
   const sideRef = useRef<HTMLTextAreaElement | null>(null)
   const [active, setActive] = useState<SelectionSnapshot | null>(null)
+  const naturalWidthRef = useRef(0)
+  /** Icon-only row: a narrow column cannot hold every label. */
+  const [compact, setCompact] = useState(false)
+  /** Bumped when the column changes width, so the fit is re-decided. */
+  const [spaceTick, setSpaceTick] = useState(0)
   const [phase, setPhase] = useState<SelectionPhase>('idle')
   const [comment, setComment] = useState('')
   const [status, setStatus] = useState<string | null>(null)
@@ -209,8 +216,9 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         hide()
         return
       }
-      // Keep an open comment popover; only drop idle toolbar when selection dies.
-      if (phaseRef.current === 'idle') setActive(null)
+      // Keep an open comment popover or target picker; only drop the idle
+      // toolbar when the selection itself dies.
+      if (phaseRef.current === 'idle' && handoff.pickerRef.current === null) setActive(null)
       return
     }
     // The menu retains its own snapshot; retargeting is a new right-click or a
@@ -220,7 +228,9 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     if (!touch && !resolveTriggers(getConfig()).auto) {
       // The right-click / shortcut menu is a separate entry point: its host
       // must stay mounted while the selection is still the menu's own.
-      if (phaseRef.current === 'idle' && !menuRef.current) setActive(null)
+      if (phaseRef.current === 'idle' && !menuRef.current && handoff.pickerRef.current === null) {
+        setActive(null)
+      }
       return
     }
     // Merged mode: the Host paints its own pill next to the selection and our
@@ -237,7 +247,14 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       // gesture (pointerdown/pointerup both schedule one) dropped `active`
       // right after it — the menu appeared and vanished in the same frame.
       // Same guard as the contextmenu-only branch above.
-      !menuRef.current
+      !menuRef.current &&
+      // The Host pill only exists over the transcript. A selection inside the
+      // right Sidebar's file preview has no Host surface to ride in, so that
+      // one keeps this toolbar even in merged mode.
+      next.surface !== 'sidebarFile' &&
+      // The target picker is our surface too: unmounting this component would
+      // take it down with the toolbar, so its latch keeps the host alive.
+      handoff.pickerRef.current === null
     ) {
       setActive(null)
       return
@@ -375,9 +392,20 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     refresh()
   }, [dismissMenu, refresh])
 
-  /** Dispatch a shared action against the range the calling surface latched. */
+  /**
+   * Dispatch a shared action against the range the calling surface latched.
+   *
+   * A split entry passes its destination along: the entry itself means "here",
+   * so `annotate` without one opens the comment bubble in the conversation that
+   * was read (the reader's call, 2026-11-09).
+   */
   const runAction = useCallback(
-    (key: SelectionActionKey, snapshot: SelectionSnapshot, surface: 'toolbar' | 'menu' = 'toolbar') => {
+    (
+      key: SelectionActionKey,
+      snapshot: SelectionSnapshot,
+      surface: 'toolbar' | 'menu' = 'toolbar',
+      destination?: SelectionDestinationKey,
+    ) => {
       switch (key) {
         case 'open':
           system.openLink(snapshot)
@@ -385,23 +413,28 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         case 'copy':
           void system.copy(snapshot)
           return
-        case 'add':
-          annotation.begin(snapshot)
-          return
-        case 'handoff': {
+        case 'annotate': {
           const defaultTarget = handoff.directory.defaultTarget
-          if (surface === 'menu') {
+          if (destination === 'target' && defaultTarget !== undefined) {
+            dismissMenu()
+            dismissHostPill()
+            handoff.begin(snapshot, defaultTarget)
+            return
+          }
+          if (destination !== undefined) {
+            // The picker replaces whatever held the surface: keeping the menu
+            // (or the destination list) open left it painted above the list and
+            // its scroll listener dismissed both.
             const latched = menuRef.current
             const at = latched ? { x: latched.x, y: latched.y } : undefined
-            // The picker replaces the menu: keeping both open left the menu
-            // painted above the list and its scroll listener dismissed both.
             dismissMenu()
             handoff.openPicker(snapshot, at)
-          } else if (defaultTarget) {
-            handoff.begin(snapshot, defaultTarget)
-          } else {
-            handoff.openPicker(snapshot)
+            return
           }
+          // The main click closes the Host's pill: our comment popover takes
+          // over the same spot.
+          dismissHostPill()
+          annotation.begin(snapshot)
           return
         }
         case 'translate':
@@ -449,6 +482,8 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
       ).map((action) => ({
         ...action,
         onClick: () => runAction(action.key, snapshot),
+        pick: (destination: SelectionDestinationKey) =>
+          runAction(action.key, snapshot, 'toolbar', destination),
       })),
     [
       config.translateHideSameLanguage,
@@ -458,11 +493,36 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     ],
   )
 
+  /**
+   * The chevron of a split entry lists where the passage can go. It reuses the
+   * menu slot, so the latch, the dismissal rules and the layout are the ones
+   * the right-click menu already gets — and the Host's pill can open it too.
+   */
+  const openDestinations = useCallback(
+    (
+      snapshot: SelectionSnapshot,
+      _action: SelectionActionEntry,
+      at?: { x: number; y: number },
+    ): void => {
+      // One panel decides where the passage goes: the same picker the hand-off
+      // flow uses, with the current conversation as its first row. The chevron
+      // therefore opens it directly instead of a menu that opens it again.
+      const fromContent = snapshot.layer.fromContent(snapshot.left, snapshot.top)
+      setStatus(null)
+      setActive(snapshot)
+      handoff.openPicker(snapshot, at ?? { x: fromContent.left, y: fromContent.top })
+    },
+    [handoff.openPicker],
+  )
+
   // The Host's selection pill is a different React tree and cannot read this
-  // component's state; it asks through this bridge for the entries above.
-  // Publishing is cheap and unconditional — the pill decides, from the config,
-  // whether to paint them.
-  useEffect(() => publishHostSurface({ actions: buildEntries }), [buildEntries])
+  // component's state; it asks through this bridge for the entries above and
+  // for the destination list behind their chevron. Publishing is cheap and
+  // unconditional — the pill decides, from the config, whether to paint them.
+  useEffect(
+    () => publishHostSurface({ actions: buildEntries, destinations: openDestinations }),
+    [buildEntries, openDestinations],
+  )
 
   const handleCommentKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -502,6 +562,39 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
    * visible one; the custom property is read by the toolbar transform and its
    * entrance keyframes.
    */
+  /**
+   * Icon-only fallback for a narrow column.
+   *
+   * The row is max-content, so a narrow transcript column (a Sidebar preview, a
+   * split pane) clips it instead of shrinking it. When the natural width does
+   * not fit, every action keeps its place and loses only its wording — the
+   * destination chevron and the tooltip stay. The natural width is only
+   * measurable while labels are painted, so it is cached from those renders and
+   * re-read whenever the compact row is widened again.
+   */
+  useLayoutEffect(() => {
+    if (touch || phase !== 'idle' || !active) {
+      if (compact) setCompact(false)
+      return
+    }
+    const el = toolbarRef.current
+    if (!el) return
+    const available = Math.max(180, active.layer.scroller.clientWidth - 16)
+    if (!compact) naturalWidthRef.current = el.getBoundingClientRect().width
+    const shouldCompact = naturalWidthRef.current > available
+    if (shouldCompact !== compact) setCompact(shouldCompact)
+  }, [active, compact, phase, touch, spaceTick])
+
+  // Re-decide when the column changes width (split drag, window resize).
+  useLayoutEffect(() => {
+    if (touch || !active) return
+    const observer = new ResizeObserver(() => {
+      setSpaceTick((tick) => tick + 1)
+    })
+    observer.observe(active.layer.scroller)
+    return () => observer.disconnect()
+  }, [active, touch])
+
   useLayoutEffect(() => {
     if (touch || phase !== 'idle') return
     const el = toolbarRef.current
@@ -534,6 +627,31 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     translate: runtime.translate !== undefined,
   }
   const actions: SelectionActionEntry[] = buildEntries(active)
+  // The vertical menu has no chevron, so a split entry is expanded there: the
+  // entry itself first, then one row per destination.
+  const menuEntries: readonly SelectionActionEntry[] =
+    menu === null
+      ? []
+      : selectionActions(
+          menu.snapshot,
+          handoff.options,
+          visibilityFor(menu.snapshot.text),
+          availability,
+        ).flatMap((action) => {
+          const main: SelectionActionEntry = {
+            ...action,
+            onClick: () => runAction(action.key, menu.snapshot, 'menu'),
+          }
+          if (action.destinations === undefined || action.destinations.length === 0) {
+            return [main]
+          }
+          return [
+            main,
+            ...destinationRows(main, (destination) =>
+              runAction(action.key, menu.snapshot, 'menu', destination),
+            ),
+          ]
+        })
 
   return (
     <>
@@ -544,6 +662,7 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         status={status}
         viewport={viewport}
         actions={actions}
+        compact={compact}
         comment={comment}
         sideText={side.sideText}
         sending={side.sending}
@@ -571,9 +690,10 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
         onSideKeyDown={side.onKeyDown}
         onSendSide={side.send}
         onCancelSide={hide}
-        onHandoffPick={() => {
-          const latched = menuRef.current
-          handoff.openPicker(active, latched ? { x: latched.x, y: latched.y } : undefined)
+        onDestinations={(action, at) => openDestinations(active, action, at)}
+        onSettings={() => {
+          hide()
+          runtime.openPluginSettings?.()
         }}
         handoff={
           phase === 'handoff'
@@ -611,22 +731,24 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
           x={handoff.picker.x}
           y={handoff.picker.y}
           touch={touch}
-          onPick={handoff.pick}
+          onPick={(target) => {
+            dismissHostPill()
+            if (target.kind !== 'here') {
+              handoff.pick(target)
+              return
+            }
+            // "This conversation" is the picker's first row: the same outcome
+            // as the button's main click, which is why it needs no hand-off.
+            const snapshot = handoff.picker?.snapshot
+            handoff.closePicker()
+            if (snapshot) annotation.begin(snapshot)
+          }}
           onClose={handoff.closePicker}
         />
       ) : null}
       {menu ? (
         <SelectionMenu
-          entries={selectionActions(
-            menu.snapshot,
-            handoff.options,
-            visibilityFor(menu.snapshot.text),
-            availability,
-          ).map((action) => ({
-            ...action,
-            label: action.key === 'handoff' ? (action.menuLabel ?? action.label) : action.label,
-            onClick: () => runAction(action.key, menu.snapshot, 'menu'),
-          }))}
+          entries={menuEntries}
           x={menu.x}
           y={menu.y}
           initialFocus={menu.initialFocus}

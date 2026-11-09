@@ -12,6 +12,10 @@ export const TOKENS_CSS = `
 body {
   --dsq-chat-width: var(--dsh-chat-content-width, 748px);
   --dsq-font-size: var(--dsh-content-font-size, 14px);
+  /* The UI stack, never the text under the selection: a toolbar floating over a
+     code preview would otherwise inherit that document's font (Songti in the
+     worst case) and read as a different product. */
+  --dsq-font: var(--dsw-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif);
   --dsq-font-delta: var(--dsh-content-font-delta, 0px);
   --dsq-bg-raised: var(--dsw-alias-bg-layer-1, #fff);
   /* Toast pill. The product token that used to back this (bg-layer-3) is plain

@@ -107,6 +107,12 @@ export const runtime: {
    * host rejects ("owned by subagent routing").
    */
   isSubagentSession?: (sessionId: string) => boolean
+  /**
+   * Jumps to this plugin's page in the Host plugin panel, where the settings
+   * section lives. Absent when the shell has no plugin manager, and the gear
+   * is then simply not offered.
+   */
+  openPluginSettings?: () => void
 } = {}
 
 export function setRuntimeSession(sessionId: string | undefined): void {

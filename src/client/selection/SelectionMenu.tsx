@@ -14,6 +14,7 @@ import { t } from '../i18n.ts'
 import { A, cx, styles } from '../styles.ts'
 import { LucideIcon } from '../ui/icons.tsx'
 import type { SelectionActionEntry } from './actions.ts'
+import { SplitLabel } from './SplitLabel.tsx'
 
 export interface SelectionMenuProps {
   /** The same ordered entries the toolbar renders, bound to the latched range. */
@@ -172,7 +173,9 @@ export function SelectionMenu({
     >
       {entries.map((entry, index) => (
         <button
-          key={entry.key}
+          // Destinations of one entry share that entry's key, and the index is
+          // the only thing that stays unique once a split button is expanded.
+          key={`${entry.key}:${index}`}
           ref={index === 0 ? firstRef : undefined}
           type="button"
           role="menuitem"
@@ -185,7 +188,9 @@ export function SelectionMenu({
           onClick={entry.disabled ? undefined : entry.onClick}
         >
           <LucideIcon name={entry.icon} size={15} />
-          <span>{entry.label}</span>
+          <span>
+            {entry.labelParts === undefined ? entry.label : <SplitLabel parts={entry.labelParts} />}
+          </span>
         </button>
       ))}
     </div>,

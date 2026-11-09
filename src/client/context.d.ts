@@ -225,6 +225,17 @@ declare module '@deepseek-ai/cordis' {
       openResource(address: string, options?: { kind?: string }): void
     }
     /**
+     * Host plugin panel navigation (`@deepseek-ai/dsh-client-ui-plugin-manager`).
+     *
+     * `openBundle()` lands on the package page, which is where this plugin's
+     * `plugins.bundle.config` section renders — the settings page's own entry
+     * point. Absent on a shell without the plugin manager.
+     */
+    pluginNavigation: {
+      openList(): void
+      openBundle(packageName: string): void
+    }
+    /**
      * Client session controller (`@deepseek-ai/dsh-client-ui-session`).
      *
      * `create()` mints a session and publishes a catalog row without
