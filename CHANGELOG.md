@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.3](https://github.com/latte03/dsh-select-quote/compare/v0.4.2...v0.4.3) (2026-11-09)
+
+### Features
+
+* 划词按钮增补批注开关，并保证至少留一个 ([204b0be](https://github.com/latte03/dsh-select-quote/commit/204b0be59cbd1f65e89efb092bc6833b97c0dfb1)), references [#11](https://github.com/latte03/dsh-select-quote/issues/11) [#11](https://github.com/latte03/dsh-select-quote/issues/11)
+* 设置页改为五个 tab，记住上次所在组 ([2c8a60b](https://github.com/latte03/dsh-select-quote/commit/2c8a60b501d8d64f6f82bcba5922410004554bfc))
+* 语言与模型下拉改用锚定式入场 ([b2f9161](https://github.com/latte03/dsh-select-quote/commit/b2f91614b283bcd8974b8b8c754687db2d08f3c6))
+
+### Bug Fixes
+
+* 去掉 tab 条的 mask-image 渐隐 ([aa2e338](https://github.com/latte03/dsh-select-quote/commit/aa2e338023a85a278599b4700c7c12865b4dfa32))
+
 ## [0.4.2](https://github.com/latte03/dsh-select-quote/compare/v0.4.1...v0.4.2) (2026-11-09)
 
 ### Features
