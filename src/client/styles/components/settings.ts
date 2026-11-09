@@ -161,6 +161,14 @@ export const SETTINGS_CSS = `
   padding: 6px 10px;
   border: 1px solid var(--dsq-line);
   border-radius: 10px;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    transform 120ms ease;
+}
+
+.dsq_settingsSelect:active {
+  transform: translateY(1px) scale(0.99);
 }
 
 .dsq_settingsModel {
@@ -198,6 +206,11 @@ export const SETTINGS_CSS = `
   border-radius: 10px;
   outline: none;
   background: transparent;
+  /* Lumno eases an input's border instead of swapping it; the ring only
+     appears once the field is actually focused. */
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
   color: var(--dsq-label);
   font: inherit;
   font-size: 12.5px;
@@ -211,6 +224,7 @@ export const SETTINGS_CSS = `
 
 .dsq_settingsInput:focus-visible {
   border-color: var(--dsq-focus-ring);
+  box-shadow: 0 0 0 2px var(--dsq-focus-ring-soft);
 }
 
 /* Shortcut reference under the switch: the two commands and the keycaps the
@@ -281,9 +295,11 @@ export const SETTINGS_CSS = `
   border-radius: 6px;
   background: var(--dsq-bg-raised);
   box-shadow: 0 0 0 0.5px var(--dsq-line);
+  /* Same spring as the settings tab indicator: the two controls are read as
+     the same gesture, so they should land the same way. */
   transition:
-    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
-    width 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 280ms cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
 }
 
@@ -298,11 +314,21 @@ export const SETTINGS_CSS = `
   color: var(--dsq-label-2);
   font-size: 13px;
   cursor: pointer;
-  transition: color 0.12s ease;
+  transition:
+    color 200ms ease,
+    transform 120ms ease,
+    filter 120ms ease;
 }
 
 .dsq_segOption:hover {
   color: var(--dsq-label);
+}
+
+/* Press feedback, borrowed from the same extension's options page: the cell
+   sinks a pixel and dims, so a tap is acknowledged before the value lands. */
+.dsq_segOption:active {
+  transform: translateY(1px) scale(0.98);
+  filter: brightness(0.95);
 }
 
 .dsq_segOption[data-active="true"] {
@@ -338,6 +364,33 @@ export const SETTINGS_CSS = `
     animation: none;
   }
 
+  .dsq_switch,
+  .dsq_switchTrack {
+    transition: none;
+  }
+
+  .dsq_segOption {
+    transition: none;
+  }
+
+  .dsq_segOption:active {
+    transform: none;
+    filter: none;
+  }
+
+  .dsq_settingsInput,
+  .dsq_settingsSelect {
+    transition: none;
+  }
+
+  .dsq_settingsSelect:active {
+    transform: none;
+  }
+
+  .dsq_settingsNotice {
+    animation: none;
+  }
+
   .dsq_segThumb {
     transition: none;
   }
@@ -367,6 +420,17 @@ export const SETTINGS_CSS = `
   background: var(--dsq-line);
 }
 
+@keyframes dsq-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Shown when the last button switch was refused: the toolbar would otherwise
    be as empty as an uninstalled plugin. Colours stay on the --dsq-* aliases. */
 .dsq_settingsNotice {
@@ -378,6 +442,7 @@ export const SETTINGS_CSS = `
   color: var(--dsq-label);
   font-size: 12px;
   line-height: 1.5;
+  animation: dsq-notice-in 160ms cubic-bezier(0.2, 0.9, 0.2, 1);
 }
 
 /* The whole row is the target: label text, hint, and the switch itself. */
@@ -409,6 +474,11 @@ export const SETTINGS_CSS = `
   corner-shape: round;
   background: var(--dsq-switch-off);
   cursor: pointer;
+  /* The track used to snap between on and off while only the thumb travelled.
+     Lumno's toggle eases the track too (150ms), which reads as one movement. */
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 
 .dsq_switch[data-on='true'] {
@@ -424,7 +494,7 @@ export const SETTINGS_CSS = `
   border-radius: 50%;
   corner-shape: round;
   background: var(--dsq-switch-thumb-off);
-  transition: transform 0.12s ease;
+  transition: transform 150ms ease;
 }
 
 .dsq_switch[data-on='true'] .dsq_switchTrack {

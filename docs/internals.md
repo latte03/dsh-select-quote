@@ -299,6 +299,8 @@ Each item contains text selected from an earlier message ...
 - **一次只渲染一个面板**：非活动组不进 DOM。面板进入是 200ms 的 translateY(4px)+opacity，**不做离场**（要留住旧子树 200ms，而用户切得比这快）。设置页不是磨砂浮层，所以这里用 opacity 不违反「磨砂层动画不带 opacity」那条。
 - **记住上次的组**：配置区在 `plugins.bundle.config` 的 `whileServed` 里，离开插件页就卸载，`useState` 会重置。所以写 `localStorage` 的 `dsh-select-quote.settings-group`；读写都包 try/catch，存储被禁只损失「记得哪个 tab」，不影响任何配置。
 - **窄列**：`.dsq_tabsStrip` 横向滚、不换行（换成两行就不再像导航），滚动条隐藏。
+- **控件是原件，不是抄写的**：`settings/rows.tsx` 收四个：`SettingsPanel`（tabpanel 外壳）、`SettingRow`（左文案右控件）、`SwitchRow`（整行可点的布尔行）、`SettingsNotice`（`role="status"` 的提示条）。此前开关行写了六份、设置行写了五份，已经各自漂移（有的 hint 折两行、有的没有 hint），每调一次动画要改六处。原件只收 props，不读配置、不写表单——**守卫规则留在 `ConfigRow`**（哪一枚不许关、哪个值要连写两个字段）。
+- **动效来自同一套刻度**（Lumno 扩展的 options 页，1.4.1）：tab 指示器与 `Segmented` 的 thumb 都用 280ms `cubic-bezier(0.32, 0.72, 0, 1)`；按压是 `translateY(1px) scale(0.98)` + `brightness(0.95)`（120ms）；开关轨道颜色跟随 150ms（原来只有滑块在动、轨道瞬切）；输入框与选择器的描边 180ms 过渡，聚焦才出现软环；提示条 160ms 淡入 + 3px 上移。**激活 tab 不改字重**（400→500 会让测量出的指示器偏位，见上），这是有意识放弃的一条。
 
 ## 浮层名词与层带
 
@@ -340,7 +342,10 @@ src/client/remote.ts               # 客户端 Typert 贡献：重新导出 ./re
 src/client/index.tsx               # Client 半入口：注册 Slot、配置跟随、语言词典与装饰观察者；发布翻译桥与全局模型目录
 src/client/config.ts               # 配置默认值/归一化/resolveTriggers + configForms 订阅发布
 src/client/translate.ts            # 目标语言智能解析、本地语言粗判、内置/自定义提示词（纯逻辑）
-src/client/settings/ConfigRow.tsx  # 插件页外层的配置区（划词入口 / 快捷键 / 子代理模式 / 翻译语言、模型、提示词）
+src/client/settings/ConfigRow.tsx  # 插件页外层的配置区：状态、写入与五个 tab 的编排
+src/client/settings/SettingsTabs.tsx      # tab 条：真 tablist + 实测指示器
+src/client/settings/rows.tsx             # 复用的行原件：SettingsPanel / SettingRow / SwitchRow / SettingsNotice
+src/client/settings/settingsGroups.ts    # 组 → 配置字段的归属表（settingsGroups.test.ts 校验覆盖）
 src/client/selection/SelectionToolbar.tsx # 划词协调器：选中态、相位机与收尾顺序；动作分发与快捷键桥（state/open/add），各动作的状态与生命周期在同目录 flow hook 里
 src/client/selection/useSelectionMenu.ts # 右键/快捷键菜单：选中快照锁存 + 同步 ref（DOM 监听在渲染之间关闭它）
 src/client/selection/useAnnotationFlow.ts # 批注评论：打开即保存、评论补写、完成/外部关闭、宿主“加入任务”入口
