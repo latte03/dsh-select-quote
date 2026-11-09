@@ -29,7 +29,7 @@ dsh plugin --profile web add dsh-select-quote
 dsh --profile web
 ```
 
-Desktop: enter `dsh-select-quote` inside the app, then restart the client. Local development is described in [`dev.patch.example.yml`](dev.patch.example.yml).
+Desktop: enter `dsh-select-quote` inside the app, then restart the client. Development commands (`check` / `sync:web` / `release`), publishing and the internal conventions live in [`docs/internals.md`](docs/internals.md).
 
 ## Usage
 
@@ -42,36 +42,12 @@ Click **Annotate** on a selection and it is saved at once; `Enter` or `⌘/Ctrl 
 
 ## Settings
 
-Plugin page → `dsh-select-quote`; the settings sit behind five tabs (Entry / Buttons / Translation / Side task / Shortcuts) and the last one you opened is remembered:
+Plugin page → `dsh-select-quote`; the settings sit behind five tabs — **Entry** (trigger, placement, host-surface merge), **Buttons** (four switches), **Translation** (target, same-language hiding, model, prompt), **Side task** (subagent reuse) and **Shortcuts**. Each row explains itself, and the last tab you opened is remembered.
 
-- **Trigger and placement**: auto / right-click / both; the toolbar sits above or below the selection and flips when space runs out
-- **Selection buttons**: show or hide **Annotate** (chevron and send targets included), **Copy**, **Translate** and **Ask in side task**; **keep at least one on** — the last switch refuses to turn off and says why
-- **Merge into the host surface**: our buttons ride in the built-in selection pill instead of a second bar (off by default)
-- **Sidebar subagent**: fresh each time (default) or reuse one
-- **Translation**: target language, hide for the same language, a separate model, and a custom prompt (`{target}` is replaced)
+**Keep at least one button on**: with every switch off the toolbar is empty, so the last switch refuses to turn off and says why.
 
-## Known limitations
-
-- Unsent annotations come back after a refresh (last 20 sessions / 7 days); sending clears them and forked sessions do not inherit them
-- Send-to-session needs the host's workspace and `openSession`; older versions hide the entry
-- The card mounts on `conversation.chat.user.before` and leaves the user bubble alone; requires dsh ≥ 0.2.2-rc.1
-- Selection works in the conversation and file previews only, not in the file tree, editors or terminals
-- Translation sends only the selection, with no conversation context; about 6,000 characters and a 90-second timeout
-
-## Development
-
-```bash
-pnpm run check     # typecheck + test + build + verify; run before committing
-pnpm run sync:web  # push to the installed copy (desktop: sync:desktop)
-pnpm run release   # version + tag
-```
-
-`lib/` is committed with the source and read at runtime; publishing uses `npm publish`, then syncs the npmmirror copy. Internals and troubleshooting live in [`docs/internals.md`](docs/internals.md).
-
-## Acknowledgements
-
-[@imallakov](https://github.com/imallakov) (multilingual support and cross-platform builds), [@Ladersbt](https://github.com/Ladersbt), [@EliteOtaku](https://github.com/EliteOtaku).
+Limitations, host version requirements and known issues live in [`docs/limitations.md`](docs/limitations.md).
 
 ## License
 
-[MIT](LICENSE) © 2026 agan
+[MIT](LICENSE) © 2026 agan · thanks to [@imallakov](https://github.com/imallakov) (multilingual support and cross-platform builds), [@Ladersbt](https://github.com/Ladersbt), [@EliteOtaku](https://github.com/EliteOtaku).

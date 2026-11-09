@@ -29,7 +29,7 @@ dsh plugin --profile web add dsh-select-quote
 dsh --profile web
 ```
 
-桌面版在应用内输入 `dsh-select-quote` 安装后重启；本地开发见 [`dev.patch.example.yml`](dev.patch.example.yml)。
+桌面版在应用内输入 `dsh-select-quote` 安装后重启。开发命令（`check` / `sync:web` / `release`）、发布流程与内部约定见 [`docs/internals.md`](docs/internals.md)。
 
 ## 用法
 
@@ -42,36 +42,12 @@ dsh --profile web
 
 ## 设置
 
-插件页 → `dsh-select-quote`，分五个 tab（入口 / 按钮 / 翻译 / 侧边提问 / 快捷键），记住上次那一组：
+插件页 → `dsh-select-quote`，配置分五个 tab：**入口**（触发方式、浮层位置、并入官方浮层）、**按钮**（四枚开关）、**翻译**（目标语言、同语言隐藏、模型、提示词）、**侧边提问**（子代理复用）、**快捷键**。每项自带说明，记住上次那一组。
 
-- **划词入口与位置**：自动浮出 / 右键菜单 / 两者都开；浮层在上方或下方，放不下自动翻面
-- **划词按钮**：显示或隐藏「批注」（含箭头与放入目标）、「复制」、「翻译」、「在侧边提问」；**至少留一个**，最后一个开关会拒绝关闭并给出提示
-- **并入宿主浮层**：按钮放进官方划词浮层，原文旁不再另起一条（默认关闭）
-- **侧边子代理**：每次独立（默认）/ 复用同一个
-- **翻译**：目标语言、同语言隐藏、独立模型、自定义提示词（`{target}` 替换为目标语言）
+**至少留一枚按钮**：全部关掉工具条就空了，最后一个开关会拒绝关闭并给出提示。
 
-## 已知限制
-
-- 未发送的批注保留最近 20 个会话 / 7 天，发送即清除，分叉会话不继承
-- 「放入其他会话」依赖宿主的工作区与 `openSession`，旧版本自动隐藏入口
-- 批注卡挂在 `conversation.chat.user.before` 席位，不接管用户气泡；需要 dsh ≥ 0.2.2-rc.1
-- 划词只在对话正文与文件预览生效，文件树、编辑器、终端不介入
-- 翻译只发选区，不带上下文，约 6000 字、超时 90 秒
-
-## 开发
-
-```bash
-pnpm run check     # typecheck + test + build + verify，提交前必跑
-pnpm run sync:web  # 推到已安装副本，桌面版用 sync:desktop
-pnpm run release   # 版本号 + tag
-```
-
-`lib/` 随源码提交；发布用 `npm publish` 后同步 npmmirror。机制与排错见 [`docs/internals.md`](docs/internals.md)。
-
-## 致谢
-
-[@imallakov](https://github.com/imallakov)（多语言与跨平台构建）、[@Ladersbt](https://github.com/Ladersbt)、[@EliteOtaku](https://github.com/EliteOtaku)。
+限制、依赖与已知问题见 [`docs/limitations.md`](docs/limitations.md)。
 
 ## License
 
-[MIT](LICENSE) © 2026 agan
+[MIT](LICENSE) © 2026 agan · 致谢 [@imallakov](https://github.com/imallakov)（多语言与跨平台构建）、[@Ladersbt](https://github.com/Ladersbt)、[@EliteOtaku](https://github.com/EliteOtaku)。

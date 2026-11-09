@@ -36,6 +36,7 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 ## 文档
 
 - `docs/internals.md` —— 机制、内部约定、排错（**只记现存**）
+- `docs/limitations.md` —— 限制与已知问题（中英双语，README 里的详情从这里引用）
 - `docs/archive/` —— 历史调查（结论已并入正文）
 - `CHANGELOG.md` —— 自动生成，勿手改
 - `README.md` / `README.en.md` —— 面向用户，改动要两份同步
