@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.2](https://github.com/latte03/dsh-select-quote/compare/v0.4.1...v0.4.2) (2026-11-09)
+
+### Features
+
+* 并入宿主划词浮层，浮层位置默认改到下方 ([ce60fb5](https://github.com/latte03/dsh-select-quote/commit/ce60fb5262776cca967624ec9e9637d21979cf54))
+* 批注分裂按钮、宿主浮层保活与窄列折叠 ([0d8bca6](https://github.com/latte03/dsh-select-quote/commit/0d8bca60e02ddcb65efccac0d86c032bf7a32b44))
+
+### Bug Fixes
+
+* 角标改为真实元素后点击穿透，恢复批注预览的点击目标与实测命中 ([b703e59](https://github.com/latte03/dsh-select-quote/commit/b703e59801fd391bf231cca7514f29ca348c732e))
+
 ## [0.4.1](https://github.com/latte03/dsh-select-quote/compare/v0.4.0...v0.4.1) (2026-11-06)
 
 ### Features
