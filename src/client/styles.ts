@@ -98,6 +98,8 @@ export const styles = {
   cardPad: 'dsq_cardPad',
   summary: 'dsq_summary',
   summaryIcon: 'dsq_summaryIcon',
+  summaryCount: 'dsq_summaryCount',
+  summaryPixels: 'dsq_summaryPixels',
   summaryBody: 'dsq_summaryBody',
   summaryTitle: 'dsq_summaryTitle',
   summaryHint: 'dsq_summaryHint',

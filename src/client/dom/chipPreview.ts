@@ -60,7 +60,14 @@ const HOVER_DELAY = 250
 const CLOSE_DELAY = 40
 const GAP = 8
 /** Matches the leaving keyframe; the node is detached after it finishes. */
-const EXIT_MS = 120
+/** Entrance length for the preview card. */
+const PREVIEW_MOTION_MS = 300
+/**
+ * Exit is shorter on purpose: leaving should feel like it got out of the way,
+ * and the node is removed by a timer, so this is also the removal delay.
+ */
+const PREVIEW_EXIT_MS = 180
+const EXIT_MS = PREVIEW_EXIT_MS
 
 let preview: HTMLDivElement | null = null
 let jumpButton: HTMLButtonElement | null = null
@@ -113,6 +120,21 @@ function animatePreviewOut(box: HTMLDivElement): void {
   if (active instanceof HTMLElement && box.contains(active)) active.blur()
   box.classList.add(styles.chipPreviewLeaving)
   box.setAttribute('aria-hidden', 'true')
+  const to = box.dataset.side === 'top' ? '10px' : '-10px'
+  box.animate([{ transform: 'none' }, { transform: `translateY(${to}) scale(0.96)` }], {
+    duration: PREVIEW_EXIT_MS,
+    easing: 'cubic-bezier(0.4, 0, 1, 1)',
+    fill: 'forwards',
+  })
+  const body = box.querySelector<HTMLElement>(`.${styles.chipPreviewBody}`)
+  if (body) {
+    body.style.animation = 'none'
+    body.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration: PREVIEW_EXIT_MS,
+      easing: 'cubic-bezier(0.4, 0, 1, 1)',
+      fill: 'forwards',
+    })
+  }
   leavingBox = box
   leavingTimer = window.setTimeout(() => {
     leavingTimer = 0
@@ -449,12 +471,35 @@ function mountPreview(box: HTMLDivElement, anchor: DOMRect): void {
   // Keep the flex display while measuring; toggling display changes wrapping
   // and produces a shorter panel than the one actually painted.
   const panel = { width: box.offsetWidth || 320, height: box.offsetHeight || 180 }
-  const { top, left } = placePopover(anchor, panel, 'top', GAP)
+  const { top, left, side } = placePopover(anchor, panel, 'top', GAP)
   box.style.top = `${top}px`
   box.style.left = `${left}px`
+  // The entrance keyframes pick their direction from this.
+  box.dataset.side = side
   box.style.visibility = ''
+  // The stylesheet no longer drives this: the node is already visible here, so a
+  // WAAPI animation starts from frame zero instead of fighting the mount.
+  // The material layer is the card's own ::before, so it has to move with the
+  // content: animating only the body left the frosted panel popping in fully
+  // formed behind a fading child. Transform goes on the card, and opacity stays
+  // off it (an opacity < 1 ancestor stops ::before sampling its backdrop), so the
+  // panel slides but never fades — the fade stays on the body.
+  const from = side === 'top' ? '14px' : '-14px'
+  box.animate(
+    [
+      { transform: `translateY(${from}) scale(0.94)` },
+      { transform: 'none' },
+    ],
+    { duration: PREVIEW_MOTION_MS, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1)' },
+  )
   const animated = box.querySelector<HTMLElement>(`.${styles.chipPreviewBody}`)
-  if (animated) animated.style.animation = ''
+  if (animated) {
+    animated.style.animation = 'none'
+    animated.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: PREVIEW_MOTION_MS,
+      easing: 'cubic-bezier(0.2, 0.9, 0.2, 1)',
+    })
+  }
 
   onDocPointerDown = (event) => {
     // An open editor keeps its draft; outside presses do not dismiss it.

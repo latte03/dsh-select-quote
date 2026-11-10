@@ -21,6 +21,13 @@ export interface UserBeforeOwner {
   readonly kind?: 'user' | 'steering'
 }
 
+/** Where a node sits in the transcript, as far as the run state needs it. */
+export interface ChatTurnLocationLike {
+  readonly kind?: string
+  /** `open` while the turn is being answered; the Host closes it when it ends. */
+  readonly turn?: { readonly status?: string }
+}
+
 /** One durable Chat node, as far as this plugin inspects it. */
 export interface ChatNodeLike {
   readonly kind?: string
@@ -29,6 +36,12 @@ export interface ChatNodeLike {
     readonly source?: UserBeforeSource
     readonly content?: unknown
   }
+  readonly location?: ChatTurnLocationLike
+}
+
+/** One entry of the Host's per-session status snapshot. */
+export interface SessionStatusLike {
+  readonly running?: boolean
 }
 
 /** The slice of the Chat snapshot that can resolve a message body. */
@@ -98,3 +111,36 @@ export function userMessageTextOf(
   return undefined
 }
 
+/**
+ * Whether the turn carrying this message is still being answered.
+ *
+ * This is the same field the Host's own running indicator reads
+ * (`location.turn.status === 'open'`), so the whale and the Host agree on when
+ * the run starts and stops. `undefined` means "cannot tell" — a message whose
+ * node is not loaded yet, or a Host that did not publish a location — and every
+ * caller treats that as "not running" rather than guessing.
+ */
+export function chatTurnOpenOf(
+  state: ChatStateLike | undefined,
+  rpcId: string | undefined,
+): boolean | undefined {
+  if (rpcId === undefined) return undefined
+  const byKey = state?.nodes?.byKey
+  if (!(byKey instanceof Map)) return undefined
+  for (const value of byKey.values()) {
+    if (value?.data?.source?.rpcId !== rpcId) continue
+    const status = value.location?.turn?.status
+    return status === undefined ? undefined : status === 'open'
+  }
+  return undefined
+}
+
+/** The session-level run flag from the Host's status snapshot. */
+export function sessionRunningOf(
+  snapshot: Map<string, SessionStatusLike> | undefined,
+  sessionId: string | undefined,
+): boolean | undefined {
+  if (sessionId === undefined) return undefined
+  if (!(snapshot instanceof Map)) return undefined
+  return snapshot.get(sessionId)?.running
+}

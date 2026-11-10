@@ -21,6 +21,15 @@ export type ToolbarPlacement = 'above' | 'below'
 /** One side-task child per parent session, or a fresh fork for every question. */
 export type SideTaskMode = 'separate' | 'reuse'
 
+/**
+ * How the annotation card's count tile animates.
+ *
+ * `none` keeps the number still, `subtle` is the default rise-and-settle, and
+ * `dots` draws the count as a dot matrix — the same grid the running whale is
+ * made of, which is why it is the mode the easter egg hangs off.
+ */
+export type CountAnimation = 'none' | 'subtle' | 'dots'
+
 import { isTranslateTarget, type TranslateTarget } from './translate.ts'
 
 /** Translation target: `auto` follows the UI language per selection. */
@@ -56,6 +65,8 @@ export interface SelectQuoteConfig {
    * this switch can only take wording away, never make it overflow.
    */
   showButtonText: boolean
+  /** Count-tile motion on the annotation card; dots is the easter-egg level. */
+  countAnimation: CountAnimation
   sideTaskMode: SideTaskMode
   translateTarget: TranslateTarget
   /** Hide the translate entry when the selection already is the target language. */
@@ -77,6 +88,7 @@ export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   showAskInSide: true,
   showAnnotate: true,
   showButtonText: true,
+  countAnimation: 'subtle',
   sideTaskMode: 'separate',
   translateTarget: 'auto',
   translateHideSameLanguage: false,
@@ -94,6 +106,12 @@ const TRIGGER_MODES: ReadonlySet<string> = new Set<TriggerMode>([
 const TOOLBAR_PLACEMENTS: ReadonlySet<string> = new Set<ToolbarPlacement>(['above', 'below'])
 
 const SIDE_TASK_MODES: ReadonlySet<string> = new Set<SideTaskMode>(['separate', 'reuse'])
+
+const COUNT_ANIMATIONS: ReadonlySet<string> = new Set<CountAnimation>([
+  'none',
+  'subtle',
+  'dots',
+])
 
 /** The four per-button switches the settings page shows. */
 export type ButtonSwitch = 'showCopy' | 'showTranslate' | 'showAskInSide' | 'showAnnotate'
@@ -166,6 +184,9 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
     showAskInSide: switches.showAskInSide,
     showAnnotate: switches.showAnnotate,
     showButtonText: bool(record.showButtonText, DEFAULT_CONFIG.showButtonText),
+    countAnimation: COUNT_ANIMATIONS.has(record.countAnimation as string)
+      ? (record.countAnimation as CountAnimation)
+      : DEFAULT_CONFIG.countAnimation,
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
       ? (record.sideTaskMode as SideTaskMode)
       : DEFAULT_CONFIG.sideTaskMode,

@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { bindTestLocale } from '../i18n.testkit.ts'
 import { AnnotationSummary, SummaryComment, type AnnotationSummaryItem } from './AnnotationCardView.tsx'
+import { CountTile } from './CountBadge.tsx'
 import { KBD_GLYPH, Kbd } from './Kbd.tsx'
 
 /**
@@ -93,6 +94,52 @@ describe('AnnotationSummary', () => {
     expect(html).toContain('3 条批注')
     expect(html).toContain('悬停查看批注')
     expect(html).not.toContain('四件事都做完了')
+  })
+
+  it('draws the badge in place when nothing moved', () => {
+    // Motion belongs to a count change; a mount (or any other re-render) must not
+    // animate, so no direction is baked into the first paint.
+    const html = renderQuiet(<AnnotationSummary count={2} items={[item(), item()]} />)
+    expect(html).toContain('dsq_summaryCount')
+    expect(html).not.toContain('data-dir')
+  })
+})
+
+describe('CountTile', () => {
+  const tile = (count: number, animation: 'none' | 'subtle' | 'dots', dir?: 'up') =>
+    renderQuiet(<CountTile count={count} animation={animation} dir={dir ?? null} />)
+
+  it('draws the plain digit unless the dot mode is on', () => {
+    expect(tile(2, 'subtle')).toContain('dsq_summaryCount')
+    expect(tile(2, 'subtle')).not.toContain('<svg')
+    expect(tile(2, 'none')).toContain('>2<')
+  })
+
+  it('draws the count as one path in dot mode', () => {
+    const one = tile(2, 'dots')
+    expect(one).toContain('<svg')
+    expect(one).toContain('viewBox="0 0 5 7"')
+    expect(one).toContain('shape-rendering="crispEdges"')
+    expect(one.match(/<path/g)).toHaveLength(1)
+    expect(one).not.toContain('dsq_summaryCount')
+    // Two glyphs add the five columns plus the one blank between them.
+    expect(tile(12, 'dots')).toContain('viewBox="0 0 11 7"')
+  })
+
+  it('keeps the direction attribute so the run animation still fires', () => {
+    expect(tile(2, 'dots', 'up')).toContain('data-dir="up"')
+    // "No animation" means no attribute at all, not a slower one.
+    expect(tile(2, 'none', 'up')).not.toContain('data-dir')
+  })
+
+  it('runs a dot wave behind the digits, and only while the turn runs', () => {
+    const loading = renderQuiet(<CountTile count={2} animation="dots" dir={null} loading />)
+    // The count itself becomes dots while it runs (5×7 glyph cells, two layers).
+    expect(loading).toContain('<circle')
+    expect(loading).not.toContain('<path')
+    expect(loading).toContain('data-loading')
+    // Behind means earlier in the DOM: the tile paints later siblings over it.
+    expect(renderQuiet(<CountTile count={2} animation="dots" dir={null} />)).toContain('<path')
   })
 })
 

@@ -26,6 +26,8 @@ export interface Config {
   showAnnotate: Volatile<boolean>
   /** Button labels; off leaves icons only. */
   showButtonText: Volatile<boolean>
+  /** Annotation-card count motion: still, the subtle rise, or a dot matrix. */
+  countAnimation: Volatile<'none' | 'subtle' | 'dots'>
   sideTaskMode: Volatile<'separate' | 'reuse'>
   translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
   translateHideSameLanguage: Volatile<boolean>
@@ -46,6 +48,9 @@ export const Config = z.object({
   showAskInSide: z.boolean().default(true).volatile(),
   showAnnotate: z.boolean().default(true).volatile(),
   showButtonText: z.boolean().default(true).volatile(),
+  // Easter-egg tier: `dots` is the only mode that can carry the running whale,
+  // so it sits alone in its own settings tab (see settingsGroups.ts).
+  countAnimation: z.union(['none', 'subtle', 'dots']).default('subtle').volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
   translateTarget: z
     .union(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'])

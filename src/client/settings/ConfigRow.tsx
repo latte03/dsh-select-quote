@@ -12,6 +12,7 @@ import {
   hasAnyButton,
   normalizeConfig,
   type ButtonSwitch,
+  type CountAnimation,
   type SideTaskMode,
   type ToolbarPlacement,
   type TranslateTarget,
@@ -58,6 +59,7 @@ export interface ConfigRowProps {
 const CHOICES: readonly TriggerMode[] = ['auto', 'contextmenu', 'both']
 const PLACEMENT_CHOICES: readonly ToolbarPlacement[] = ['above', 'below']
 const SIDE_TASK_CHOICES: readonly SideTaskMode[] = ['separate', 'reuse']
+const COUNT_ANIMATION_CHOICES: readonly CountAnimation[] = ['none', 'subtle', 'dots']
 
 /**
  * Segmented radio group whose selected cell is one sliding thumb. The thumb is
@@ -317,6 +319,19 @@ function ConfigSection({
             on={current.showButtonText}
             onChange={(next) => void form.set('showButtonText', next)}
           />
+          <SettingRow
+            label={t('settings.countAnimation')}
+            hint={t('settings.countAnimationHint')}
+          >
+            <Segmented
+              name="dsq-count-animation"
+              ariaLabel={t('settings.countAnimation')}
+              choices={COUNT_ANIMATION_CHOICES}
+              value={current.countAnimation}
+              label={(mode) => t(`settings.countAnimation.${mode}`)}
+              onChange={(mode) => void form.set('countAnimation', mode)}
+            />
+          </SettingRow>
         </SettingsPanel>
       ) : null}
       {group === 'translate' ? (

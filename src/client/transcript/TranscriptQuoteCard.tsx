@@ -23,6 +23,8 @@ export interface TranscriptQuoteCardProps {
   node: { data: SelectQuoteNodeData }
   /** Side-question marks paint a bot glyph instead of the ordinal. */
   robot?: boolean
+  /** The turn this message opened is still being answered (drives the whale). */
+  running?: boolean
 }
 
 /**
@@ -35,7 +37,11 @@ export interface TranscriptQuoteCardProps {
  * scrolls back to the marked text in the source message; the ordinal badge
  * matches the `:dsh-annotation{index="N"}` the model refers to.
  */
-export function TranscriptQuoteCard({ node, robot = false }: TranscriptQuoteCardProps): ReactNode {
+export function TranscriptQuoteCard({
+  node,
+  robot = false,
+  running = false,
+}: TranscriptQuoteCardProps): ReactNode {
   ensureToolbarStyles()
   const stackRef = useRef<HTMLDivElement | null>(null)
   const quotes = node.data?.quotes ?? []
@@ -163,6 +169,7 @@ export function TranscriptQuoteCard({ node, robot = false }: TranscriptQuoteCard
               }
             : {}),
         }))}
+        running={running}
         onItemSelect={onSelect}
         onItemOrigin={onOrigin}
       />

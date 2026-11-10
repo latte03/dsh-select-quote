@@ -116,6 +116,10 @@ Each item contains text selected from an earlier message ...
 面板 **portal 到 `document.body`**：消息内容里有带 `contain: layout` 的表面、滚动容器带 `container-type`，它们都会成为 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群只有 40ms 宽限（够跨桥，退场动画随即开始）；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层只在朝向摘要一侧留的 12px padding（左右不留，面板卡面因此与摘要左缘对齐）。面板退场时保留节点 120ms 播 `dsq-rise-out` 再卸载，期间 `pointer-events: none`。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）；编辑期间指针离开、点击面板外导致失焦都不关闭面板，退出编辑后才恢复关闭；编辑目标按批注 `id` 记录，删除其他条目不会串到旁边的批注。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
 
 - **只有一条批注时，卡片就是那条批注**：标题换成引文、提示行换成用户评论，没写评论就整行不画（卡片只剩一行，而不是画一行空提示）。两条起才回到「N 条批注 + 悬停/点按查看」——序号徽章本来就在左边显示数字，一条时再说一遍「1 条批注」是重复。「有没有评论」直接问 `ui/comment-block.ts`，规则不在这里复述；引文与评论都投影成单行（`ui/summary-heading.ts` 折叠空白，`.dsq_summaryTitle/.dsq_summaryHint` 已有 `nowrap + ellipsis` 负责截断）。**必须两个槽一起切**：`count` 与 `items` 对不上、或引文为空时整体退回计数写法，只换标题不换提示会得到一个没有名字的按钮。
+- **浮层宽度跟内容走，不写死**：`.dsq_summaryHover` 与 `.dsq_chipPreview` 共用一条规则，只给 `min-width: 160px` 与 `max-width: min(320px, calc(100vw - 16px))`，**不写 `width`**——fixed 盒没有宽度就是 shrink-to-fit，正好是「和内容一样宽，到上限为止」；一写 `width` 两条限制就只剩钳位作用，卡片又变成永远最大。宽度都在设置 `left` **之前**量（`mountPreview` 先读 `offsetWidth` 再 `placePopover`，悬停面板读的是 inner），所以量到的就是最终画出来的宽度；`placePopover` 的水平钳位沿用 8px 边距，配合 `calc(100vw - 16px)` 不会把卡片推出视口。`pnpm run verify` 的 CASCADE 闸成对断言：两条限制必须落在共享规则上，且这条规则里不许再出现 `width`。
+- **徽章只在数字变化时动，方向就是消息**：`.dsq_summaryIcon` 里的数字是计数、不是装饰——悬停、展开、挂载一律静止（用户正在读的数据不该晃），只有 `count` 真的变了才播一次 180ms 的入场：加一条从下方升起、删一条从上方落下，方向由 `ui/summary-count.ts` 的 `countDirection` 决定（纯函数、可单测）；同一拍里图块补一层 0.18 的 `--dsq-link` 淡出，**只在上方那一条**，删掉不庆祝。图块 `overflow: hidden`，数字从块外滚进来，不会越到标题上。**重播靠 `key={count}` 重建整个图块**：同一个方向连着来两次（2→3 → 3→4）时 `animation-name` 不变，只有重建才能重新起跑；方向必须在**渲染期**算（`if (seen !== count) setSeen(…)`），放进 effect 会先提交一帧没有方向的新数字，看着像卡顿。`prefers-reduced-motion` 换成 `dsq-count-fade`：保留「变了」的节拍，去掉位移与补光。
+- **三档计数动画（`countAnimation`，在「按钮」tab）**：`subtle` 是上面那套上浮 + 补光；`dots` 用 `ui/pixel-count.ts` 的 5×7 点阵把数字画成一个 `<path>`（一行内连续像素合并成矩形，一位数 8 条指令，不是 35 个 `rect`），网格自动缩放塞进图块里 22×18 的盒子；`none` **不挂 `data-dir`**，动画由 CSS 属性选择器驱动，所以"不动"是缺一个属性，不是另一条更慢的动画。点阵的墨水是 `currentColor`（跟着图块的 `--dsq-link` 走），这块网格也是后面鲸鱼的底座。配置项落在**单独一个「彩蛋」tab**：这是唯一允许放纯装饰的 tab，别再往行为 tab 里塞。新增字段仍然要重启宿主（schema 在宿主侧）。
+- **跑到哪只鲸鱼、什么时候跑**：`dots` 档下，**当前这一轮在回答**的那张卡会在图块里放一只 20×13 的鲸鱼（`ui/whale.ts`，同一套点阵网格、同一条 `path` 构建器）。运行态不靠嗅 DOM：`useChat` 取 `location.turn.status === 'open'`（宿主自己就是用它决定运行指示器的），拿不到再退到根 hook `useSessionStatus` 的 `running`，两者都没有就**当没在跑**——一只游不停的鲸鱼比没有鲸鱼更糟。三个阶段：`swim`（0.28 不透明度穿过图块，5.6s 一轮，两端停一拍）、`dive`（回合结束那一下：0.6s 变实、抬 6px、下潜出图块，期间数字降到 0.2，一个 32px 方块里两个实心东西只会糊成一团）、然后消失。**只有亲眼看它游过的那张卡才有 `dive`**：`whalePhaseOf(running, wasRunning)` 里 `wasRunning` 决定这一下要不要放，挂载进一个已经结束的会话时不放。`prefers-reduced-motion` 直接 `display: none`——定格在角落的鲸鱼只会是一块解释不清的污渍。CASCADE 闸对 swim / dive(0.6s) / reduce 隐藏各断言一次。
 - **键盘**：摘要卡可聚焦；Enter 展开并把焦点移到面板第一个控件，↓ 在已展开时进入面板；Tab / Shift+Tab 在面板内循环，Esc 关闭并把焦点还给摘要卡。面板是 React portal 子节点，keydown 会按 React 树冒泡回摘要卡，所以面板处理过的键要 `stopPropagation()`，否则摘要卡的 Tab 会抢回第一个控件。
 - **触屏**：`(hover: none), (pointer: coarse)` 下提示从「悬停查看批注」切成「点按查看批注」；`pointerup` 的 `pointerType === 'touch'` 时点按摘要展开，`pointerleave` 不触发自动关闭（触屏抬手也会发 pointerleave），点外部关闭。操作按钮在 coarse 指针下为 44px；角落关闭按钮保留视觉尺寸，用 `::after` 扩展命中区。
 - **触屏的划词 chrome**：coarse pointer 下工具条和评论泡改走 `document.body` 级 fixed，不再挂滚动容器。操作条贴 visual viewport 底部（`visualViewport` 算软键盘 inset，再加 `env(safe-area-inset-bottom)`），评论是底部抽屉：带上选中原文预览、输入框 16px 防 iOS 聚焦缩放、按钮 44px，`maxHeight` 跟 visual viewport 走。抽屉打开时不自动聚焦评论框，关闭后也不把焦点抢回 composer，避免软键盘第二次弹出。细指针（鼠标）仍走内容坐标 + 滚动容器裁剪。
@@ -396,6 +400,13 @@ src/client/ui/HoverTip.tsx         # 图标态的名称提示（portal 到 body�
 src/client/dom/tip-placement.ts    # 提示落位：水平居中、贴边内收、上方放不下就翻到下方
 src/client/ui/comment-block.ts     # 评论要不要画：三处（批注卡/预览/放入面板）共用一条规则
 src/client/ui/summary-heading.ts   # 一条批注时卡片的标题/提示：引文 + 评论，否则退回「N 条批注」
+src/client/ui/summary-count.ts     # 计数徽章的入场方向：加了往上升、删了往下落、没变就原地画
+src/client/ui/CountBadge.tsx       # 计数图块：CountTile 是纯视图（点阵 / 数字），CountBadge 只订阅设置
+src/client/ui/pixel-count.ts       # 5×7 点阵数字：字形表、行程合并、缩放适配（纯几何，无颜色无 DOM）
+src/client/ui/whale.ts             # 20×13 点阵鲸鱼：同一套网格与 path 构建器（自绘，灵感见 dsh-TUI）
+src/client/ui/whale-state.ts       # 鲸鱼阶段：swim / dive 一次 / 不画（纯函数）
+src/client/ui/useWhalePhase.ts     # 阶段机的计时器：dive 只放一次，到点收走
+src/client/useConfig.ts            # 订阅设置钩子；config.ts 保持无 React 依赖
 src/client/model/types.ts          # 模型目录的只读面与选择类型
 src/client/model/rank.ts           # 宿主同款有序子序列搜索排序（纯逻辑，可单测）
 src/client/model/ModelSelect.tsx   # 宿主 composer 模型位的移植：两级菜单、搜索、键盘、跟随主会话

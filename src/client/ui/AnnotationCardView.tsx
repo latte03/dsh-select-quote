@@ -16,6 +16,8 @@ import { A, cx, styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
 import { Kbd } from './Kbd.tsx'
 import { commentBlockOf } from './comment-block.ts'
+import { CountBadge } from './CountBadge.tsx'
+import { countDirection, type CountDirection } from './summary-count.ts'
 import { summaryHeadingOf } from './summary-heading.ts'
 import { t } from '../i18n.ts'
 import { useLocale } from '../useLocale.ts'
@@ -47,6 +49,8 @@ export interface AnnotationSummaryProps {
   readonly onItemEdit?: (index: number, item: AnnotationSummaryItem, comment: string) => void
   /** Composer only: open the source conversation of a cross-session item. */
   readonly onItemOrigin?: (index: number, item: AnnotationSummaryItem) => void
+  /** The turn is being answered right now; only the transcript passes this. */
+  readonly running?: boolean
 }
 
 /** Short grace for crossing the 12px bridge; the exit starts right after it. */
@@ -55,8 +59,16 @@ const CLOSE_DELAY = 40
 const SETTLE_DELAY = 600
 /** Transparent strip on the facing side; the pointer crosses it in transit. */
 const BRIDGE = 12
-/** Matches the list's leaving keyframe; the panel unmounts after it. */
-const EXIT_MS = 120
+/**
+ * Entrance length for the hover panel.
+ *
+ * Same treatment as the preview card: the surface (which carries the material
+ * layer) moves as one, the content fades. Driven from here rather than the
+ * stylesheet because the panel is portaled and measured before it is shown.
+ */
+const PANEL_ENTER_MS = 300
+/** Matches the leaving animation below; the panel unmounts after it finishes. */
+const EXIT_MS = 180
 
 /**
  * The card's comment pair: label plus text, or nothing at all.
@@ -100,11 +112,23 @@ export function AnnotationSummary({
   onItemRemove,
   onItemEdit,
   onItemOrigin,
+  running = false,
 }: AnnotationSummaryProps): ReactNode {
   useLocale()
   const touch = useCoarsePointer()
   /** Title/hint text; the count wording only survives for 0 or 2+ annotations. */
   const heading = summaryHeadingOf(items, count)
+  const [countMove, setCountMove] = useState<{ seen: number; dir: CountDirection | null }>({
+    seen: count,
+    dir: null,
+  })
+  // Render-phase update, on purpose: the badge tile is keyed by the count, so it
+  // has to mount with the direction already decided. An effect would commit one
+  // frame of the new number with no motion, then start the animation — a visible
+  // stutter rather than a count.
+  if (countMove.seen !== count) {
+    setCountMove({ seen: count, dir: countDirection(countMove.seen, count) })
+  }
   const rootRef = useRef<HTMLDivElement | null>(null)
   const popRef = useRef<HTMLDivElement | null>(null)
   const closeTimerRef = useRef<number | null>(null)
@@ -124,6 +148,8 @@ export function AnnotationSummary({
   const [editDraft, setEditDraft] = useState('')
   /** Item key (or 'all') waiting for the second press of its delete button. */
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  /** Set when the panel is about to open; the next placement plays the entrance. */
+  const entranceRef = useRef(false)
 
   // A closed panel forgets the half-finished destructive step.
   useEffect(() => {
@@ -151,6 +177,28 @@ export function AnnotationSummary({
     pop.style.paddingBottom = side === 'top' ? `${BRIDGE}px` : '0'
     pop.dataset.side = side
     pop.style.opacity = '1'
+    // Entrance: the surface carries the material layer, so it takes the
+    // transform; only the list fades. Same split as the preview card, and for
+    // the same reason (an animating opacity would stop ::before sampling).
+    if (entranceRef.current) {
+      entranceRef.current = false
+      const inner = pop.firstElementChild
+      if (inner instanceof HTMLElement) {
+        const from = side === 'top' ? '14px' : '-14px'
+        inner.animate(
+          [
+            { transform: `translateY(${from}) scale(0.94)` },
+            { transform: 'none' },
+          ],
+          { duration: PANEL_ENTER_MS, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1)' },
+        )
+      }
+      const list = pop.querySelector<HTMLElement>(`.${styles.summaryList}`)
+      list?.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: PANEL_ENTER_MS,
+        easing: 'cubic-bezier(0.2, 0.9, 0.2, 1)',
+      })
+    }
   }, [])
 
   const cancelClose = useCallback(() => {
@@ -162,6 +210,7 @@ export function AnnotationSummary({
 
   const openPop = useCallback(() => {
     cancelClose()
+    entranceRef.current = true
     setOpen(true)
   }, [cancelClose])
 
@@ -656,9 +705,7 @@ export function AnnotationSummary({
       onBlur={onBlur}
       onKeyDown={onKeyDown}
     >
-      <div className={cx(A.keep, A.gridMid, styles.summaryIcon)} aria-hidden="true">
-        {String(count)}
-      </div>
+      <CountBadge key={count} count={count} dir={countMove.dir} running={running} />
       <div className={cx(A.grow, styles.summaryBody)}>
         <div className={styles.summaryTitle}>
           {heading.quote ?? t('summary.title', { count })}

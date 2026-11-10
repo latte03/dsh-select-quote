@@ -673,6 +673,33 @@ function checkCascadePrecedence(code) {
     problems.push("summary title lost nowrap — it stacks one character per line when space is tight")
   }
 
+  // The running indicator is the one thing on the tile that moves on its own,
+  // so its off-switch is worth a gate: reduced motion must hold the wave still
+  // rather than let it pulse forever.
+  if (!/\.dsq_summaryPixels circle\s*\{[^}]*animation:\s*dsq-pixel-breathe/.test(css)) {
+    problems.push("the count lost its breathing wave")
+  }
+  if (!/\.dsq_summaryPixels circle\s*\{[^}]*animation:\s*none/.test(css)) {
+    problems.push("reduced motion no longer stills the breathing count")
+  }
+  // …and a cap. A `width` here (it used to be a flat 320) brings back the card
+  // that is always maximum size, so the pair is checked as a pair: the limits
+  // must be on the shared rule, and the rule must not also pin a width.
+  const floatRule = css.match(/\.dsq_summaryHover,\s*\.dsq_chipPreview\s*\{([^}]*)\}/)?.[1] ?? ""
+  if (floatRule === "") {
+    problems.push("the shared .dsq_summaryHover/.dsq_chipPreview box rule is gone")
+  } else {
+    if (!/min-width:\s*160px/.test(floatRule)) {
+      problems.push("the floating preview lost its 160px floor — a one-word quote draws a sliver of a card")
+    }
+    if (!/max-width:\s*min\(320px, calc\(100vw - 16px\)\)/.test(floatRule)) {
+      problems.push("the floating preview lost its 320px / viewport cap")
+    }
+    if (/(^|;)\s*width:/.test(floatRule)) {
+      problems.push("the floating preview pins a width again — the limits only matter if width follows the content")
+    }
+  }
+
   // 3. Exit must hide the text before the box collapses; enter must open the
   //    box before the text appears. CSS uses the destination state transition,
   //    so the base rule drives the exit and the confirming rule the entry.

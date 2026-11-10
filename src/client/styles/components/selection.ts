@@ -51,19 +51,45 @@ export const SELECTION_CSS = `
    ::before with backdrop-filter, so an animated opacity would cut the blur. */
 @keyframes dsq-dropdown-in-below {
   from {
-    transform: translateY(-6px) scale(0.98);
+    opacity: 0;
+    transform: translateY(-14px) scale(0.94);
   }
   to {
+    opacity: 1;
     transform: none;
   }
 }
 
 @keyframes dsq-dropdown-in-above {
   from {
-    transform: translateY(6px) scale(0.98);
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
   }
   to {
+    opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes dsq-dropdown-out-below {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+}
+
+@keyframes dsq-dropdown-out-above {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
   }
 }
 

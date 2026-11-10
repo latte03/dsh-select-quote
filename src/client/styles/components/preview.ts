@@ -20,19 +20,35 @@ export const PREVIEW_CSS = `
 
 /* Same rise as the annotation card's hover list; on the content, not on the
    material layer, so backdrop sampling stays put. */
+/* Same entrance as the settings dropdowns: the card grows out of the edge it is
+   anchored to, and picks the direction from placePopover's side. The animation
+   lives on the content, not on the material layer, so backdrop sampling stays
+   put — and the exit is the entrance backwards, a little faster because a timer
+   removes the node. */
 .dsq_chipPreviewBody {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  animation: dsq-rise-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dsq_chipPreview[data-side='below'] .dsq_chipPreviewBody {
+  transform-origin: 50% 0;
+}
+
+.dsq_chipPreview[data-side='above'] .dsq_chipPreviewBody {
+  transform-origin: 50% 100%;
 }
 
 .dsq_chipPreviewLeaving {
   pointer-events: none;
 }
 
-.dsq_chipPreviewLeaving .dsq_chipPreviewBody {
-  animation: dsq-rise-out 0.12s cubic-bezier(0.4, 0, 1, 1) both;
+/* After the entrance rules on purpose: same specificity, so source order picks
+   the exit while the node is on its way out. */
+.dsq_chipPreviewLeaving.dsq_chipPreview[data-side='below'] .dsq_chipPreviewBody {
+}
+
+.dsq_chipPreviewLeaving.dsq_chipPreview[data-side='above'] .dsq_chipPreviewBody {
 }
 
 /* Header rows: title on the left, the single action on the right. */
@@ -92,7 +108,11 @@ export const PREVIEW_CSS = `
   height: 26px;
   padding: 0 7px;
   border-radius: 7px;
-  background: var(--dsq-danger-bg);
+  /* Opaque on purpose: the chip sits on top of the card's own text, and a
+     translucent tint let the title read through it. The tint is composited over
+     the raised surface instead of over whatever is underneath. */
+  background-color: var(--dsq-bg-raised);
+  background-image: linear-gradient(var(--dsq-danger-bg), var(--dsq-danger-bg));
   color: var(--dsq-danger);
   font-size: 11.5px;
   white-space: nowrap;

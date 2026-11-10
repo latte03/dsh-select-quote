@@ -73,9 +73,190 @@ export const ANNOTATIONS_CSS = `
   height: 32px;
   border-radius: 10px;
   background: var(--dsq-fill-hover);
-  color: var(--dsq-link);
+  /* One ink for the count and the whale: the host's primary blue. The tile is
+     the only place in the plugin that paints blue text, so it reads as "this is
+     the annotation count", not as a link. */
+  color: var(--dsq-accent);
   font-size: 13px;
   font-weight: 600;
+  /* The tint layer below is absolute; it needs this tile as its containing
+     block, and a nested copy of the tile is what the count animation remounts. */
+  position: relative;
+  /* The digit rolls in from outside the tile, so the tile is the viewport of its
+     own little counter — without this the incoming number is drawn over the
+     title while it fades up. */
+  overflow: hidden;
+}
+
+/* The badge is a counter, not an ornament. It stays still until the number
+   itself changes, and then the digit arrives from the side the change came
+   from — added rises from below, removed drops from above — while the tile
+   takes one soft tint. Nothing here runs on hover, on open, or on mount: a
+   number the user is reading must not wander. Direction comes from
+   summary-count.ts via data-dir; the tile is keyed by the count in the view,
+   and that remount is what restarts these keyframes when the same direction
+   happens twice in a row. */
+.dsq_summaryIcon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--dsq-link);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dsq_summaryCount {
+  position: relative;
+  display: block;
+  /* 1 and 2 are the same width, so the digit does not shimmy mid-roll. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dot matrix: the tile's own ink, so the count and the running whale can share
+   one grid without a second palette. currentColor follows the tile's link
+   colour through theme changes for free. */
+.dsq_summaryPixels {
+  display: block;
+  overflow: visible;
+}
+
+.dsq_summaryPixels path {
+  fill: currentColor;
+}
+
+/* The wave runs through the count itself: while a turn is running the digit is
+   drawn as cells instead of a path (see CountBadge), and these light it up in
+   turn. The floor is 0.55 on purpose — this is the number the user is reading,
+   so the pulse may make it breathe, never make it faint. */
+.dsq_summaryPixels circle {
+  fill: currentColor;
+  opacity: 1;
+  animation: dsq-pixel-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes dsq-pixel-breathe {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
+
+@keyframes dsq-whale-swim {
+  0%,
+  8% {
+    transform: translate(-130%, 0);
+  }
+  30% {
+    transform: translate(-60%, -1px);
+  }
+  50% {
+    transform: translate(0, 0);
+  }
+  70% {
+    transform: translate(60%, 1px);
+  }
+  80%,
+  100% {
+    transform: translate(130%, 0);
+  }
+}
+
+@keyframes dsq-whale-dive {
+  0% {
+    opacity: 0.5;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(0, -6px) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(2px, 4px) rotate(12deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(4px, 18px) rotate(24deg);
+  }
+}
+
+.dsq_summaryIcon[data-dir='up'] .dsq_summaryCount,
+.dsq_summaryIcon[data-dir='up'] .dsq_summaryPixels {
+  animation: dsq-count-up 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dsq_summaryIcon[data-dir='down'] .dsq_summaryCount,
+.dsq_summaryIcon[data-dir='down'] .dsq_summaryPixels {
+  animation: dsq-count-down 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Arrival only: a delete should leave nothing behind but the smaller number. */
+.dsq_summaryIcon[data-dir='up']::before {
+  animation: dsq-count-flash 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dsq-count-up {
+  from {
+    opacity: 0;
+    transform: translateY(55%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dsq-count-down {
+  from {
+    opacity: 0;
+    transform: translateY(-55%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dsq-count-flash {
+  from {
+    opacity: 0.18;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion keeps the "something changed" beat and drops the travel. */
+@media (prefers-reduced-motion: reduce) {
+  .dsq_summaryIcon[data-dir] .dsq_summaryCount,
+  .dsq_summaryIcon[data-dir] .dsq_summaryPixels {
+    animation: dsq-count-fade 0.16s ease;
+  }
+
+  .dsq_summaryIcon[data-dir='up']::before {
+    animation: none;
+  }
+
+  /* Reduced motion keeps the information and drops the movement: the count
+     stays fully legible, only the wave is gone. */
+  .dsq_summaryPixels circle {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+@keyframes dsq-count-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .dsq_summaryBody {
@@ -111,11 +292,17 @@ export const ANNOTATIONS_CSS = `
   }
 }
 
-/* The hover panel and the chip preview are the same floating width; keeping it
-   in one rule means a width tweak lands on both. */
+/* The hover panel and the chip preview are one floating surface, so the box is
+   described once. Width follows the content: a short quote no longer pays for a
+   full 320px card, and a long one still stops at the cap instead of running
+   away. There is deliberately no width property — a fixed box without one is
+   shrink-to-fit, which is exactly "as wide as the content, within the bounds".
+   Both limits are measured before placement sets left, so the width the
+   placement sees is the width that gets painted. */
 .dsq_summaryHover,
 .dsq_chipPreview {
-  width: min(320px, calc(100vw - 16px));
+  min-width: 160px;
+  max-width: min(320px, calc(100vw - 16px));
 }
 
 .dsq_summaryHover {
@@ -148,9 +335,24 @@ export const ANNOTATIONS_CSS = `
   pointer-events: none;
 }
 
-.dsq_summaryHoverLeaving .dsq_summaryList {
-  animation: dsq-rise-out 0.12s cubic-bezier(0.4, 0, 1, 1) both;
+.dsq_summaryHoverLeaving .dsq_summaryHoverInner {
+  animation: dsq-rise-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
 }
+
+.dsq_summaryHoverLeaving .dsq_summaryList {
+  animation: dsq-summary-fade-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes dsq-summary-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+
 
 .dsq_summaryHoverInner {
   position: relative;
@@ -169,7 +371,17 @@ export const ANNOTATIONS_CSS = `
   overflow-y: auto;
   overscroll-behavior: contain;
   max-height: min(412px, calc(100vh - 128px));
-  animation: dsq-rise-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Same entrance as the chip preview and the settings dropdowns: grows out of the
+   edge the card is anchored to. The side comes from place(), which already
+   writes data-side on the portaled panel. */
+.dsq_summaryHover[data-side='below'] .dsq_summaryList {
+  transform-origin: 50% 0;
+}
+
+.dsq_summaryHover[data-side='above'] .dsq_summaryList {
+  transform-origin: 50% 100%;
 }
 
 /* 老浏览器没有 backdrop-filter：图层退成不透明底色，否则半透明直接糊在文字上。 */
@@ -308,7 +520,13 @@ export const ANNOTATIONS_CSS = `
   position: absolute;
   top: 4px;
   right: 4px;
-  z-index: 3;
+  /* Above the card's own text: the chip overlays the title in this state, so it
+     has to win the paint order outright. */
+  z-index: 4;
+  /* A 1px ring in the raised surface colour lifts it off whatever it covers —
+     white on light themes, the dark surface on dark ones, both through the same
+     token. */
+  box-shadow: 0 0 0 1px var(--dsq-bg-raised);
   display: inline-flex;
   align-items: center;
   justify-content: center;

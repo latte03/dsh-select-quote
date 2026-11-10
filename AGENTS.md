@@ -7,7 +7,7 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 | 命令 | 用途 |
 |---|---|
 | `pnpm run check` | typecheck + test + build + verify，**提交前必跑** |
-| `pnpm run build` / `watch` | 产出 `lib/`（**随源码提交**，运行时直读） |
+| `pnpm run build` / `watch` | 产出 `lib/`（**不入库**，见 .gitignore；发布由 prepublishOnly 自动构建） |
 | `pnpm run verify` | 无头跑 `lib/client.js`：贡献注册、八语言词典、包元信息、`npm pack` 清单 |
 | `pnpm run sync:desktop` / `sync:web` | 把 `lib/` 推到已安装副本（宿主 500ms 热更新；**换版本仍需重启**） |
 | `pnpm run release` | check → CHANGELOG → 版本 + tag（`<1.0.0` 时 `feat:`/`fix:` 都只跳 patch） |

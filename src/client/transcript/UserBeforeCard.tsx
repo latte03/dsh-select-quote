@@ -28,8 +28,11 @@ import { scanAnnotatedMessage } from '../protocol/annotation-protocol.ts'
 import { runtime } from '../runtime.ts'
 import {
   chatNodeTextOf,
+  chatTurnOpenOf,
+  sessionRunningOf,
   userMessageTextOf,
   type ChatStateLike,
+  type SessionStatusLike,
   type UserBeforeOwner,
 } from './chat-seat.ts'
 import { TranscriptQuoteCard } from './TranscriptQuoteCard.tsx'
@@ -40,6 +43,10 @@ export interface UserBeforeCardProps {
   readonly matched?: UserBeforeOwner | null
   /** Standard session seat: selector hook over the Chat snapshot. */
   readonly useChat?: <T>(selector: (state: ChatStateLike) => T) => T
+  /** Root seat: per-session run state ("is this session answering right now"). */
+  readonly useSessionStatus?: <T>(
+    selector: (snapshot: Map<string, SessionStatusLike>) => T,
+  ) => T
   /** Standard session seat: the session this row belongs to. */
   readonly sessionId?: string
   [key: string]: unknown
@@ -55,6 +62,7 @@ export interface UserBeforeCardProps {
 export function UserBeforeCard({
   matched,
   useChat,
+  useSessionStatus,
   sessionId,
 }: UserBeforeCardProps): ReactNode {
   const rpcId = typeof matched?.source?.rpcId === 'string' ? matched.source.rpcId : undefined
@@ -72,6 +80,18 @@ export function UserBeforeCard({
 
   const select = <T,>(read: (state: ChatStateLike) => T): T | undefined =>
     typeof useChat === 'function' ? useChat(read) : undefined
+
+  // Run state, straight from the Host's own seats: the turn flag first (it is
+  // per-turn, so parallel steering rows cannot borrow each other's run), then
+  // the session-level flag for rows the turn lookup cannot place. Both calls sit
+  // here rather than in a helper so the hook order matches `select`'s.
+  const turnOpen =
+    typeof useChat === 'function' ? useChat((state) => chatTurnOpenOf(state, rpcId)) : undefined
+  const sessionRunning =
+    typeof useSessionStatus === 'function'
+      ? useSessionStatus((snapshot) => sessionRunningOf(snapshot, sessionId))
+      : undefined
+  const running = turnOpen ?? sessionRunning ?? false
 
   const rpcText = select((state) => userMessageTextOf(state, rpcId))
   const keyedText = select((state) => chatNodeTextOf(state, flowKey))
@@ -95,7 +115,7 @@ export function UserBeforeCard({
       {quotes !== null && !inherited ? (
         // In a side session the quote was taken by the sidebar agent, so its
         // mark wears a bot glyph instead of an ordinal.
-        <TranscriptQuoteCard node={{ data: { quotes } }} robot={isSubagent} />
+        <TranscriptQuoteCard node={{ data: { quotes } }} robot={isSubagent} running={running} />
       ) : null}
     </span>
   )
