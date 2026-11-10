@@ -6,8 +6,10 @@
 
 import {
   Fragment,
+  useCallback,
   useEffect,
   useRef,
+  useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -19,6 +21,7 @@ import type { SelectionSnapshot } from '../dom/selection.ts'
 import { t } from '../i18n.ts'
 import { A, cx, styles } from '../styles.ts'
 import { LANGUAGE_LABELS, TRANSLATE_LANGUAGES } from '../translate.ts'
+import { HoverTip, type TipTarget } from '../ui/HoverTip.tsx'
 import { LucideIcon } from '../ui/icons.tsx'
 import { Kbd } from '../ui/Kbd.tsx'
 import type { VisualViewportMetrics } from '../ui/touch.ts'
@@ -136,6 +139,18 @@ export function ActionRow({
   /** Jumps to this plugin's settings; the gear is the row's last button. */
   onSettings?: () => void
 }): ReactNode {
+  /**
+   * Icon-only cells have no visible wording, so the label rides a hover tip.
+   * One tip for the whole row: a per-button tip would let two of them stack while
+   * the pointer crosses the gap between cells.
+   */
+  const [tip, setTip] = useState<TipTarget | null>(null)
+  const openTip = useCallback((element: HTMLElement, text: string): void => {
+    const rect = element.getBoundingClientRect()
+    setTip({ text, rect })
+  }, [])
+  const closeTip = useCallback((): void => setTip(null), [])
+
   const cells: ActionCell[] = []
   for (const action of actions) {
     const destinations = action.destinations ?? []
@@ -175,7 +190,6 @@ export function ActionRow({
           compact && !stacked && cx(A.gridMid, styles.buttonCompact),
         )}
         aria-label={compact && !stacked ? labelTextOf(cell) : undefined}
-        title={compact && !stacked ? labelTextOf(cell) : undefined}
         aria-haspopup={cell.chevron ? 'dialog' : undefined}
         // aria-disabled rather than `disabled`: a disabled button drops hover
         // in some browsers, and the tooltip is the whole point here. Clicks
@@ -183,6 +197,27 @@ export function ActionRow({
         aria-disabled={cell.action.disabled ? 'true' : undefined}
         data-dsq-tip={cell.action.disabled ? cell.action.disabledReason : undefined}
         data-dsq-destinations={cell.chevron ? 'true' : undefined}
+        // No `title`: the platform tip would surface a second, slower label
+        // after ours. The tip carries the disabled reason when there is one.
+        onPointerEnter={
+          compact && !stacked
+            ? (event) =>
+                openTip(
+                  event.currentTarget,
+                  cell.action.disabled
+                    ? (cell.action.disabledReason ?? labelTextOf(cell))
+                    : labelTextOf(cell),
+                )
+            : undefined
+        }
+        onPointerLeave={compact && !stacked ? closeTip : undefined}
+        onFocus={
+          compact && !stacked
+            ? (event) => openTip(event.currentTarget, labelTextOf(cell))
+            : undefined
+        }
+        onBlur={compact && !stacked ? closeTip : undefined}
+        onPointerDown={compact && !stacked ? closeTip : undefined}
         onClick={cell.action.disabled ? undefined : cell.onClick}
       >
         <LucideIcon name={cell.action.icon} size={stacked ? 18 : 14} />
@@ -200,8 +235,19 @@ export function ActionRow({
           className={cx(A.plain, A.gridMid, styles.handoffChevron)}
           aria-haspopup="dialog"
           aria-label={t('handoff.dialogAria')}
-          title={t('handoff.dialogAria')}
           data-dsq-destinations-picker="true"
+          onPointerEnter={
+            compact && !stacked
+              ? (event) => openTip(event.currentTarget, t('handoff.dialogAria'))
+              : undefined
+          }
+          onPointerLeave={compact && !stacked ? closeTip : undefined}
+          onFocus={
+            compact && !stacked
+              ? (event) => openTip(event.currentTarget, t('handoff.dialogAria'))
+              : undefined
+          }
+          onBlur={compact && !stacked ? closeTip : undefined}
           onClick={(event) => {
             event.stopPropagation()
             const rect = event.currentTarget.getBoundingClientRect()
@@ -229,8 +275,11 @@ export function ActionRow({
               stacked ? styles.touchAction : styles.button,
             )}
             aria-label={t('toolbar.settings')}
-            title={t('toolbar.settings')}
             data-dsq-settings="true"
+            onPointerEnter={(event) => openTip(event.currentTarget, t('toolbar.settings'))}
+            onPointerLeave={closeTip}
+            onFocus={(event) => openTip(event.currentTarget, t('toolbar.settings'))}
+            onBlur={closeTip}
             onClick={onSettings}
           >
             <LucideIcon name="settings" size={stacked ? 18 : 14} />
@@ -238,6 +287,7 @@ export function ActionRow({
           </button>
         </>
       )}
+      <HoverTip target={tip} />
     </>
   )
 }

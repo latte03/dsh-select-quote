@@ -272,6 +272,53 @@ export const SELECTION_CSS = `
   background: transparent;
 }
 
+/* Icon-only cells lose their wording, so the label arrives on hover instead.
+   Portaled to <body>: inside the transcript scroller a tip drawn by the button
+   is clipped right where the last row sits. 140ms on the emphasized curve with a
+   3px travel out of the anchored edge — no opacity, since a fading surface
+   samples its backdrop mid-flight. Leaving is instant. */
+.dsq_tip {
+  position: fixed;
+  z-index: 30;
+  max-width: 240px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 0.5px solid var(--dsq-line);
+  background: var(--dsq-bg-raised);
+  color: var(--dsq-label);
+  box-shadow: var(--dsw-elevation-prominent, 0 0 0 0.5px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.08));
+  font-family: var(--dsq-font);
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 400;
+  white-space: normal;
+  pointer-events: none;
+  animation: dsq_tip_in 140ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.dsq_tip[data-side='top'] {
+  --dsq-tip-from: 3px;
+}
+
+.dsq_tip[data-side='bottom'] {
+  --dsq-tip-from: -3px;
+}
+
+@keyframes dsq_tip_in {
+  from {
+    transform: translateY(var(--dsq-tip-from, 3px)) scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsq_tip {
+    animation: none;
+  }
+}
+
 /* Hover tooltip. A native title would be slower and styled by the OS; this
    rides the same token set as the rest of the chrome. */
 [data-dsq-tip] {

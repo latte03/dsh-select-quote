@@ -296,6 +296,7 @@ Each item contains text selected from an earlier message ...
 - **开关不碰动作清单**：`showCopy` / `showTranslate` / `showAskInSide` / `showAnnotate` 只是把 `SelectionToolbar` 里那份 `visibilityFor(text)` 的 `hide*` 交进去，`selection/actions.ts` 的 `selectionActions()` 按它过滤条目。工具条、右键菜单、宿主合并浮层仍旧共用这一份清单，所以关掉一个按钮三个入口同时消失，不会各写一份判断。
 - **`showAnnotate` 连箭头一起去**：「批注」是分裂条目，`destinations`（`放入 <默认会话>` / `放入会话…`）挂在同一个对象上，关掉时整条不出现，菜单里的目标行也随之消失——不要只隐藏主键，否则会留下点击没反应的箭头。
 - **文字开关只能「少给」，不能「多给」**：`showButtonText`（按钮 tab 最后一行）关掉后一律图标，悬停与 `aria-label` 仍有名称；打开时也**不保证**有文字——行宽超过列宽照样收缩（机制 19 那条）。两条判定在同一个 `compact` 上，方向相反会互相抵消：所以实现里是 `!showButtonText || shouldCompactRow(...)`，而不是把它塞进 `shouldCompactRow` 内部。触屏底部操作条同样受它控制（原来那里恒为 `stacked` 且不收缩）。
+- **图标态靠 hover tip 补名称**：`ActionRow` 在 `compact && !stacked` 时给每个格子挂 `HoverTip`（`ui/HoverTip.tsx` + `dom/tip-placement.ts`）。要点四条：①**portal 到 body**——工具条在会话滚动容器里，画在按钮上的提示会被恰好在带的边缘裁掉，而图标态最常出现在那一行；②**原生 `title` 必须去掉**，否则平台提示会在我们之后又弹一次（更慢、样式不可控）；③动画按 Lumno 那套：显示延迟 120ms、入场 **140ms** `cubic-bezier(0.2, 0.9, 0.2, 1)`、从锚点方向移入 3px + `scale(.96)`、**不做 opacity**（磨砂面在过渡中会采到自己的背板）、离开**立即**消失；`prefers-reduced-motion` 下直接显示；④禁用项的 `disabledReason` 走同一个 tip，取代原来那条 CSS `::after`。整行只保留一个 tip 状态，避免指针扫过两格时叠两个。
 - **至少留一个**：四枚全关会把工具条削到只剩齿轮、宿主浮层只剩它自己的引用格，与没装插件无法区分，而且没有按钮能点回设置。所以 `config.ts` 的 `keepOneButton()` 在归一化时兜底保留 `showAnnotate`，`ConfigRow` 的 `setSwitch()` 在提交前算一遍 `hasAnyButton()`，最后一个开关直接拒绝并就地出提示（`role="status"`）。两道闸各管一端：前者防过期快照 / 外部写入把全关的组合写进 store，后者防用户在设置页点到那个空状态。
 - **测试口径**：`config.test.ts` 覆盖四关保批注与「三关留批注」，`actions.test.ts` 覆盖 `hideAnnotate` 连带 `destinations` 一并消失。
 
@@ -387,6 +388,8 @@ src/client/dom/selection.ts        # 选区快照、工具条定位、复制、�
 src/client/dom/floating-layer.ts   # 找到对话滚动容器，挂内容坐标的浮层 host（裁剪 + 层带）
 src/client/ui/touch.ts             # coarse pointer / visualViewport 探测（触屏底部操作条与抽屉）
 src/client/ui/Kbd.tsx              # 提交键的 ⏎ 键帽：React `<Kbd>` + DOM `createKbd()`，触屏由调用方隐藏
+src/client/ui/HoverTip.tsx         # 图标态的名称提示（portal 到 body，140ms 从锚点移入）
+src/client/dom/tip-placement.ts    # 提示落位：水平居中、贴边内收、上方放不下就翻到下方
 src/client/ui/comment-block.ts     # 评论要不要画：三处（批注卡/预览/放入面板）共用一条规则
 src/client/model/types.ts          # 模型目录的只读面与选择类型
 src/client/model/rank.ts           # 宿主同款有序子序列搜索排序（纯逻辑，可单测）
@@ -509,6 +512,7 @@ lib/                               # 构建产物（已提交，运行时直接�
 | **历史卡上的「来自：…」点了不跳** | 那个按钮由 `AnnotationCardView` 在 `item.origin` 存在时渲染，但**只有传入 `onItemOrigin` 才真的能点**。草稿卡（`AnnotationPanel`）一直传了，历史卡（`TranscriptQuoteCard`）曾漏传，于是按钮渲染出来却是空操作。跳转本身走 `openSourceAndLocate`：先 `uiWorkspace.openSession(sourceId)`，再在 8s 内轮询源会话里的箭头 mark 并闪烁；宿主没有 `handoffHost`（缺 sessions/workspaces/uiWorkspace 任一）时整条链路不可用 |
 | **空草稿发不出批注 / 发出空气泡** | 有批注时草稿里应有一个看不见的 U+200B（草稿非空，发送键才可用）。按钮仍置灰时先看 `reconcileDraftMarker()` 有没有写进去：编辑器 `textContent` 应为 `\u200B`，且面板拿到的 `sessionId` 与本地列表对得上。空气泡露出来时，`annotations.ts` 那条 `[data-message-bubble]:has(> span:only-child > span[data-slot='conversation.user.text.node']:only-child > span:empty:only-child)` 跟宿主气泡的 DOM 层级绑着，宿主改了层级就会失配——按实际层级补选择器，别改成按文本判空（带附件/引用的空正文气泡不该被吞） |
 | **并入官方模式后工具条只剩图标、没有文字** | `compact` 被误判。合并态的可用宽度**不能**取宿主那层 wrapper：它是 `position:absolute; width:max-content`，`clientWidth` 等于我们这一行自己的宽度，减掉 8px 内缩后永远「贴不下」。应取 `[data-chat-flow]` 列的宽度（`availableWidthFor()`），并让 `shouldCompactRow()` 在测到 0 时保持标签、等 `ResizeObserver` 回调重算；窗口或分栏变化后没恢复，检查那个 observer 有没有挂在列上 |
+| **图标态 hover 没有名称提示** | 先确认真的进了图标态（按钮上有 `dsq_buttonCompact`）——有文字的行本来就不挂 tip。再查 `.dsq_tip` 是否出现在 `body` 下（在工具条里说明 portal 被绕过），以及按钮上是否还留着 `title`（会变成平台提示）。设置里改了 `showButtonText` 但界面没变，先怀疑 `publishConfig` 的去重比较是否漏了这个字段：它现在是按 `DEFAULT_CONFIG` 的键结构化比较，别改回手写列表 |
 | **发送后气泡里仍是整段协议 JSON** | 宿主 0.2.2-rc.1 起用户气泡文本由 `uiConversation.userText` 规则切分，无规则认领的文本字面渲染。先确认 `ctx.inject(['uiConversation'])` 分支真的跑到了（`pnpm run verify` 的贡献清单里应有 `inject uiConversation`），再确认规则 id 没被别家占用（重复注册会抛 `user-text rule "…" is already registered`，整个 effect 失败）；规则的 `data.text` / `display` 也逐条对一遍 |
 | 带图片的消息在记录里只剩摘要块、图片没了 | 现在插件完全不碰气泡内容，出现这种情况说明有人又在改写 `data.content`：去掉改写，协议块交给 `uiConversation.userText` 规则剥 |
 | 用户消息下方的时间 / 复制（以及 dsh-rewind 的 ↶）整行消失 | 同「没有时间/复制按钮」：查是否残留 `conversation.chat.node` 覆写；装饰席位不会影响动作行 |

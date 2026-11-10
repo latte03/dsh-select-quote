@@ -215,27 +215,16 @@ export function subscribeConfig(listener: () => void): () => void {
   }
 }
 
+/** Every field participates in change detection — see `publishConfig`. */
+const CONFIG_KEYS = Object.freeze(Object.keys(DEFAULT_CONFIG) as (keyof SelectQuoteConfig)[])
+
 /** Publish a snapshot value; returns the normalized config actually stored. */
 export function publishConfig(value: unknown): SelectQuoteConfig {
   const next = normalizeConfig(value)
-  if (
-    next.triggerMode === current.triggerMode &&
-    next.toolbarPlacement === current.toolbarPlacement &&
-    next.mergeHostSurface === current.mergeHostSurface &&
-    next.shortcut === current.shortcut &&
-    next.showCopy === current.showCopy &&
-    next.showTranslate === current.showTranslate &&
-    next.showAskInSide === current.showAskInSide &&
-    next.showAnnotate === current.showAnnotate &&
-    next.sideTaskMode === current.sideTaskMode &&
-    next.translateTarget === current.translateTarget &&
-    next.translateHideSameLanguage === current.translateHideSameLanguage &&
-    next.translateProvider === current.translateProvider &&
-    next.translateModel === current.translateModel &&
-    next.translatePrompt === current.translatePrompt
-  ) {
-    return current
-  }
+  // Structural, not a hand-written field list: a new field that is left out of a
+  // hand-maintained comparison silently never reaches the views (the label
+  // switch landed exactly like that).
+  if (CONFIG_KEYS.every((key) => next[key] === current[key])) return current
   current = next
   for (const listener of [...listeners]) listener()
   return current

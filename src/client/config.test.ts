@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CONFIG, hasAnyButton, normalizeConfig, resolveTriggers } from './config.ts'
+import {
+  DEFAULT_CONFIG,
+  getConfig,
+  hasAnyButton,
+  normalizeConfig,
+  publishConfig,
+  resolveTriggers,
+  subscribeConfig,
+  type SelectQuoteConfig,
+} from './config.ts'
 
 describe('normalizeConfig', () => {
   it('falls back to the defaults for a missing or malformed snapshot', () => {
@@ -167,5 +176,55 @@ describe('resolveTriggers', () => {
       contextMenu: true,
       shortcut: true,
     })
+  })
+})
+
+describe('publishConfig', () => {
+  /** A value different from the default, for every field of the shape. */
+  const alternatives: Record<keyof SelectQuoteConfig, unknown> = {
+    triggerMode: 'contextmenu',
+    toolbarPlacement: 'above',
+    mergeHostSurface: true,
+    shortcut: true,
+    showCopy: false,
+    showTranslate: false,
+    showAskInSide: false,
+    showAnnotate: false,
+    showButtonText: false,
+    sideTaskMode: 'reuse',
+    translateTarget: 'ja',
+    translateHideSameLanguage: true,
+    translateProvider: 'p',
+    translateModel: 'm',
+    translatePrompt: 'x',
+  }
+
+  // A field missing from the dedupe comparison never reaches the views; the
+  // hand-written list that used to live in publishConfig lost showButtonText
+  // exactly that way. This walks the shape instead of the list.
+  for (const key of Object.keys(DEFAULT_CONFIG) as (keyof SelectQuoteConfig)[]) {
+    it(`notifies when ${key} changes`, () => {
+      publishConfig(undefined)
+      let notified = 0
+      const off = subscribeConfig(() => {
+        notified += 1
+      })
+      publishConfig({ [key]: alternatives[key] })
+      off()
+      expect(getConfig()[key]).toBe(alternatives[key])
+      expect(notified).toBe(1)
+    })
+  }
+
+  it('stays quiet when the normalized value is unchanged', () => {
+    publishConfig(undefined)
+    let notified = 0
+    const off = subscribeConfig(() => {
+      notified += 1
+    })
+    publishConfig(undefined)
+    publishConfig({})
+    off()
+    expect(notified).toBe(0)
   })
 })
