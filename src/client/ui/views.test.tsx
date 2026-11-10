@@ -48,16 +48,33 @@ const item = (comment?: string): AnnotationSummaryItem => ({
 })
 
 describe('AnnotationSummary', () => {
-  it('renders the collapsed row with its count and copy', () => {
+  it('titles a lone annotation with its quote instead of a count', () => {
     const html = renderQuiet(<AnnotationSummary count={1} items={[item()]} />)
     expect(html).toContain('data-selection-annotation-summary="true"')
     expect(html).toContain('aria-haspopup="dialog"')
     expect(html).toContain('aria-expanded="false"')
-    expect(html).toContain('1 条批注')
-    expect(html).toContain('悬停查看批注')
+    expect(html).toContain('四件事都做完了')
+    // One annotation is not a list: there is nothing left to count, and the
+    // affordance copy would only repeat what the badge already shows.
+    expect(html).not.toContain('1 条批注')
+    expect(html).not.toContain('悬停查看批注')
+    expect(html).not.toContain('点按查看批注')
     // The hover panel is portal-only: nothing from the list may leak into the
     // collapsed render, or the page shows duplicate quote text.
     expect(html).not.toContain('四件事都做完了，已提交并推送')
+  })
+
+  it('adds the comment under the quote when the user wrote one', () => {
+    const html = renderQuiet(<AnnotationSummary count={1} items={[item('这句要改')]} />)
+    expect(html).toContain('四件事都做完了')
+    expect(html).toContain('这句要改')
+    expect(html).not.toContain('悬停查看批注')
+  })
+
+  it('draws no hint line at all when the lone annotation has no comment', () => {
+    // Not "an empty hint": the element is gone, so the card is one line tall.
+    const html = renderQuiet(<AnnotationSummary count={1} items={[item()]} />)
+    expect(html).not.toContain('dsq_summaryHint')
   })
 
   it('offers the remove-all button only when a handler is given', () => {
@@ -69,11 +86,13 @@ describe('AnnotationSummary', () => {
     expect(removable).toContain('移除全部划词批注')
   })
 
-  it('counts in the label, not in the badge alone', () => {
+  it('keeps the count and the hover wording from two annotations up', () => {
     const html = renderQuiet(
       <AnnotationSummary count={3} items={[item(), item(), item()]} />,
     )
     expect(html).toContain('3 条批注')
+    expect(html).toContain('悬停查看批注')
+    expect(html).not.toContain('四件事都做完了')
   })
 })
 

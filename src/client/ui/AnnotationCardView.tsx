@@ -16,6 +16,7 @@ import { A, cx, styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
 import { Kbd } from './Kbd.tsx'
 import { commentBlockOf } from './comment-block.ts'
+import { summaryHeadingOf } from './summary-heading.ts'
 import { t } from '../i18n.ts'
 import { useLocale } from '../useLocale.ts'
 import { useCoarsePointer } from './touch.ts'
@@ -102,6 +103,8 @@ export function AnnotationSummary({
 }: AnnotationSummaryProps): ReactNode {
   useLocale()
   const touch = useCoarsePointer()
+  /** Title/hint text; the count wording only survives for 0 or 2+ annotations. */
+  const heading = summaryHeadingOf(items, count)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const popRef = useRef<HTMLDivElement | null>(null)
   const closeTimerRef = useRef<number | null>(null)
@@ -657,13 +660,23 @@ export function AnnotationSummary({
         {String(count)}
       </div>
       <div className={cx(A.grow, styles.summaryBody)}>
-        <div className={styles.summaryTitle}>{t('summary.title', { count })}</div>
-        <div className={cx(styles.summaryHint, styles.summaryHintPointer)}>
-          {t('summary.hint')}
+        <div className={styles.summaryTitle}>
+          {heading.quote ?? t('summary.title', { count })}
         </div>
-        <div className={cx(styles.summaryHint, styles.summaryHintTouch)}>
-          {t('summary.hintTouch')}
-        </div>
+        {heading.quote === null ? (
+          <>
+            <div className={cx(styles.summaryHint, styles.summaryHintPointer)}>
+              {t('summary.hint')}
+            </div>
+            <div className={cx(styles.summaryHint, styles.summaryHintTouch)}>
+              {t('summary.hintTouch')}
+            </div>
+          </>
+        ) : heading.comment === null ? null : (
+          /* One comment is content, not an affordance: it reads the same on a
+             phone as on a desktop, so the pointer/touch split drops out. */
+          <div className={styles.summaryHint}>{heading.comment}</div>
+        )}
       </div>
       {onRemoveAll ? (
         <button

@@ -115,6 +115,7 @@ Each item contains text selected from an earlier message ...
 
 面板 **portal 到 `document.body`**：消息内容里有带 `contain: layout` 的表面、滚动容器带 `container-type`，它们都会成为 `position: fixed` 的包含块，面板写在子树里会整体跑出屏幕。面板与摘要之间留 12px 透明"悬停桥"，指针离开集群只有 40ms 宽限（够跨桥，退场动画随即开始）；resize / 滚动时面板重新定位而非失效。**默认优先放摘要上方**（`placePopover(anchor, panel, 'top', 0)`），只有上方确实放不下、且下方更宽裕时才翻到下方；gap 传 0，视觉间距与悬停桥都靠外层只在朝向摘要一侧留的 12px padding（左右不留，面板卡面因此与摘要左缘对齐）。面板退场时保留节点 120ms 播 `dsq-rise-out` 再卸载，期间 `pointer-events: none`。条目序号与"选中的文本"同行，点击滚动到对应正文 mark。编辑批注**不另弹层**：点铅笔后该项在列表面板内原地展开编辑（完整原文 + 评论框 + 取消/保存）；编辑期间指针离开、点击面板外导致失焦都不关闭面板，退出编辑后才恢复关闭；编辑目标按批注 `id` 记录，删除其他条目不会串到旁边的批注。划词工具条等**拖拽结束**（pointerup）才出现，评论弹窗居中于工具条。
 
+- **只有一条批注时，卡片就是那条批注**：标题换成引文、提示行换成用户评论，没写评论就整行不画（卡片只剩一行，而不是画一行空提示）。两条起才回到「N 条批注 + 悬停/点按查看」——序号徽章本来就在左边显示数字，一条时再说一遍「1 条批注」是重复。「有没有评论」直接问 `ui/comment-block.ts`，规则不在这里复述；引文与评论都投影成单行（`ui/summary-heading.ts` 折叠空白，`.dsq_summaryTitle/.dsq_summaryHint` 已有 `nowrap + ellipsis` 负责截断）。**必须两个槽一起切**：`count` 与 `items` 对不上、或引文为空时整体退回计数写法，只换标题不换提示会得到一个没有名字的按钮。
 - **键盘**：摘要卡可聚焦；Enter 展开并把焦点移到面板第一个控件，↓ 在已展开时进入面板；Tab / Shift+Tab 在面板内循环，Esc 关闭并把焦点还给摘要卡。面板是 React portal 子节点，keydown 会按 React 树冒泡回摘要卡，所以面板处理过的键要 `stopPropagation()`，否则摘要卡的 Tab 会抢回第一个控件。
 - **触屏**：`(hover: none), (pointer: coarse)` 下提示从「悬停查看批注」切成「点按查看批注」；`pointerup` 的 `pointerType === 'touch'` 时点按摘要展开，`pointerleave` 不触发自动关闭（触屏抬手也会发 pointerleave），点外部关闭。操作按钮在 coarse 指针下为 44px；角落关闭按钮保留视觉尺寸，用 `::after` 扩展命中区。
 - **触屏的划词 chrome**：coarse pointer 下工具条和评论泡改走 `document.body` 级 fixed，不再挂滚动容器。操作条贴 visual viewport 底部（`visualViewport` 算软键盘 inset，再加 `env(safe-area-inset-bottom)`），评论是底部抽屉：带上选中原文预览、输入框 16px 防 iOS 聚焦缩放、按钮 44px，`maxHeight` 跟 visual viewport 走。抽屉打开时不自动聚焦评论框，关闭后也不把焦点抢回 composer，避免软键盘第二次弹出。细指针（鼠标）仍走内容坐标 + 滚动容器裁剪。
@@ -394,6 +395,7 @@ src/client/ui/Kbd.tsx              # 提交键的 ⏎ 键帽：React `<Kbd>` + D
 src/client/ui/HoverTip.tsx         # 图标态的名称提示（portal 到 body，140ms 从锚点移入）
 src/client/dom/tip-placement.ts    # 提示落位：水平居中、贴边内收、上方放不下就翻到下方
 src/client/ui/comment-block.ts     # 评论要不要画：三处（批注卡/预览/放入面板）共用一条规则
+src/client/ui/summary-heading.ts   # 一条批注时卡片的标题/提示：引文 + 评论，否则退回「N 条批注」
 src/client/model/types.ts          # 模型目录的只读面与选择类型
 src/client/model/rank.ts           # 宿主同款有序子序列搜索排序（纯逻辑，可单测）
 src/client/model/ModelSelect.tsx   # 宿主 composer 模型位的移植：两级菜单、搜索、键盘、跟随主会话
