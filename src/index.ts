@@ -24,6 +24,8 @@ export interface Config {
   showTranslate: Volatile<boolean>
   showAskInSide: Volatile<boolean>
   showAnnotate: Volatile<boolean>
+  /** Button labels; off leaves icons only. */
+  showButtonText: Volatile<boolean>
   sideTaskMode: Volatile<'separate' | 'reuse'>
   translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
   translateHideSameLanguage: Volatile<boolean>
@@ -43,6 +45,7 @@ export const Config = z.object({
   showTranslate: z.boolean().default(true).volatile(),
   showAskInSide: z.boolean().default(true).volatile(),
   showAnnotate: z.boolean().default(true).volatile(),
+  showButtonText: z.boolean().default(true).volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
   translateTarget: z
     .union(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'])

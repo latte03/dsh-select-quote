@@ -120,6 +120,8 @@ export const zh: LocaleDict = {
   'settings.showAnnotate': '批注',
   'settings.showAnnotateHint': '在划词工具条和右键菜单里显示「批注」，包括下拉箭头与放入目标。',
   'settings.keepOneButton': '至少要留一个按钮，否则工具条会空掉。',
+  'settings.showButtonText': '显示按钮文字',
+  'settings.showButtonTextHint': '关掉后只留图标，悬停显示名称；列太窄时本来就会自动收起文字。',
   'settings.mergeHostSurface': '并入官方浮层',
   'settings.mergeHostSurfaceHint': '我们的按钮放进官方划词浮层，原文旁不再另起一条。',
   'settings.shortcut': '快捷键',

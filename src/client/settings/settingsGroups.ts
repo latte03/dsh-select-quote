@@ -37,7 +37,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   {
     id: 'buttons',
     labelKey: 'settings.groupButtons',
-    fields: ['showAnnotate', 'showCopy', 'showTranslate', 'showAskInSide'],
+    fields: ['showAnnotate', 'showCopy', 'showTranslate', 'showAskInSide', 'showButtonText'],
   },
   {
     id: 'translate',

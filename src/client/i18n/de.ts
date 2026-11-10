@@ -122,6 +122,8 @@ export const de: LocaleDict = {
   'settings.showAnnotate': 'Anmerken',
   'settings.showAnnotateHint': 'Anmerken in Leiste und Menü anzeigen, samt Pfeil und Zielen.',
   'settings.keepOneButton': 'Mindestens eine Schaltfläche muss an bleiben, sonst bleibt die Leiste leer.',
+  'settings.showButtonText': 'Beschriftungen anzeigen',
+  'settings.showButtonTextHint': 'Aus: nur Symbole, Name beim Überfahren. Eine schmale Spalte blendet sie ohnehin aus.',
   'settings.mergeHostSurface': 'In die Host-Leiste einfügen',
   'settings.mergeHostSurfaceHint': 'Unsere Schaltflächen erscheinen in der Leiste des Hosts statt in einer zweiten Leiste.',
   'settings.shortcut': 'Tastenkürzel',

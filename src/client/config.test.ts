@@ -18,6 +18,7 @@ describe('normalizeConfig', () => {
       showTranslate: true,
       showAskInSide: true,
       showAnnotate: true,
+      showButtonText: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
       translateHideSameLanguage: false,
@@ -34,6 +35,7 @@ describe('normalizeConfig', () => {
       showTranslate: true,
       showAskInSide: true,
       showAnnotate: true,
+      showButtonText: true,
       sideTaskMode: 'separate',
       translateTarget: 'auto',
       translateHideSameLanguage: false,
@@ -70,6 +72,11 @@ describe('normalizeConfig', () => {
   it('keeps the merge switch only when boolean', () => {
     expect(normalizeConfig({ mergeHostSurface: true }).mergeHostSurface).toBe(true)
     expect(normalizeConfig({ mergeHostSurface: 'yes' }).mergeHostSurface).toBe(false)
+  })
+
+  it('keeps the label switch only when boolean', () => {
+    expect(normalizeConfig({ showButtonText: false }).showButtonText).toBe(false)
+    expect(normalizeConfig({ showButtonText: 'no' }).showButtonText).toBe(true)
   })
 
   it('keeps each button switch only when boolean', () => {

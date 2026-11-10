@@ -185,9 +185,13 @@ export function HostQuoteSurface({
     const el = pillRef.current
     if (el === null) return
     if (!compact) naturalWidthRef.current = el.getBoundingClientRect().width
-    const next = shouldCompactRow(naturalWidthRef.current, availableWidthFor(el))
+    // The switch only ever takes wording away; a row that does not fit still
+    // collapses, or it would spill out of the column.
+    const next =
+      !config.showButtonText ||
+      shouldCompactRow(naturalWidthRef.current, availableWidthFor(el))
     if (next !== compact) setCompact(next)
-  }, [compact, spaceTick, entries.length])
+  }, [compact, config.showButtonText, entries.length, spaceTick])
 
   /**
    * Re-decide when the column changes width (split drag, window resize, sidebar

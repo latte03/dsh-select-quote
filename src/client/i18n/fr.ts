@@ -124,6 +124,8 @@ export const fr: LocaleDict = {
   'settings.showAnnotateHint':
     'Affiche Annoter dans la barre et le menu, flèche et destinations comprises.',
   'settings.keepOneButton': 'Laissez au moins un bouton actif, sinon la barre reste vide.',
+  'settings.showButtonText': 'Afficher le libellé des boutons',
+  'settings.showButtonTextHint': 'Désactivé : icônes seules, nom au survol. Une colonne étroite masque déjà le libellé.',
   'settings.mergeHostSurface': 'Fusionner dans la barre de l’hôte',
   'settings.mergeHostSurfaceHint': 'Nos boutons s’affichent dans la barre de l’hôte, sans seconde barre.',
   'settings.shortcut': 'Raccourci',

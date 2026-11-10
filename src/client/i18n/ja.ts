@@ -120,6 +120,8 @@ export const ja: LocaleDict = {
   'settings.showAnnotate': '注釈',
   'settings.showAnnotateHint': 'ツールバーとメニューに注釈を表示します（矢印と送信先を含む）。',
   'settings.keepOneButton': 'ボタンは1つ以上オンにしてください。すべてオフにするとツールバーが空になります。',
+  'settings.showButtonText': 'ボタンの文字を表示',
+  'settings.showButtonTextHint': 'オフにするとアイコンのみ（ホバーで名前）。列が狭いときは自動で畳まれます。',
   'settings.mergeHostSurface': '公式の選択メニューに統合',
   'settings.mergeHostSurfaceHint': '弊社のボタンを公式の選択メニュー内に表示し、別のバーは出しません。',
   'settings.shortcut': 'ショートカット',

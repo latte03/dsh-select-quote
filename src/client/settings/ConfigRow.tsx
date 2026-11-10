@@ -311,6 +311,12 @@ function ConfigSection({
             onChange={(next) => void setSwitch('showAskInSide', next)}
           />
           {keepOneNotice ? <SettingsNotice text={t('settings.keepOneButton')} /> : null}
+          <SwitchRow
+            label={t('settings.showButtonText')}
+            hint={t('settings.showButtonTextHint')}
+            on={current.showButtonText}
+            onChange={(next) => void form.set('showButtonText', next)}
+          />
         </SettingsPanel>
       ) : null}
       {group === 'translate' ? (

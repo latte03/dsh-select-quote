@@ -595,17 +595,20 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
    * re-read whenever the compact row is widened again.
    */
   useLayoutEffect(() => {
+    // The switch only ever takes wording away; a row that does not fit still
+    // collapses, or it would spill out of the column.
+    const labelsOff = !config.showButtonText
     if (touch || phase !== 'idle' || !active) {
-      if (compact) setCompact(false)
+      if (compact !== labelsOff) setCompact(labelsOff)
       return
     }
     const el = toolbarRef.current
     if (!el) return
     const available = Math.max(0, active.layer.scroller.clientWidth - 16)
     if (!compact) naturalWidthRef.current = el.getBoundingClientRect().width
-    const shouldCompact = shouldCompactRow(naturalWidthRef.current, available)
+    const shouldCompact = labelsOff || shouldCompactRow(naturalWidthRef.current, available)
     if (shouldCompact !== compact) setCompact(shouldCompact)
-  }, [active, compact, phase, touch, spaceTick])
+  }, [active, compact, config.showButtonText, phase, touch, spaceTick])
 
   // Re-decide when the column changes width (split drag, window resize).
   useLayoutEffect(() => {

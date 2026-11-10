@@ -123,6 +123,8 @@ export const en: LocaleDict = {
   'settings.showAnnotateHint':
     'Show Annotate in the toolbar and menu, chevron and send targets included.',
   'settings.keepOneButton': 'Keep at least one button on, or the toolbar stays empty.',
+  'settings.showButtonText': 'Show button labels',
+  'settings.showButtonTextHint': 'Off leaves icons only, with the name on hover. A narrow column collapses the labels anyway.',
   'settings.mergeHostSurface': 'Merge into the host surface',
   'settings.mergeHostSurfaceHint': 'Our actions ride in the host’s selection pill instead of a second bar.',
   'settings.shortcut': 'Shortcut',

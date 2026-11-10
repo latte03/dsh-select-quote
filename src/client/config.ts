@@ -48,6 +48,14 @@ export interface SelectQuoteConfig {
    * nothing but the gear, which is the same as not having the plugin.
    */
   showAnnotate: boolean
+  /**
+   * Draw the action labels.
+   *
+   * Off leaves icons only, with the name on hover. On does not *promise* labels:
+   * a row wider than the column still collapses (see `host-surface-fit.ts`), so
+   * this switch can only take wording away, never make it overflow.
+   */
+  showButtonText: boolean
   sideTaskMode: SideTaskMode
   translateTarget: TranslateTarget
   /** Hide the translate entry when the selection already is the target language. */
@@ -68,6 +76,7 @@ export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   showTranslate: true,
   showAskInSide: true,
   showAnnotate: true,
+  showButtonText: true,
   sideTaskMode: 'separate',
   translateTarget: 'auto',
   translateHideSameLanguage: false,
@@ -156,6 +165,7 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
     showTranslate: switches.showTranslate,
     showAskInSide: switches.showAskInSide,
     showAnnotate: switches.showAnnotate,
+    showButtonText: bool(record.showButtonText, DEFAULT_CONFIG.showButtonText),
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
       ? (record.sideTaskMode as SideTaskMode)
       : DEFAULT_CONFIG.sideTaskMode,

@@ -122,6 +122,8 @@ export const pt: LocaleDict = {
   'settings.showAnnotate': 'Anotar',
   'settings.showAnnotateHint': 'Mostra Anotar na barra e no menu, com a seta e os destinos.',
   'settings.keepOneButton': 'Deixe ao menos um botão ligado, senão a barra fica vazia.',
+  'settings.showButtonText': 'Mostrar texto dos botões',
+  'settings.showButtonTextHint': 'Desligado: só ícones, com o nome ao passar o mouse. Uma coluna estreita já oculta o texto.',
   'settings.mergeHostSurface': 'Mesclar na barra do host',
   'settings.mergeHostSurfaceHint': 'Nossos botões ficam dentro da barra do host, sem uma segunda barra.',
   'settings.shortcut': 'Atalho',
