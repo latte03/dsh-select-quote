@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.4](https://github.com/latte03/dsh-select-quote/compare/v0.4.3...v0.4.4) (2026-11-10)
+
+### Features
+
+* 没有评论时不渲染评论区 ([788cef9](https://github.com/latte03/dsh-select-quote/commit/788cef9d5a218a4760002dd803a4b8a0ac3bc246))
+* 有批注时输入框空着也能发送（合并 PR [#12](https://github.com/latte03/dsh-select-quote/issues/12)） ([e7e9171](https://github.com/latte03/dsh-select-quote/commit/e7e91717b8ef9503f344557a223567aaddc8682c))
+
 ## [0.4.3](https://github.com/latte03/dsh-select-quote/compare/v0.4.2...v0.4.3) (2026-11-09)
 
 ### Features

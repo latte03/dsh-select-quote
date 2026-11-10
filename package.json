@@ -1,6 +1,6 @@
 {
   "name": "dsh-select-quote",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "DeepSeek Harness web plugin: adds selection annotations, in-place translation, sidebar subagent questions and default-browser link opening. The selected text rides along with your next message, the source keeps its highlight and ordinal mark for jumping back, the menu opens on selection or from the right-click menu, and the translation model can be picked separately.",
   "keywords": [
     "deepseek",
