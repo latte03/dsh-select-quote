@@ -2018,8 +2018,13 @@ async function checkConfigStore() {
     problems.push('a config-form update did not reach the store')
   }
   detach()
-  if (getConfig().triggerMode !== DEFAULT_CONFIG.triggerMode || getConfig().shortcut !== DEFAULT_CONFIG.shortcut) {
-    problems.push('detaching the config form did not restore the defaults')
+  // Detaching keeps the last values on purpose: the form is disposed and
+  // re-attached on every plugin reload and every service re-registration, so
+  // snapping back to the defaults in between made an open toolbar relayout —
+  // labels first, icons a frame later. A host that loses the service entirely
+  // keeps running with what the user chose.
+  if (getConfig().triggerMode !== 'auto' || getConfig().shortcut !== true) {
+    problems.push('detaching the config form did not keep the last values')
   }
   off()
   publishConfig(undefined)
