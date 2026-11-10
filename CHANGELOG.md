@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.6](https://github.com/latte03/dsh-select-quote/compare/v0.4.5...v0.4.6) (2026-11-10)
+
+### Features
+
+* 计数动画三档、预览卡与悬停面板的入场退场 ([86235ce](https://github.com/latte03/dsh-select-quote/commit/86235ce4932729536ab11d47e5d174edfa42a54f))
+* 只有一条批注时摘要卡直接显示引文与评论 ([f0b48d4](https://github.com/latte03/dsh-select-quote/commit/f0b48d40a1529d1ad6d9a2794b7331d06474c805))
+
+### Bug Fixes
+
+* 配置快照不再闪回默认值；图标尺寸在有文字时也统一 ([40e77d0](https://github.com/latte03/dsh-select-quote/commit/40e77d0765fbf7888ad593c6bd436afae1085c6a))
+
 ## [0.4.5](https://github.com/latte03/dsh-select-quote/compare/v0.4.4...v0.4.5) (2026-11-10)
 
 ### Features
