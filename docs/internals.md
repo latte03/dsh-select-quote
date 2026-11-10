@@ -288,6 +288,8 @@ Each item contains text selected from an earlier message ...
 - **动作单源**：浮层是宿主渲染的另一棵树，看不到协调器的状态。`selection/host-surface.ts` 是唯一过桥点：`SelectionToolbar` 用 `buildEntries(snapshot)` 同时喂自己的按钮和浮层，label / 可用性 / handoff 选项因此不会各写一份；浮层的 chevron 走同一座桥的 `destinations(snapshot, action, at)` 打开协调器那份去向菜单（浮层自己不画列表，也不持有菜单状态）。
 - **材质与动画都是我们自己的**：宿主的容器（`.…_textInteraction`）只有 `z-index/visibility/width:max-content/absolute`，**没有任何 background / padding / border / radius / shadow**。所以 `.dsq_hostPill` 必须自己给 `padding: 4px`、`border-radius: 12px`，并进共享 elevation 列表（`--dsq-shadow` / `box-shadow`），否则并进去就是一颗裸按钮。**材质必须画在元素自己身上**（`background: var(--dsq-menu)` + `backdrop-filter: var(--dsq-menu-backdrop)`），**不能沿用它处那套 `::before` + `z-index: -1`**：`z-index: -1` 的子层会落进宿主聊天列自己的叠放次序里，结果是阴影在、表面没了（2026-11-09 实测如此）。`backdrop-filter` 只糊元素身后，不会糊自己的按钮，所以画在身上没有副作用。入场动画挂自己的 `animation: dsq-menu-in`（transform-only，磨砂浮层不能动 `opacity`）；**退场无法做**：宿主按手势挂载/卸载这个节点，没有离开的那一帧。**真机上看到「有阴影、没有表面」先查样式版本**：宿主容器确实没有底色（三份 bundle 里对 `.…_textInteraction` 只有那一条几何规则），pill 没有底色时看到的那片白就是页面自己——2026-11-09 那次就是旧样式表在跑（见「样式通过 `ensureToolbarStyles()` 注入」那条），不是材质写法错。
 - **合并态不另起浮层**：`SelectionToolbar.refresh()` 里 `mergeHostSurface` 且相位为 `idle` 时直接 `setActive(null)`；评论 / 翻译 / 右键菜单这些相位是我们自己的，照旧。触屏不受影响（走底部操作条），该分支只在 `!touch` 生效。**这个分支必须带 `!menuRef.current` 守卫**（与 `contextmenu` 单开那条一致）：协调器 `if (!active) return null` 会把**菜单一起卸载**，而右键那一下的 `pointerdown`/`pointerup` 各排了一次 `refresh`，所以菜单刚 `openMenu` 点亮就被同一手势的下一趟 refresh 抹掉——表现就是「两者都开时右键一闪即灭」。
+- **贴不下的判定按列算，不能按宿主那层 wrapper 算**：宿主容器是 `position: absolute; width: max-content`，`clientWidth` **就等于我们那一行的宽度**，拿它当「可用宽度」再比行宽，`行宽 > 行宽 - 8` 恒成立——合并态不分列宽一律退成图标（0.4.4 的真实 bug，实测 wrapper 只比行宽多 6px，而阈值是 8px）。可用宽度取 `[data-chat-flow]` 列的 `clientWidth`，判定走 `selection/host-surface-fit.ts` 的 `shouldCompactRow()`；测到 0（隐藏面板、尚未布局）时**不收缩**，留给 `ResizeObserver` 在列真有宽度后重算——误判一次会被 `naturalWidthRef` 缓存住，永久锁死在图标态。我们自己的工具条用同一条规则，上限取滚动容器宽度。
+- **`mergeHostSurface` 归「入口」不归「按钮」**：它回答的是「我们的工具条要不要另起一条」，和「浮层位置」是同一个问题；放进按钮组会让人以为它是逐按钮的选择。
 
 **20. 划词按钮开关：可见性走 `selectionActions`，至少留一个**
 
@@ -299,7 +301,6 @@ Each item contains text selected from an earlier message ...
 **21. 设置页的 tab：归属表 + 真 tablist + 记住上次的组**
 
 - **归属是数据，不是 JSX**：`settings/settingsGroups.ts` 的 `SETTINGS_GROUPS` 写明每组 id、词典键和它拥有的配置字段。`settingsGroups.test.ts` 拿 `DEFAULT_CONFIG` 的键去对这张表，断言**每个字段恰好属于一个组**——否则新加的字段会悄悄没有 tab，而 verify 只在产物里 grep 控件名，看不出来。加字段的顺序固定：schema → `DEFAULT_CONFIG` → 这张表 → 视图。
-- **`mergeHostSurface` 归「入口」不归「按钮」**：它回答的是「我们的工具条要不要另起一条」，和「浮层位置」是同一个问题；放进按钮组会让人以为它是逐按钮的选择。
 - **不复用 `Segmented`**：那个是 `role="radiogroup"`（记住一个值），tab 是 `role="tablist"` + `aria-controls` 的导航。共用组件等于对读屏器撒谎。`SettingsTabs.tsx` 用 roving tabindex（只有当前 tab 是 `tabIndex=0`）+ ←→/Home/End，方向键同时移焦点与选区（automatic activation，五个短标签没有中间态）。
 - **指示器只动 transform/width**：和 `Segmented` 同一套测量（`getBoundingClientRect` + `ResizeObserver`），但曲线是 280ms `cubic-bezier(0.32, 0.72, 0, 1)`（spring），并且**激活 tab 不改字重**——400→500 会改变标签盒宽，把指示器测偏。动效参数借用自 Lumno 扩展的 options 页。
 - **一次只渲染一个面板**：非活动组不进 DOM。面板进入是 200ms 的 translateY(4px)+opacity，**不做离场**（要留住旧子树 200ms，而用户切得比这快）。设置页不是磨砂浮层，所以这里用 opacity 不违反「磨砂层动画不带 opacity」那条。
@@ -362,6 +363,7 @@ src/client/selection/useSystemActions.ts # 复制与打开链接：交给系统�
 src/client/selection/useSelectionWatcher.ts # 指针/选区/右键/滚动的监听编排（只管何时 refresh）
 src/client/selection/host-surface.ts # 过桥：协调器把动作表发布给宿主浮层里那条接管条目
 src/client/selection/HostQuoteSurface.tsx # 接管 `conversation.chat.text-interaction` 的 key `quote`：宿主席位 + 我们的动作行
+src/client/selection/host-surface-fit.ts # 合并态「贴不下就只留图标」的判定（纯函数：行宽 vs 列宽）
 src/client/selection/pointer-guard.ts # 浮层按压保护（press 会吃掉原生选区；输入框与可选结果区除外）
 src/client/selection/SplitLabel.tsx # 分裂条目/菜单行共用的强调色标签渲染（目标会话名）
 src/client/selection/useCommentPlacement.ts # 评论泡与提示条的测量/落位生命周期（`side` / `translate` 相位复用）
@@ -505,6 +507,7 @@ lib/                               # 构建产物（已提交，运行时直接�
 | **点「在侧边提问」只弹一句「当前无法创建侧边提问」** | 那是 `runtime.sideTask` 没发布时的兜底提示。它原来要求 Remote 命名空间**和** `sidebarRight` 在 `$mount` 解析那一刻同时存在——侧边栏晚一步激活就永久缺席。现在只按 Remote 是否可用来发布，`sidebarRight` 改成发送时惰性解析（缺了会抛明确错误）。排查顺序：先看 `runtime.sideTask`，再用 `/api/<namespace>/<method>` 探网关是否路由到该命名空间（返回 `method … does not match endpoint` 说明路由在） |
 | **历史卡上的「来自：…」点了不跳** | 那个按钮由 `AnnotationCardView` 在 `item.origin` 存在时渲染，但**只有传入 `onItemOrigin` 才真的能点**。草稿卡（`AnnotationPanel`）一直传了，历史卡（`TranscriptQuoteCard`）曾漏传，于是按钮渲染出来却是空操作。跳转本身走 `openSourceAndLocate`：先 `uiWorkspace.openSession(sourceId)`，再在 8s 内轮询源会话里的箭头 mark 并闪烁；宿主没有 `handoffHost`（缺 sessions/workspaces/uiWorkspace 任一）时整条链路不可用 |
 | **空草稿发不出批注 / 发出空气泡** | 有批注时草稿里应有一个看不见的 U+200B（草稿非空，发送键才可用）。按钮仍置灰时先看 `reconcileDraftMarker()` 有没有写进去：编辑器 `textContent` 应为 `\u200B`，且面板拿到的 `sessionId` 与本地列表对得上。空气泡露出来时，`annotations.ts` 那条 `[data-message-bubble]:has(> span:only-child > span[data-slot='conversation.user.text.node']:only-child > span:empty:only-child)` 跟宿主气泡的 DOM 层级绑着，宿主改了层级就会失配——按实际层级补选择器，别改成按文本判空（带附件/引用的空正文气泡不该被吞） |
+| **并入官方模式后工具条只剩图标、没有文字** | `compact` 被误判。合并态的可用宽度**不能**取宿主那层 wrapper：它是 `position:absolute; width:max-content`，`clientWidth` 等于我们这一行自己的宽度，减掉 8px 内缩后永远「贴不下」。应取 `[data-chat-flow]` 列的宽度（`availableWidthFor()`），并让 `shouldCompactRow()` 在测到 0 时保持标签、等 `ResizeObserver` 回调重算；窗口或分栏变化后没恢复，检查那个 observer 有没有挂在列上 |
 | **发送后气泡里仍是整段协议 JSON** | 宿主 0.2.2-rc.1 起用户气泡文本由 `uiConversation.userText` 规则切分，无规则认领的文本字面渲染。先确认 `ctx.inject(['uiConversation'])` 分支真的跑到了（`pnpm run verify` 的贡献清单里应有 `inject uiConversation`），再确认规则 id 没被别家占用（重复注册会抛 `user-text rule "…" is already registered`，整个 effect 失败）；规则的 `data.text` / `display` 也逐条对一遍 |
 | 带图片的消息在记录里只剩摘要块、图片没了 | 现在插件完全不碰气泡内容，出现这种情况说明有人又在改写 `data.content`：去掉改写，协议块交给 `uiConversation.userText` 规则剥 |
 | 用户消息下方的时间 / 复制（以及 dsh-rewind 的 ↶）整行消失 | 同「没有时间/复制按钮」：查是否残留 `conversation.chat.node` 覆写；装饰席位不会影响动作行 |

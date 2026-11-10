@@ -38,8 +38,30 @@ import { styles } from '../styles.ts'
 import { runtime } from '../runtime.ts'
 import type { SelectionActionEntry } from './actions.ts'
 import { hostSurface, publishHostDismiss } from './host-surface.ts'
+import { shouldCompactRow } from './host-surface-fit.ts'
 import { guardSurfacePress } from './pointer-guard.ts'
 import { ActionRow } from './ToolbarView.tsx'
+
+/**
+ * The Host's Chat column — the box the surface is absolutely positioned in, and
+ * therefore the width that actually constrains this row. Our own wrapper is
+ * `width: max-content`, so it can never answer "is there room?".
+ */
+const CHAT_COLUMN = '[data-chat-flow]'
+
+/** Gap kept from the column edge, matching the floating toolbar's inset. */
+const COLUMN_INSET = 8
+
+/** Room for the row, or 0 when the layout has not told us yet. */
+function availableWidthFor(pill: HTMLElement): number {
+  const column = pill.closest(CHAT_COLUMN)
+  if (column instanceof HTMLElement && column.clientWidth > 0) {
+    return column.clientWidth - COLUMN_INSET
+  }
+  // No column (an unexpected host, a detached surface): the viewport is the only
+  // honest bound left, and a zero keeps the labels rather than collapsing.
+  return window.innerWidth > 0 ? window.innerWidth - COLUMN_INSET * 4 : 0
+}
 
 /** The slice of the Host's `inputActions` this surface inserts through. */
 interface HostSurfaceInputActions {
@@ -73,6 +95,8 @@ export function HostQuoteSurface({
   /** Width the row needs with its labels; only readable while they are painted. */
   const naturalWidthRef = useRef(0)
   const [compact, setCompact] = useState(false)
+  /** Bumped when the column resizes, so the fit decision runs again. */
+  const [spaceTick, setSpaceTick] = useState(0)
 
   // The pill mounts once per gesture, while the selection it dispatched on is
   // still live (the Host reads the same range on click), so the snapshot can be
@@ -150,16 +174,34 @@ export function HostQuoteSurface({
    * row does not shrink — so labels spill out of the pill instead of the pill
    * growing. When the natural row is wider than that box, drop to icons: each
    * cell keeps its tooltip and aria-label, and the destination chevron stays.
+   *
+   * Measure against the Chat column, never against our own wrapper: the Host
+   * gives the surface `position: absolute; width: max-content`, so the wrapper's
+   * width *is* the row's width and comparing the two says "does not fit" at
+   * every column width — which is why every merged row used to collapse to
+   * icons. The column is the box that actually constrains the surface.
    */
   useLayoutEffect(() => {
     const el = pillRef.current
-    if (!el) return
-    const box = el.parentElement
-    const available = Math.max(160, (box?.clientWidth ?? window.innerWidth) - 8)
-    if (!compact) naturalWidthRef.current = el.scrollWidth
-    const shouldCompact = naturalWidthRef.current > available
-    if (shouldCompact !== compact) setCompact(shouldCompact)
-  })
+    if (el === null) return
+    if (!compact) naturalWidthRef.current = el.getBoundingClientRect().width
+    const next = shouldCompactRow(naturalWidthRef.current, availableWidthFor(el))
+    if (next !== compact) setCompact(next)
+  }, [compact, spaceTick, entries.length])
+
+  /**
+   * Re-decide when the column changes width (split drag, window resize, sidebar
+   * opening). The surface also mounts before a hidden pane reports a width, so
+   * the observer's first callback is what lets the row settle either way.
+   */
+  useLayoutEffect(() => {
+    const el = pillRef.current
+    const column = el?.closest(CHAT_COLUMN)
+    if (!(column instanceof HTMLElement)) return
+    const observer = new ResizeObserver(() => setSpaceTick((tick) => tick + 1))
+    observer.observe(column)
+    return () => observer.disconnect()
+  }, [])
 
   return (
     <div ref={pillRef} className={styles.hostPill} onPointerDown={guardSurfacePress}>

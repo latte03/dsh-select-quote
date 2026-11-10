@@ -30,6 +30,7 @@ import {
 import { SelectionMenu } from './SelectionMenu.tsx'
 import { popoverEnter } from './popover-keys.ts'
 import { dismissHostPill, publishHostSurface } from './host-surface.ts'
+import { shouldCompactRow } from './host-surface-fit.ts'
 import { guardSurfacePress } from './pointer-guard.ts'
 import { ToolbarView } from './ToolbarView.tsx'
 import { useAnnotationFlow } from './useAnnotationFlow.ts'
@@ -600,9 +601,9 @@ export function SelectionToolbar({ sessionId }: SelectionToolbarProps): ReactNod
     }
     const el = toolbarRef.current
     if (!el) return
-    const available = Math.max(180, active.layer.scroller.clientWidth - 16)
+    const available = Math.max(0, active.layer.scroller.clientWidth - 16)
     if (!compact) naturalWidthRef.current = el.getBoundingClientRect().width
-    const shouldCompact = naturalWidthRef.current > available
+    const shouldCompact = shouldCompactRow(naturalWidthRef.current, available)
     if (shouldCompact !== compact) setCompact(shouldCompact)
   }, [active, compact, phase, touch, spaceTick])
 
