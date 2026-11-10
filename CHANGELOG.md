@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.5](https://github.com/latte03/dsh-select-quote/compare/v0.4.4...v0.4.5) (2026-11-10)
+
+### Features
+
+* 划词按钮文字可关（showButtonText） ([a0fa268](https://github.com/latte03/dsh-select-quote/commit/a0fa26846a88f508dcdf8ccdceec97ae7c2dbf6f))
+* 图标态悬停显示名称提示，按 Lumno 的动效刻度做 ([3b6fb6f](https://github.com/latte03/dsh-select-quote/commit/3b6fb6f76797842018a3fcec8463d09651ef0356))
+
+### Bug Fixes
+
+* 并入宿主浮层时按列宽判定，恢复按钮文字 ([c8e7968](https://github.com/latte03/dsh-select-quote/commit/c8e796803745d400c6cf0c80e36b126037a76bbb))
+* 图标态每格 28×28，sync 不再穿过硬链接 ([5342b6d](https://github.com/latte03/dsh-select-quote/commit/5342b6d5a6918f3d4bd382fa8ec52c59e5290f42))
+
 ## [0.4.4](https://github.com/latte03/dsh-select-quote/compare/v0.4.3...v0.4.4) (2026-11-10)
 
 ### Features
