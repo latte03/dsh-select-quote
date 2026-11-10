@@ -84,7 +84,6 @@ export const de: LocaleDict = {
   'summary.edit': 'Anmerkung {index} bearbeiten',
   'summary.remove': 'Anmerkung {index} entfernen',
   'summary.userComment': 'Benutzerkommentar',
-  'summary.noComment': 'Kein Kommentar',
   'summary.aria.one': '{count} Anmerkung. Zum Anzeigen der Details öffnen.',
   'summary.aria.other': '{count} Anmerkungen. Zum Anzeigen der Details öffnen.',
   'summary.title.one': '{count} Anmerkung',

@@ -84,7 +84,6 @@ export const zh: LocaleDict = {
   'summary.edit': '编辑批注 {index}',
   'summary.remove': '移除批注 {index}',
   'summary.userComment': '用户评论',
-  'summary.noComment': '未添加评论',
   'summary.aria.other': '{count} 条划词批注。展开查看详情。',
   'summary.title.other': '{count} 条批注',
   'summary.removeAll': '移除全部划词批注',

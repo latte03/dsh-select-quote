@@ -588,16 +588,12 @@ export function AnnotationSummary({
                       }}
                     >
                       <div className={styles.summaryItemText}>{item.title}</div>
-                      <div className={styles.summaryItemLabel}>{t('summary.userComment')}</div>
-                      <div
-                        className={
-                          item.comment
-                            ? styles.summaryItemText
-                            : `${styles.summaryItemText} ${styles.summaryItemTextEmpty}`
-                        }
-                      >
-                        {item.comment || t('summary.noComment')}
-                      </div>
+                      {item.comment ? (
+                        <>
+                          <div className={styles.summaryItemLabel}>{t('summary.userComment')}</div>
+                          <div className={styles.summaryItemText}>{item.comment}</div>
+                        </>
+                      ) : null}
                     </button>
                     {item.origin ? (
                       <button

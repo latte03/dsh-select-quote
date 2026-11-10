@@ -84,7 +84,6 @@ export const es: LocaleDict = {
   'summary.edit': 'Editar anotación {index}',
   'summary.remove': 'Quitar anotación {index}',
   'summary.userComment': 'Comentario del usuario',
-  'summary.noComment': 'Sin comentario',
   'summary.aria.one': '{count} anotación. Abre para ver los detalles.',
   'summary.aria.other': '{count} anotaciones. Abre para ver los detalles.',
   'summary.title.one': '{count} anotación',

@@ -84,7 +84,6 @@ export const ru: LocaleDict = {
   'summary.edit': 'Изменить аннотацию {index}',
   'summary.remove': 'Удалить аннотацию {index}',
   'summary.userComment': 'Комментарий пользователя',
-  'summary.noComment': 'Комментарий не добавлен',
   'summary.aria.one': '{count} аннотация. Откройте, чтобы увидеть подробности.',
   'summary.aria.few': '{count} аннотации. Откройте, чтобы увидеть подробности.',
   'summary.aria.many': '{count} аннотаций. Откройте, чтобы увидеть подробности.',

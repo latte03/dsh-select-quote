@@ -61,10 +61,6 @@ export const PREVIEW_CSS = `
   overscroll-behavior: contain;
 }
 
-.dsq_chipPreviewCommentEmpty {
-  color: var(--dsq-label-3);
-}
-
 /* Edit/remove sit in the preview's title row, matching the summary list's
    per-item actions so the two editing surfaces read as one. */
 .dsq_chipPreviewActions {

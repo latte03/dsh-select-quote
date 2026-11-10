@@ -84,7 +84,6 @@ export const ja: LocaleDict = {
   'summary.edit': '注釈 {index} を編集',
   'summary.remove': '注釈 {index} を削除',
   'summary.userComment': 'ユーザーのコメント',
-  'summary.noComment': 'コメントなし',
   'summary.aria.other': '選択範囲の注釈 {count} 件。開いて詳細を表示します。',
   'summary.title.other': '注釈 {count} 件',
   'summary.removeAll': '選択範囲の注釈をすべて削除',

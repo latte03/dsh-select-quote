@@ -409,10 +409,6 @@ export const ANNOTATIONS_CSS = `
   overflow: hidden;
 }
 
-.dsq_summaryItemTextEmpty {
-  color: var(--dsq-label-3);
-}
-
 /* A user message that carries annotations but no words.
  *
  * The bubble is Host-rendered now, and the Host decides to show it from the raw

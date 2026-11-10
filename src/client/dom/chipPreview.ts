@@ -325,13 +325,9 @@ function buildPreview(
     body.append(renderHead())
     appendLabel(body, t('common.selectedText'))
     appendText(body, styles.chipPreviewQuote, quoteText)
-    if (comment !== null) {
+    if (currentComment !== '') {
       appendLabel(body, t('summary.userComment'))
-      appendText(
-        body,
-        cx(styles.chipPreviewComment, currentComment === '' && styles.chipPreviewCommentEmpty),
-        currentComment === '' ? t('summary.noComment') : currentComment,
-      )
+      appendText(body, styles.chipPreviewComment, currentComment)
     }
   }
 
@@ -758,11 +754,9 @@ function buildHandoffPreview(group: HandoffGroup): HTMLDivElement {
       record.state === 'sent' ? t('handoff.sent') : t('handoff.pending'),
     ].filter((part) => part !== '')
     appendLabel(row, meta.join(' · '))
-    appendText(
-      row,
-      cx(styles.chipPreviewComment, record.comment ? undefined : styles.chipPreviewCommentEmpty),
-      record.comment || t('summary.noComment'),
-    )
+    if (record.comment) {
+      appendText(row, styles.chipPreviewComment, record.comment)
+    }
     return row
   }
 
