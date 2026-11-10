@@ -11,6 +11,7 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 | `pnpm run verify` | 无头跑 `lib/client.js`：贡献注册、八语言词典、包元信息、`npm pack` 清单 |
 | `pnpm run sync:desktop` / `sync:web` | 把 `lib/` 推到已安装副本（宿主 500ms 热更新；**换版本仍需重启**） |
 | `pnpm run release` | check → CHANGELOG → 版本 + tag（`<1.0.0` 时 `feat:`/`fix:` 都只跳 patch） |
+| `node scripts/release-body.mjs <tag>` | 预览该版本的 Release 正文（可选开篇 + CHANGELOG 节 + 页脚），推 tag 后由 workflow 自动用到 |
 
 包管理 pnpm。发布必须显式 `npm publish --registry=https://registry.npmjs.org/`（本机默认源是 npmmirror），随后 `PUT https://registry.npmmirror.com/-/package/dsh-select-quote/syncs`。**PUT 返回 202 是成功**：packument 与镜像都要几十秒才更新，别拿 `npm view` 判成败。
 
@@ -37,6 +38,7 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 ## 文档
 
 - `docs/internals.md` —— 机制、内部约定、排错（**只记现存**）
+- `docs/releases/<version>.md` —— 可选的手写 Release 开篇（需要解释设计取舍时写；workflow 会把它拼在 CHANGELOG 节前面）
 - `docs/limitations.md` —— 限制与已知问题（中英双语，README 里的详情从这里引用）
 - `docs/archive/` —— 历史调查（结论已并入正文）
 - `CHANGELOG.md` —— 自动生成，勿手改

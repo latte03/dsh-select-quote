@@ -1,0 +1,56 @@
+name: release
+
+# A release is cut locally (`pnpm run release` → version + CHANGELOG + tag) and the
+# tag is pushed. This workflow only turns that tag into a GitHub Release, so the
+# notes come from the same CHANGELOG section the repository already trusts.
+#
+# Nothing here publishes to npm: that needs an NPM_TOKEN secret and a deliberate
+# command, and a half-published version is worse than a manual one.
+#
+# workflow_dispatch exists to refresh a tag that was pushed before this workflow
+# existed (or to re-run after editing docs/releases/<version>.md).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)generate the notes for
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Compose the body from CHANGELOG.md
+        run: node scripts/release-body.mjs "$TAG" > "$RUNNER_TEMP/body.md"
+      - name: Create the Release, or refresh its notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Re-running a tag push (or a re-pointed tag) must not fail on an
+          # existing release: refresh the notes instead of erroring out.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/body.md"
+          else
+            gh release create "$TAG" \
+              --title "${TAG#v}" \
+              --notes-file "$RUNNER_TEMP/body.md" \
+              --verify-tag
+          fi
