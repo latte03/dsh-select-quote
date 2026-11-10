@@ -29,12 +29,8 @@ import {
   ANNOTATIONS_BLOCK_OPEN,
   readComposedDraft,
 } from '../protocol/annotation-protocol.ts'
-import {
-  DRAFT_MARKER,
-  stripDraftMarker,
-} from '../protocol/quote-protocol.ts'
 import { AnnotationSummary, type AnnotationSummaryItem } from '../ui/AnnotationCardView.tsx'
-import { isMarkerOnly } from './useDraftMarker.ts'
+import { reconcileDraftMarker } from './useDraftMarker.ts'
 import { writeDraft, type InputActionsFace } from './draft-write.ts'
 import { useSendIntercept } from './useSendIntercept.ts'
 
@@ -193,25 +189,20 @@ export function AnnotationPanel({
     setDraft(restored.rest)
   }, [draft, sessionId, setDraft, composing])
 
-  // Strip the legacy invisible marker from a persisted draft.
+  // Keep the draft non-empty while annotations are pending, so the Host's send
+  // button and Enter stay available for an annotation-only message. The marker
+  // is invisible and the submit path strips it; the user-text rule hides the
+  // protocol block, and the stylesheet hides the resulting empty bubble.
   //
-  // The plugin used to append U+200B so an annotation-only draft counted as
-  // non-empty and the Host's send button stayed enabled. That enabled sending a
-  // message with no words — and since the bubble is now Host-rendered, such a
-  // message shows as an empty bubble, which reads as a rendering bug. The
-  // marker is no longer written; this pass only cleans drafts persisted before
-  // the change, and the composer keeps its own placeholder because the draft is
-  // genuinely empty again.
-  //
-  // Never write while an IME composition is in flight: the host store's draft
-  // goes transiently empty when composition starts (the composing text is not
-  // in it yet), and a programmatic write at that moment replaces the editor
-  // content — the first pinyin character disappears.
+  // When the last annotation is removed, the marker goes too. Real words are
+  // never touched. Never write while an IME composition is in flight: the host
+  // store's draft goes transiently empty when composition starts, and a
+  // programmatic write at that moment replaces the editor content.
   useEffect(() => {
     if (composing.current) return
-    if (!draft.includes(DRAFT_MARKER)) return
-    setDraft(isMarkerOnly(draft) ? '' : stripDraftMarker(draft))
-  }, [draft, setDraft, composing])
+    const next = reconcileDraftMarker(draft, items.length)
+    if (next !== null && next !== draft) setDraft(next)
+  }, [draft, items.length, setDraft, composing])
 
   const onRemoveAll = useCallback(() => {
     clearAnnotations(sessionId, 'discarded')
