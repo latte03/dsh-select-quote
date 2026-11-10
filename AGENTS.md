@@ -32,6 +32,7 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 - 交互单源：动作清单在 `selection/actions.ts`；图标只在 `ui/icons.tsx`（React `LucideIcon` / 纯 DOM `iconMarkup()`）。
 - 每条动作流程一个 hook（`useSelectionMenu` / `useAnnotationFlow` / `useSideQuestion` / `useHandoffFlow` / `useTranslatePopover` / `useSystemActions`），不反向 import 入口组件。
 - 任何拆分后跑 `pnpm run check`，并在真实客户端确认受影响的浮层与设置页。
+- 视图层的测试用 `react-dom/server` 的 `renderToStaticMarkup` 做结构冒烟（`ui/views.test.tsx`、`settings/rows.test.tsx`）：挡崩溃、标签丢失、条件写反、i18n key 没绑定（`t()` 未 bind 时返回 key 本身，断言文案前先 `bindTestLocale()`）。**不要引入 jsdom / @testing-library**——几何、CSS 层叠与材质、Lexical、宿主 DOM 契约都必须真机验，jsdom 对它们全盲（见 `docs/internals.md` 排错表）。要测新的渲染分支，先把它抽成可渲染的纯视图或纯函数（`ui/comment-block.ts` + `SummaryComment` 是样板），改坏了要能变红。
 
 ## 文档
 

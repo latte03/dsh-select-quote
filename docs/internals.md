@@ -384,6 +384,7 @@ src/client/dom/selection.ts        # 选区快照、工具条定位、复制、�
 src/client/dom/floating-layer.ts   # 找到对话滚动容器，挂内容坐标的浮层 host（裁剪 + 层带）
 src/client/ui/touch.ts             # coarse pointer / visualViewport 探测（触屏底部操作条与抽屉）
 src/client/ui/Kbd.tsx              # 提交键的 ⏎ 键帽：React `<Kbd>` + DOM `createKbd()`，触屏由调用方隐藏
+src/client/ui/comment-block.ts     # 评论要不要画：三处（批注卡/预览/放入面板）共用一条规则
 src/client/model/types.ts          # 模型目录的只读面与选择类型
 src/client/model/rank.ts           # 宿主同款有序子序列搜索排序（纯逻辑，可单测）
 src/client/model/ModelSelect.tsx   # 宿主 composer 模型位的移植：两级菜单、搜索、键盘、跟随主会话

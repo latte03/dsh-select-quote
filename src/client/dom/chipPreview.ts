@@ -43,6 +43,7 @@ import {
 } from './preview-anchors.ts'
 import { messageQuotes } from '../transcript/quote-registry.ts'
 import { createKbd } from '../ui/Kbd.tsx'
+import { commentBlockOf } from '../ui/comment-block.ts'
 import { isCoarsePointer } from '../ui/touch.ts'
 import { showToast } from '../ui/toast.ts'
 import {
@@ -325,9 +326,10 @@ function buildPreview(
     body.append(renderHead())
     appendLabel(body, t('common.selectedText'))
     appendText(body, styles.chipPreviewQuote, quoteText)
-    if (currentComment !== '') {
+    const block = commentBlockOf(currentComment)
+    if (block !== null) {
       appendLabel(body, t('summary.userComment'))
-      appendText(body, styles.chipPreviewComment, currentComment)
+      appendText(body, styles.chipPreviewComment, block.text)
     }
   }
 
@@ -754,8 +756,9 @@ function buildHandoffPreview(group: HandoffGroup): HTMLDivElement {
       record.state === 'sent' ? t('handoff.sent') : t('handoff.pending'),
     ].filter((part) => part !== '')
     appendLabel(row, meta.join(' · '))
-    if (record.comment) {
-      appendText(row, styles.chipPreviewComment, record.comment)
+    const block = commentBlockOf(record.comment)
+    if (block !== null) {
+      appendText(row, styles.chipPreviewComment, block.text)
     }
     return row
   }

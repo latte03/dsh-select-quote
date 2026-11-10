@@ -15,6 +15,7 @@ import { popoverEnter } from '../selection/popover-keys.ts'
 import { A, cx, styles } from '../styles.ts'
 import { LucideIcon } from './icons.tsx'
 import { Kbd } from './Kbd.tsx'
+import { commentBlockOf } from './comment-block.ts'
 import { t } from '../i18n.ts'
 import { useLocale } from '../useLocale.ts'
 import { useCoarsePointer } from './touch.ts'
@@ -55,6 +56,24 @@ const SETTLE_DELAY = 600
 const BRIDGE = 12
 /** Matches the list's leaving keyframe; the panel unmounts after it. */
 const EXIT_MS = 120
+
+/**
+ * The card's comment pair: label plus text, or nothing at all.
+ *
+ * Split out of the item list so the rule has one owner and one render site that
+ * a test can reach without a DOM — the hover panel only mounts on pointer in,
+ * so the list itself cannot be rendered to a string.
+ */
+export function SummaryComment({ comment }: { comment?: string }): ReactNode {
+  const block = commentBlockOf(comment)
+  if (block === null) return null
+  return (
+    <>
+      <div className={styles.summaryItemLabel}>{t('summary.userComment')}</div>
+      <div className={styles.summaryItemText}>{block.text}</div>
+    </>
+  )
+}
 
 /** Stable edit target: item id, with an index fallback for id-less callers. */
 function editKeyOf(item: AnnotationSummaryItem | undefined, index: number): string {
@@ -588,12 +607,7 @@ export function AnnotationSummary({
                       }}
                     >
                       <div className={styles.summaryItemText}>{item.title}</div>
-                      {item.comment ? (
-                        <>
-                          <div className={styles.summaryItemLabel}>{t('summary.userComment')}</div>
-                          <div className={styles.summaryItemText}>{item.comment}</div>
-                        </>
-                      ) : null}
+                      <SummaryComment comment={item.comment} />
                     </button>
                     {item.origin ? (
                       <button
