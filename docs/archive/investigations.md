@@ -67,3 +67,5 @@ parent.replaceChild(frag, node)   // 换成一个内容完全相同的新 Text �
 早期版本在 `useEffect` 里依赖 `draft`，一旦发现 U+200B 标记缺失就补写——而 `inputActions.setDraft()` 的实现是 `root.clear()` + 逐行重建 + 光标移到末尾。后果：用户按 Backspace 删到标记时会被立刻补回（表现为「删除失效」）；输入法组字期间甚至会把正在组字的编辑器内容整段清掉（表现为「打完中文按 Backspace 没反应」，即 2026-10-15 修复的「拼音第一个字符被删」的同一族问题）。
 
 **结论**：标记只按 `itemCount` 变化驱动（`useDraftMarker.ts`），**永远不要因为草稿变化就重写编辑器**；对账期间一律不写草稿。
+
+> 后续（0.4.4）：要支持"只有批注也能发"，标记必须能在草稿被删空后补回，光靠 `itemCount` 驱动不够。写入改为走 `writeDraft()` 的原地动词（`insertText`），并由 `reconcileDraftMarker()` 同时按 `pending` 与 `draft` 对账；本条结论里"不要重写编辑器"依然成立，被禁的是 `setDraft()` 那种整篇重建。见机制 2。
