@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -71,6 +71,12 @@ function sync() {
     // because the host's hot reload fires on the file's stat signature, and rewriting
     // identical bytes would reload the plugin for no reason.
     if (existsSync(target) && readFileSync(target).equals(readFileSync(source))) continue
+    // Unlink before writing. pnpm installs each profile's copy as a HARDLINK to
+    // one store file, so an in-place write changes the store's content and every
+    // other profile linked to it: a `sync:web` run once rewrote the desktop
+    // bundle, and a profile reporting 0.4.3 was running 0.4.1 code. Removing the
+    // link first gives this profile a private file and leaves the store alone.
+    rmSync(target, { force: true })
     writeFileSync(target, readFileSync(source))
     written.push(name)
   }

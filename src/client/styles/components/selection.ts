@@ -419,6 +419,20 @@ export const SELECTION_CSS = `
   color: var(--dsq-label);
 }
 
+/* Icon-only rows: every cell is the same square. Without this the chevron sat at
+   20px, the gear at 34px and the actions at 28px, so the hover fill changed size
+   from one button to the next under the pointer. The chevron rule is more
+   specific on purpose — it sets its own narrow box for the labelled row. */
+.dsq_buttonCompact,
+.dsq_buttonCompact.dsq_handoffChevron {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  gap: 0;
+  border-radius: 8px;
+  justify-content: center;
+}
+
 /* Toast pill: the desktop status and the touch status share the whole skin;
    only where they anchor differs. */
 .dsq_status,

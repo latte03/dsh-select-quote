@@ -23,6 +23,7 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 - 颜色只走 `--dsq-*` 别名（`src/client/styles/` 四层：token / atoms / components / host），组件层不写 `--dsw-*`。
 - 不写宿主语言偏好（`ctx.locale` 只读）；**不 `require` 任何 Harness Client 包**。
 - 仓库内脚本不含个人绝对路径；`tmp/` 已 gitignore。
+- **`sync:*` 必须先删后写**：pnpm 把每个 profile 的副本装成指向同一 store 文件的**硬链接**，原地写会连带改掉别的 profile 和 store（曾经一次 `sync:web` 把桌面端也改成了开发构建，还出现过「profile 写 0.4.3、跑的是 0.4.1」）。`scripts/sync-desktop.mjs` 已经 `rmSync` 再写，别改回去。
 - commit 用中文 conventional；与 issue 相关写 `Refs #N`，确认修复后 `Fixes #N`。发布后的推送由 agent 完成。
 
 ## 模块化约定

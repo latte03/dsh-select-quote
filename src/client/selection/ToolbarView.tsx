@@ -232,7 +232,12 @@ export function ActionRow({
       {cell.chevron ? (
         <button
           type="button"
-          className={cx(A.plain, A.gridMid, styles.handoffChevron)}
+          className={cx(
+            A.plain,
+            A.gridMid,
+            styles.handoffChevron,
+            compact && !stacked && styles.buttonCompact,
+          )}
           aria-haspopup="dialog"
           aria-label={t('handoff.dialogAria')}
           data-dsq-destinations-picker="true"
@@ -273,6 +278,9 @@ export function ActionRow({
               A.plain,
               stacked ? A.col : A.inlineRow,
               stacked ? styles.touchAction : styles.button,
+              // The gear is always icon-only; in an icon-only row it takes the
+              // same square as the cells beside it.
+              compact && !stacked && cx(A.gridMid, styles.buttonCompact),
             )}
             aria-label={t('toolbar.settings')}
             data-dsq-settings="true"
