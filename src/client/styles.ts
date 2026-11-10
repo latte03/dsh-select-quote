@@ -52,6 +52,7 @@ export const styles = {
   hostPill: 'dsq_hostPill',
   button: 'dsq_button',
   buttonCompact: 'dsq_buttonCompact',
+  iconCell: 'dsq_iconCell',
   tip: 'dsq_tip',
   buttonAddComment: 'dsq_buttonAddComment',
   kbd: 'dsq_kbd',

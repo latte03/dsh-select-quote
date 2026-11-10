@@ -236,7 +236,8 @@ export function ActionRow({
             A.plain,
             A.gridMid,
             styles.handoffChevron,
-            compact && !stacked && styles.buttonCompact,
+            // Icon-only in both layouts: one square, one icon size.
+            styles.iconCell,
           )}
           aria-haspopup="dialog"
           aria-label={t('handoff.dialogAria')}
@@ -259,7 +260,7 @@ export function ActionRow({
             onDestinations?.(cell.action, { x: rect.left, y: rect.bottom })
           }}
         >
-          <LucideIcon name="chevron-down" size={12} />
+          <LucideIcon name="chevron-down" size={14} />
         </button>
       ) : null}
     </Fragment>
@@ -278,9 +279,9 @@ export function ActionRow({
               A.plain,
               stacked ? A.col : A.inlineRow,
               stacked ? styles.touchAction : styles.button,
-              // The gear is always icon-only; in an icon-only row it takes the
-              // same square as the cells beside it.
-              compact && !stacked && cx(A.gridMid, styles.buttonCompact),
+              // The gear is icon-only in every layout: it takes the same square
+              // as the cells beside it instead of the text row's padding.
+              !stacked && cx(A.gridMid, styles.iconCell),
             )}
             aria-label={t('toolbar.settings')}
             data-dsq-settings="true"

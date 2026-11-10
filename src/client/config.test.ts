@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_CONFIG,
+  attachConfigForm,
   getConfig,
   hasAnyButton,
   normalizeConfig,
   publishConfig,
   resolveTriggers,
   subscribeConfig,
+  type ConfigFormSource,
   type SelectQuoteConfig,
 } from './config.ts'
 
@@ -226,5 +228,57 @@ describe('publishConfig', () => {
     publishConfig({})
     off()
     expect(notified).toBe(0)
+  })
+})
+
+describe('attachConfigForm', () => {
+  type Snapshot = ReturnType<ConfigFormSource['getSnapshot']>
+
+  const makeForm = (snapshots: Snapshot[]) => {
+    let index = 0
+    const listeners = new Set<() => void>()
+    return {
+      getSnapshot: (): Snapshot => snapshots[Math.min(index, snapshots.length - 1)],
+      subscribe(listener: () => void): () => void {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      push(next: Snapshot): void {
+        index += 1
+        snapshots[index] = next
+        for (const listener of [...listeners]) listener()
+      },
+    }
+  }
+
+  it('ignores a loading snapshot instead of resetting to defaults', () => {
+    publishConfig(undefined)
+    const form = makeForm([
+      { status: 'loading' },
+      { status: 'ready', value: { showButtonText: false } },
+    ])
+    const off = attachConfigForm(form)
+    // Still the defaults: nothing to publish yet, and no notify either.
+    expect(getConfig().showButtonText).toBe(true)
+    let notified = 0
+    const stop = subscribeConfig(() => {
+      notified += 1
+    })
+    form.push({ status: 'ready', value: { showButtonText: false } })
+    stop()
+    off()
+    expect(getConfig().showButtonText).toBe(false)
+    expect(notified).toBe(1)
+  })
+
+  it('keeps the last values when the form is disposed', () => {
+    publishConfig(undefined)
+    const form = makeForm([{ status: 'ready', value: { triggerMode: 'contextmenu' } }])
+    const off = attachConfigForm(form)
+    expect(getConfig().triggerMode).toBe('contextmenu')
+    // Hot reload disposes and re-attaches; the store must not snap back to
+    // defaults in between, or an open toolbar relayouts (labels, then icons).
+    off()
+    expect(getConfig().triggerMode).toBe('contextmenu')
   })
 })

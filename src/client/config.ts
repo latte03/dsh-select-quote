@@ -232,23 +232,31 @@ export function publishConfig(value: unknown): SelectQuoteConfig {
 
 /** The slice of a Host config form this half depends on. */
 export interface ConfigFormSource {
-  getSnapshot(): { value?: unknown }
+  getSnapshot(): { status?: 'loading' | 'ready' | 'unavailable'; value?: unknown }
   subscribe(listener: () => void): () => void
 }
 
 /**
  * Follow one Host config form. Works with a live form and with the fake one in
  * `verify`; the caller owns disposal.
+ *
+ * Two rules keep the store from flapping, and both were paid for:
+ *
+ *  - A `loading` snapshot carries no value. Publishing it normalizes to the
+ *    defaults, so an open toolbar re-lays-out once (labels, then icons) the
+ *    moment the real value lands — the "sometimes it flickers" report.
+ *  - Disposal must not write the defaults back. The form is disposed and
+ *    re-attached on every plugin hot reload and on every service
+ *    re-registration, and resetting in between produced the same flash. Keeping
+ *    the last known values is also the friendlier failure: a host that loses the
+ *    service still runs with what the user chose.
  */
 export function attachConfigForm(form: ConfigFormSource): () => void {
   const publish = (): void => {
-    publishConfig(form.getSnapshot().value)
+    const snapshot = form.getSnapshot()
+    if (snapshot.status === 'loading') return
+    publishConfig(snapshot.value)
   }
   publish()
-  const off = form.subscribe(publish)
-  return () => {
-    off()
-    // The service is gone: fall back to the defaults it was overriding.
-    publishConfig(undefined)
-  }
+  return form.subscribe(publish)
 }

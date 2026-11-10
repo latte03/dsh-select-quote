@@ -401,14 +401,11 @@ export const SELECTION_CSS = `
   font-weight: 500;
 }
 
-/* Split affordance beside 放入 <target>: a narrow chevron that opens the
-   picker. Kept inside the toolbar row, so it never grows the bubble. */
+/* Split affordance beside 放入 <target>: the picker's chevron. Same square as
+   the other icon-only cell (dsq_iconCell), so the row keeps one height and one
+   icon size in both layouts. */
 .dsq_handoffChevron {
-  width: 20px;
-  height: 28px;
-  padding: 0;
   border: none;
-  border-radius: 5px;
   background: transparent;
   color: var(--dsq-label-2);
   cursor: pointer;
@@ -419,10 +416,21 @@ export const SELECTION_CSS = `
   color: var(--dsq-label);
 }
 
-/* Icon-only rows: every cell is the same square. Without this the chevron sat at
-   20px, the gear at 34px and the actions at 28px, so the hover fill changed size
-   from one button to the next under the pointer. The chevron rule is more
-   specific on purpose — it sets its own narrow box for the labelled row. */
+/* Icon-only cells keep one 28×28 square in both layouts. Without this the gear
+   sat at 34×22 (a 14px glyph plus the text row's padding, no line box) and the
+   chevron at 20×28 with a 12px glyph, so the row had three different heights and
+   two different icon sizes. */
+.dsq_iconCell {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  gap: 0;
+  border-radius: 8px;
+  justify-content: center;
+}
+
+/* Icon-only rows: every cell is the same square. The chevron rule below is kept
+   for its colour and hover; the box comes from dsq_iconCell. */
 .dsq_buttonCompact,
 .dsq_buttonCompact.dsq_handoffChevron {
   width: 28px;
