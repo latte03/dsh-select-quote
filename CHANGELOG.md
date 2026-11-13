@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.7](https://github.com/latte03/dsh-select-quote/compare/v0.4.6...v0.4.7) (2026-11-13)
+
+### Bug Fixes
+
+* 批注指令改镜像切分，流式期间不再丢后文 ([10d2311](https://github.com/latte03/dsh-select-quote/commit/10d2311f885e4534e0cf9089fc510de86084b41f)), references [#13](https://github.com/latte03/dsh-select-quote/issues/13)
+* 流式突发时同节点的多条文本记录不再撤掉镜像 ([85bbd1d](https://github.com/latte03/dsh-select-quote/commit/85bbd1dc3af61ac57310638ca0da0c6a369377c4)), references [#13](https://github.com/latte03/dsh-select-quote/issues/13)
+
 ## [0.4.6](https://github.com/latte03/dsh-select-quote/compare/v0.4.5...v0.4.6) (2026-11-10)
 
 ### Features
