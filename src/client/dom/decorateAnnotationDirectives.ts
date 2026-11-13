@@ -323,24 +323,39 @@ export function watchAnnotationDirectives(root?: ParentNode): () => void {
   if (!el || typeof MutationObserver === 'undefined') return () => {}
   decorateAnnotationDirectives(el)
   const observer = new MutationObserver((records) => {
+    // A burst of stream deltas can commit several times in one task, queuing
+    // several characterData records for the same text node. Every one of them
+    // describes a value already superseded by the node's final text, while our
+    // own truncation record only arrives in the next callback. Plan each node
+    // once, or a stale record consumes the one-shot self-write flag and the
+    // truncation record is then misread as a host rewrite to the prefix —
+    // which retires the mirror and drops the tail until the next chunk.
+    const seenText = new Set<Text>()
+    const endedStreaming = new Set<Element>()
     for (const record of records) {
       // Streaming lands as an in-place text mutation, and such records carry no
       // added nodes — walking only addedNodes leaves the raw directive on
       // screen until something re-creates the message DOM (a session switch,
       // say), which is exactly the "it works after I switch sessions" report.
       if (record.type === 'characterData') {
-        if (record.target instanceof Text) decorateTextNode(record.target)
+        if (record.target instanceof Text && !seenText.has(record.target)) {
+          seenText.add(record.target)
+          decorateTextNode(record.target)
+        }
         continue
       }
       if (record.type === 'attributes') {
         // The deferred `<code>` form can only be swapped once the host stops
-        // rewriting it; `data-streaming` coming off is that moment.
+        // rewriting it; `data-streaming` coming off is that moment. Defer the
+        // walk to the end of this callback: running it here could mirror a
+        // node whose text record is still queued, and that stale record would
+        // then eat the self-write flag (same failure as above).
         if (
           record.target instanceof Element &&
           record.attributeName === 'data-streaming' &&
           !record.target.hasAttribute('data-streaming')
         ) {
-          decorateAnnotationDirectives(record.target)
+          endedStreaming.add(record.target)
         }
         continue
       }
@@ -364,6 +379,7 @@ export function watchAnnotationDirectives(root?: ParentNode): () => void {
         else if (node instanceof Element) decorateAnnotationDirectives(node)
       }
     }
+    for (const ended of endedStreaming) decorateAnnotationDirectives(ended)
   })
   observer.observe(el, {
     childList: true,

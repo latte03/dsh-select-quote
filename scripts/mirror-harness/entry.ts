@@ -102,6 +102,36 @@ async function streamingProse(): Promise<void> {
   check('S6 exactly one chip after re-parse', chips().length === 1, String(chips().length))
 }
 
+/**
+ * A burst of stream deltas can commit twice in one task, and the final chunk
+ * may share its task with the stream-end attribute removal. Every characterData
+ * record of that batch is superseded by the node's final value; planning once
+ * per callback keeps a stale record from consuming the one-shot self-write
+ * flag, which would retire the mirror and drop the tail for the rest of the
+ * task (permanently if that was the last chunk).
+ */
+async function batchedCommits(): Promise<void> {
+  await settle()
+  render([para(0, [`alpha ${D(1)} beta`])], true)
+  await tick()
+  check('S17 precondition chip present', chips().length === 1, String(chips().length))
+  render([para(0, [`alpha ${D(1)} beta gamma`])], true)
+  render([para(0, [`alpha ${D(1)} beta gamma delta`])], true)
+  await tick()
+  check('S17 batched chunks keep the reading order',
+    transcript(p()) === expected(`alpha ${D(1)} beta gamma delta`), JSON.stringify(transcript(p())))
+  check('S17 batched chunks keep one chip', chips().length === 1, String(chips().length))
+  check('S17 batched chunks keep the mirror', p().querySelector('[data-dsq-ann-mirror]') !== null)
+  // Final chunk and `data-streaming` removal committed in one task.
+  const last = `alpha ${D(1)} beta gamma delta final`
+  render([para(0, [`alpha ${D(1)} beta gamma delta`])], true)
+  render([para(0, [last])], false)
+  await tick()
+  check('S17 batched stream end keeps the reading order',
+    transcript(p()) === expected(last), JSON.stringify(transcript(p())))
+  check('S17 batched stream end keeps one chip', chips().length === 1, String(chips().length))
+}
+
 async function orphanCleanup(): Promise<void> {
   render([para(0, [`alpha ${D(1)} beta`])], true)
   await tick()
@@ -374,6 +404,7 @@ function report(): void {
 async function main(): Promise<void> {
   for (const [name, fn] of [
     ['streamingProse', streamingProse],
+    ['batchedCommits', batchedCommits],
     ['orphanCleanup', orphanCleanup],
     ['inlineCode', inlineCode],
     ['multipleDirectives', multipleDirectives],
