@@ -1665,18 +1665,56 @@ function checkDatasetKeys(code) {
 
 const storage = memoryStorage()
 /**
- * The directives observer must react to characterData records.
+ * The directives observer must react to characterData records, and the
+ * decorator must never take the host's text node out of the document.
  *
  * A streaming reply lands as an in-place text mutation, and such records carry
  * no added nodes — a callback that only walks `addedNodes` leaves the raw
  * `:dsh-annotation{index="N"}` on screen until the message DOM is re-created
  * (session switch, remount). Verified live: with the branch missing, a
  * `nodeValue` write never produced a chip.
+ *
+ * dsh renders prose as `<p children={[...]}>`, so each run of text is a React
+ * HostText fiber rewritten through `nodeValue` on every chunk. Replacing that
+ * node leaves React writing into a detached target and everything after the
+ * directive vanishes (issue #13). The mirror split keeps the host node in place
+ * holding only the prefix, so these invariants must survive edits:
+ *   - no `replaceChild` on the prose path;
+ *   - the truncation write is guarded, or it re-enters the observer forever;
+ *   - that guard is a one-shot self-write flag, not a value comparison: Blink
+ *     queues a characterData record even when `nodeValue` is set to the string
+ *     it already holds, so a host rewrite landing on the old prefix (inline
+ *     markup closing right before the directive, a regenerated message) is
+ *     indistinguishable by value — swallowing it keeps a stale mirror for good;
+ *   - mirrors are retired when React deletes their host node, or a
+ *     re-reconciled paragraph shows duplicate prose. Retirement must NOT be
+ *     conditioned on the box still sitting next to the node: React has already
+ *     detached it, so that test can never pass and orphans accumulate;
+ *   - inline `<code>` still waits for `data-streaming` to come off: React owns
+ *     that element through `setTextContent`, which wipes mirrors every chunk.
  */
 function checkDirectiveObserver(code) {
   const problems = []
   if (!/record\.type\s*===\s*['"]characterData['"]/.test(code)) {
     problems.push('directives observer ignores characterData records — streaming text is never decorated')
+  }
+  if (/\.replaceChild\(/.test(code)) {
+    problems.push('directives decorator replaces the host text node — React keeps writing into a detached node (issue #13)')
+  }
+  if (!/value === \w+\.prefix/.test(code)) {
+    problems.push('mirror truncation is not guarded against its own characterData record — the observer re-enters forever')
+  }
+  if (!/\.selfWrite\b/.test(code)) {
+    problems.push('mirror truncation guard compares values instead of a one-shot self-write flag — a host rewrite equal to the old prefix keeps a stale mirror forever')
+  }
+  if (!/record\.removedNodes/.test(code)) {
+    problems.push('mirrors are not retired with their host node — a re-reconciled paragraph shows duplicate prose')
+  }
+  if (!/closest\(['"`]\[data-streaming\]['"`]\)/.test(code)) {
+    problems.push('inline <code> is no longer deferred to the end of the stream — setTextContent wipes its chip every chunk')
+  }
+  if (!/attributeFilter\s*:\s*\[[^\]]*['"]data-streaming['"]/.test(code)) {
+    problems.push('directives observer never wakes on data-streaming removal — the deferred <code> form stays raw')
   }
   return problems
 }

@@ -6,9 +6,10 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 
 | 命令 | 用途 |
 |---|---|
-| `pnpm run check` | typecheck + test + build + verify，**提交前必跑** |
+| `pnpm run check` | typecheck + test + build + verify + verify:mirror，**提交前必跑** |
 | `pnpm run build` / `watch` | 产出 `lib/`（**不入库**，见 .gitignore；发布由 prepublishOnly 自动构建） |
 | `pnpm run verify` | 无头跑 `lib/client.js`：贡献注册、八语言词典、包元信息、`npm pack` 清单 |
+| `pnpm run verify:mirror` | 真实 React + headless Chrome 跑 `scripts/mirror-harness/`：批注镜像切分的 DOM 契约回归（需要 Chrome，可用 `CHROME_BIN` 指定） |
 | `pnpm run sync:desktop` / `sync:web` | 把 `lib/` 推到已安装副本（宿主 500ms 热更新；**换版本仍需重启**） |
 | `pnpm run release` | check → CHANGELOG → 版本 + tag（`<1.0.0` 时 `feat:`/`fix:` 都只跳 patch） |
 | `node scripts/release-body.mjs <tag>` | 预览该版本的 Release 正文（可选开篇 + CHANGELOG 节 + 页脚），推 tag 后由 workflow 自动用到 |
@@ -35,6 +36,7 @@ DeepSeek Harness（dsh）web 客户端插件：对话区划词加批注——选
 - 每条动作流程一个 hook（`useSelectionMenu` / `useAnnotationFlow` / `useSideQuestion` / `useHandoffFlow` / `useTranslatePopover` / `useSystemActions`），不反向 import 入口组件。
 - 任何拆分后跑 `pnpm run check`，并在真实客户端确认受影响的浮层与设置页。
 - 视图层的测试用 `react-dom/server` 的 `renderToStaticMarkup` 做结构冒烟（`ui/views.test.tsx`、`settings/rows.test.tsx`）：挡崩溃、标签丢失、条件写反、i18n key 没绑定（`t()` 未 bind 时返回 key 本身，断言文案前先 `bindTestLocale()`）。**不要引入 jsdom / @testing-library**——几何、CSS 层叠与材质、Lexical、宿主 DOM 契约都必须真机验，jsdom 对它们全盲（见 `docs/internals.md` 排错表）。要测新的渲染分支，先把它抽成可渲染的纯视图或纯函数（`ui/comment-block.ts` + `SummaryComment` 是样板），改坏了要能变红。
+- 与 React reconcile 的时序契约（文本节点身份、MutationRecord 顺序、镜像归属、计算样式）用 `scripts/mirror-harness/` 验：真实 React 18 + headless Chrome，`pnpm run verify:mirror`（已并入 check）。改 `decorateAnnotationDirectives.ts` 必须跑它，并把新分支写成断言——纯函数单测与静态闸盖不住时序，两个真缺陷都是它抓到的。
 
 ## 文档
 

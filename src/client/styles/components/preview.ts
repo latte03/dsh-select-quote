@@ -345,4 +345,10 @@ export const PREVIEW_CSS = `
   cursor: pointer;
   vertical-align: baseline;
 }
+
+/* The host's own <code> element is emptied and hidden rather than removed:
+   React still holds it and calls removeChild when the message goes away. */
+.dsq_annCodeHost {
+  display: none;
+}
 `

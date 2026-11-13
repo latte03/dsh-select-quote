@@ -51,7 +51,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "verify": "node scripts/verify-bundle.mjs",
-    "check": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run verify",
+    "verify:mirror": "node scripts/verify-mirror.mjs",
+    "check": "pnpm run typecheck && pnpm run test && pnpm run build && pnpm run verify && pnpm run verify:mirror",
     "release": "pnpm run check && commit-and-tag-version",
     "prepublishOnly": "pnpm run build"
   },

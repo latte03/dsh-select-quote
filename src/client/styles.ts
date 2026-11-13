@@ -125,6 +125,7 @@ export const styles = {
   summaryItemActions: 'dsq_summaryItemActions',
   summaryItemAction: 'dsq_summaryItemAction',
   annDirective: 'dsq_annDirective',
+  annCodeHost: 'dsq_annCodeHost',
   annAnchor: 'dsq_annAnchor',
   annMark: 'dsq_annMark',
   annBadge: 'dsq_annBadge',
