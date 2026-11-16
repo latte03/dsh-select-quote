@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.9](https://github.com/latte03/dsh-select-quote/compare/v0.4.8...v0.4.9) (2026-11-16)
+
+### Features
+
+* 侧栏提问归档支持按周期自动清理 ([1d3c75b](https://github.com/latte03/dsh-select-quote/commit/1d3c75bf82cf2a00edf97eccd7e03424f3c13e78))
+* 侧栏提问支持右键与标题书签保留 ([526bcfe](https://github.com/latte03/dsh-select-quote/commit/526bcfe35742daef8205029021c325ddc8188629))
+* 侧栏提问改为主会话 fork ([cbf3095](https://github.com/latte03/dsh-select-quote/commit/cbf30952638527ac5549966717445c4310c7e8b4))
+
 ## [0.4.8](https://github.com/latte03/dsh-select-quote/compare/v0.4.7...v0.4.8) (2026-11-16)
 
 ### Bug Fixes
