@@ -8,13 +8,21 @@
 
 const HOST = 'select-quote-side'
 
-export const SIDE_FORK_PROTOCOL = HOST
 export const SIDE_FORK_KIND = HOST
 export const SIDE_FORK_TAB_ID = 'dsh-select-quote-side-chat'
 export const SIDE_FORK_SLOT = 'dsh-select-quote.side.chat'
 
 export function sideForkAddress(sessionId: string): string {
   return `dsh-resource://${HOST}/session/${encodeURIComponent(sessionId)}`
+}
+
+/** Session id for a right-sidebar tab record of this kind; undefined otherwise. */
+export function sideForkSessionIdOfTab(tab: {
+  readonly kind: string
+  readonly contentId: string
+}): string | undefined {
+  if (tab.kind !== SIDE_FORK_KIND) return undefined
+  return parseSideForkAddress(tab.contentId)
 }
 
 export function parseSideForkAddress(address: string): string | undefined {

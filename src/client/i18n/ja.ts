@@ -29,7 +29,6 @@ export const ja: LocaleDict = {
   'sideTask.send': '送信',
   'sideTask.sending': '作成中…',
   'sideTask.keep': 'リストに残す',
-  'sideTask.kept': 'リストに残しました',
   'sideTask.keepHint': 'セッション一覧に残し、タブを閉じてもアーカイブしません',
   'sideTask.keptToast': 'セッション一覧に残しました',
   'toolbar.translate': '翻訳',

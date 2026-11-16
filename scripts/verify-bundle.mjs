@@ -54,6 +54,20 @@ const EXPECTED = [
   { kind: 'locale.bind', label: 'select-quote' },
 ]
 
+/** Side-fork wiring that only mounts when the sidebar services are present. */
+const SIDE_FORK_EXPECTED = [
+  { kind: 'inject', label: 'sessions, resources, sidebarRightTabs, sidebarRight, workspaces, uiWorkspace' },
+  { kind: 'resources.register', label: 'select-quote-side' },
+  { kind: 'sidebarRightTabs.register', label: 'dsh-select-quote-side-chat' },
+  { kind: 'slots.register', label: 'sidebar.right.pane.tab / dsh-select-quote-side-chat' },
+  { kind: 'slots.register', label: 'sidebar.right.pane.tab.title / dsh-select-quote-side-chat' },
+  { kind: 'slots.register', label: 'dsh-select-quote.side.chat / undefined' },
+  { kind: 'slots.register', label: 'sidebar.session.row.trailing / dsh-select-quote-side-row' },
+  { kind: 'inject', label: 'contextMenus, slots' },
+  { kind: 'slots.register', label: 'contextMenu.icon / select-quote.keep-side-fork' },
+  { kind: 'contextMenus.register', label: 'tab/select-quote.keep-side-fork' },
+]
+
 /** Baseline languages every host ships; both must land in one typed call. */
 const SHIPPED_LOCALES = ['en', 'zh']
 
@@ -1418,6 +1432,7 @@ function loadFactory(code, storage) {
     Symbol,
     Object,
     Array,
+    URL,
     Math,
     Date,
     JSON,
@@ -1492,6 +1507,47 @@ function mockContext(record, options = {}) {
     },
   }
   ctx.sessions = { scope: () => undefined }
+  if (options.sidebarServices) {
+    // Enough of the sidebar stack that installSideForkChat registers its
+    // resource, tab, title seat, row marker, and keep menu. Nothing here opens
+    // a tab or sends a prompt; the callbacks are captured for assertion.
+    ctx.sessions = {
+      scope: () => undefined,
+      list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} },
+      create: async () => ({}),
+    }
+    ctx.resources = {
+      register(provider) {
+        record.push({ kind: 'resources.register', label: provider.protocol })
+        return () => {}
+      },
+    }
+    ctx.sidebarRightTabs = {
+      register(definition) {
+        record.push({ kind: 'sidebarRightTabs.register', label: definition.id })
+        return () => {}
+      },
+    }
+    ctx.sidebarRight = { active: () => undefined, openResource: () => {} }
+    ctx.workspaces = {
+      list: { getSnapshot: () => ({ archivedSessionIds: [] }), subscribe: () => () => {} },
+    }
+    ctx.uiWorkspace = {
+      openSession: () => {},
+      archiveSession: async () => {},
+      unarchiveSession: async () => {},
+    }
+    ctx.contextMenus = {
+      register(contribution) {
+        record.push({
+          kind: 'contextMenus.register',
+          label: `${contribution.target}/${contribution.id}`,
+          contribution,
+        })
+        return () => {}
+      },
+    }
+  }
   ctx.locale = {
     getLocale: () => snapshot,
     getSnapshot: () => snapshot,
@@ -2463,6 +2519,54 @@ if (hostRegistrations.length !== wantRegistrations) {
   )
 }
 
+// The side-fork surface waits on the sidebar stack, so the main pass (which
+// deliberately omits those services) can only record the injection. Replay it
+// with stubs to prove the resource, tab title, row marker, and keep menu are
+// actually registered, then ask the menu resolver for both fork and non-fork
+// tabs.
+const sideForkRecord = []
+const sideForkBundle = loadFactory(code, memoryStorage())
+const sideForkModule = sideForkBundle.factory((name) => {
+  if (!SEEDS.has(name)) throw new Error(`require("${name}") is not a platform seed word`)
+  return require(name)
+})
+const { ctx: sideForkCtx } = mockContext(sideForkRecord, { sidebarServices: true })
+sideForkModule.apply(sideForkCtx)
+const sideForkProblems = []
+for (const expected of SIDE_FORK_EXPECTED) {
+  if (!sideForkRecord.some((entry) => entry.kind === expected.kind && entry.label === expected.label)) {
+    sideForkProblems.push(`missing ${expected.kind} ${expected.label}`)
+  }
+}
+const tabMenu = sideForkRecord.find((entry) => entry.kind === 'contextMenus.register')
+if (tabMenu === undefined) {
+  sideForkProblems.push('the tab context menu was not registered')
+} else {
+  const childAddress = 'dsh-resource://select-quote-side/session/child'
+  const resolve = (kind) =>
+    tabMenu.contribution.resolve(
+      {
+        sessionId: 'parent',
+        paneId: 'pane',
+        tab: { id: 'tab', kind, contentId: childAddress },
+      },
+      new AbortController().signal,
+    )
+  const own = resolve('select-quote-side')
+  if (!Array.isArray(own) || own.length !== 1) {
+    sideForkProblems.push(`the side-fork tab resolved ${Array.isArray(own) ? own.length : 'no'} keep action, want 1`)
+  } else {
+    const [keep] = own
+    if (keep.id !== 'keep' || keep.icon?.key !== 'select-quote.keep-side-fork' || typeof keep.run !== 'function') {
+      sideForkProblems.push('the side-fork tab keep action is missing its id, icon key, or run callback')
+    }
+  }
+  const foreign = resolve('terminal')
+  if (!Array.isArray(foreign) || foreign.length !== 0) {
+    sideForkProblems.push(`a non-side tab resolved ${Array.isArray(foreign) ? foreign.length : 'no'} keep action, want 0`)
+  }
+}
+
 const missing = EXPECTED.filter(
   (expected) => !record.some((entry) => entry.kind === expected.kind && entry.label === expected.label),
 )
@@ -2588,6 +2692,7 @@ if (
   hostConfigProblems.length > 0 ||
   patchIdentityProblems.length > 0 ||
   userTextProblems.length > 0 ||
+  sideForkProblems.length > 0 ||
   surfaceProblems.length > 0
 ) {
   for (const entry of missing) console.error(`MISSING: ${entry.kind} ${entry.label}`)
@@ -2624,6 +2729,7 @@ if (
   for (const problem of patchIdentityProblems) console.error(`ROW IDENTITY: ${problem}`)
   for (const problem of surfaceProblems) console.error(`TRANSCRIPT SURFACE: ${problem}`)
   for (const problem of userTextProblems) console.error(`USER TEXT RULE: ${problem}`)
+  for (const problem of sideForkProblems) console.error(`SIDE FORK: ${problem}`)
   process.exit(1)
 }
 console.log(
@@ -2634,5 +2740,6 @@ console.log(
     `host config + bundle settings section wired (defaults, live update, invalid-value fallback, no-service fallback), ` +
     `right-click ownership + shortcut commands replayed (two actions, defaults, selection gating, live registration, catalog mirror), ` +
     `user-text rule hides the annotation block (0.2.2 bubble pipeline), ` +
+    `side-fork tab + keep menu wired, ` +
     `package metadata (locale + icon) resolved and packed`,
 )

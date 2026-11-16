@@ -29,7 +29,6 @@ export const zh: LocaleDict = {
   'sideTask.send': '发送',
   'sideTask.sending': '创建中…',
   'sideTask.keep': '保留到列表',
-  'sideTask.kept': '已保留到列表',
   'sideTask.keepHint': '保留到会话列表，关闭标签页后不再归档',
   'sideTask.keptToast': '已保留到会话列表',
   'toolbar.translate': '翻译',

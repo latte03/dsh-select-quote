@@ -58,6 +58,39 @@ export interface SidebarRightTabDefinition {
   title: (address: string) => string
 }
 
+/** One right-sidebar tab record as captured by the host's tab context menu. */
+export interface SidebarTabMenuTarget {
+  readonly sessionId: string
+  readonly paneId: string
+  readonly tab: {
+    readonly id: string
+    readonly kind: string
+    readonly contentId: string
+    readonly title?: string
+  }
+}
+
+/** One action contributed to the host's shared context menu. */
+export interface ContextMenuActionFace {
+  readonly id: string
+  readonly label: string
+  readonly icon?: { readonly key: string; readonly src?: string }
+  readonly disabled?: boolean
+  readonly separatorBefore?: boolean
+  readonly run?: () => void | Promise<void>
+}
+
+/** A data contribution to the host's tab context menu. */
+export interface ContextMenuTabContributionFace {
+  readonly id: string
+  readonly target: 'tab'
+  readonly order: number
+  resolve(
+    target: SidebarTabMenuTarget,
+    signal: AbortSignal,
+  ): readonly ContextMenuActionFace[] | Promise<readonly ContextMenuActionFace[]>
+}
+
 /** One live slot entry as exposed by the registry inspection surface. */
 export interface SlotEntryInspection {
   /** Registered component (memo/forwardRef/plain function). */
@@ -268,6 +301,12 @@ declare module '@deepseek-ai/cordis' {
     /** Right sidebar controller (`@deepseek-ai/dsh-client-ui-sidebar-right`). */
     sidebarRight: {
       openResource(address: string, options?: { kind?: string }): void
+      /** Active tab in the focused pane of the current Session's panel. */
+      active(): { readonly id: string } | undefined
+    }
+    /** Host context menus (`@deepseek-ai/dsh-client-ui-context-menu`). */
+    contextMenus: {
+      register(contribution: ContextMenuTabContributionFace): () => void
     }
     /**
      * Host plugin panel navigation (`@deepseek-ai/dsh-client-ui-plugin-manager`).

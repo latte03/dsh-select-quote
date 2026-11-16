@@ -16,7 +16,7 @@ A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/q
 - **Annotate and send**: **Annotate this conversation** is the main button, its chevron sends the passage elsewhere; the source keeps an arrow mark, the target shows "From: <session>", and both sides jump back
 - **Marks and summary**: annotated text keeps a tint and an ordinal mark; the card above the composer edits, deletes, or jumps back, and clears on send. A lone annotation shows its quote and comment on the card itself; two or more are counted as "N annotations"
 - **Send annotations alone**: with annotations pending you can send on an empty composer; the message carries the quotes and no words
-- **Sidebar questions**: fork the conversation around one passage and follow up in the right Sidebar without interrupting the main conversation; pick a separate model, reuse the same side fork, or keep it in the session list
+- **Sidebar questions**: fork the conversation around one passage and follow up in the right Sidebar without interrupting the main conversation; pick a separate model, reuse the same side fork, or keep it in the session list from the tab's context menu or the bookmark before the active tab's title
 - **Eight UI languages**: 简体中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português
 
 ## Usage

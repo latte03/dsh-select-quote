@@ -29,7 +29,6 @@ export const ru: LocaleDict = {
   'sideTask.send': 'Отправить',
   'sideTask.sending': 'Создание…',
   'sideTask.keep': 'Оставить в списке',
-  'sideTask.kept': 'Оставлено в списке',
   'sideTask.keepHint': 'Оставить в списке сеансов; закрытие вкладки больше не архивирует его',
   'sideTask.keptToast': 'Оставлено в списке сеансов',
   'toolbar.translate': 'Перевести',

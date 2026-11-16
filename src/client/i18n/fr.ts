@@ -29,7 +29,6 @@ export const fr: LocaleDict = {
   'sideTask.send': 'Envoyer',
   'sideTask.sending': 'Création…',
   'sideTask.keep': 'Garder dans la liste',
-  'sideTask.kept': 'Gardé dans la liste',
   'sideTask.keepHint': 'Garder dans la liste des sessions ; fermer cet onglet ne l’archive plus',
   'sideTask.keptToast': 'Gardé dans la liste des sessions',
   'toolbar.translate': 'Traduire',

@@ -29,7 +29,6 @@ export const de: LocaleDict = {
   'sideTask.send': 'Senden',
   'sideTask.sending': 'Wird erstellt…',
   'sideTask.keep': 'In der Liste behalten',
-  'sideTask.kept': 'Bleibt in der Liste',
   'sideTask.keepHint': 'In der Sitzungsliste behalten; beim Schließen dieses Tabs wird sie nicht mehr archiviert',
   'sideTask.keptToast': 'In der Sitzungsliste behalten',
   'toolbar.translate': 'Übersetzen',

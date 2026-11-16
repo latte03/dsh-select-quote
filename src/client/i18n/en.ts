@@ -29,7 +29,6 @@ export const en: LocaleDict = {
   'sideTask.send': 'Send',
   'sideTask.sending': 'Starting…',
   'sideTask.keep': 'Keep in list',
-  'sideTask.kept': 'Kept in list',
   'sideTask.keepHint': 'Keep in the session list; closing this tab no longer archives it',
   'sideTask.keptToast': 'Kept in the session list',
   'toolbar.translate': 'Translate',

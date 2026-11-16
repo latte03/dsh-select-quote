@@ -10,6 +10,7 @@
 import { useSyncExternalStore, type ComponentType, type ReactNode } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { t } from '../i18n.ts'
+import { LucideIcon } from '../ui/icons.tsx'
 import { showToast } from '../ui/toast.ts'
 import {
   forgetHiddenSideFork,
@@ -21,6 +22,7 @@ import {
 } from './fork-state.ts'
 import {
   parseSideForkAddress,
+  sideForkSessionIdOfTab,
   SIDE_FORK_KIND,
   SIDE_FORK_SLOT,
   SIDE_FORK_TAB_ID,
@@ -28,6 +30,7 @@ import {
 
 const TAB_PATTERN = 'dsh-resource://select-quote-side/**'
 const HIDDEN_ROW_SLOT = 'sidebar.session.row.trailing'
+const KEEP_MENU_ICON = 'select-quote.keep-side-fork'
 
 interface SideForkReference {
   release(): void
@@ -82,6 +85,21 @@ interface SideForkConversationSnapshot {
 
 interface SideForkSessionsState {
   byId: Record<string, { blank?: boolean } | undefined>
+}
+
+interface SideForkTabInfoSnapshot {
+  tab: {
+    id: string
+    kind: string
+    contentId: string
+    title?: string
+    visible: boolean
+  }
+}
+
+interface SideForkTabTitleProps {
+  useTabInfo: () => SideForkTabInfoSnapshot
+  isActiveTab?: (tabId: string) => boolean
 }
 
 interface HiddenRowProps {
@@ -189,12 +207,6 @@ function SideForkTab({
 }: SideForkTabProps): ReactNode {
   const { tab } = useTabInfo()
   const resource = useResource(tab.contentId)
-  const sessionId = parseSideForkAddress(tab.contentId)
-  const kept = useSyncExternalStore(
-    subscribeSideForkState,
-    () => sessionId !== undefined && isKeptSideFork(sessionId),
-    () => false,
-  )
   const reference = resource.value?.reference
   const body = reference === undefined
     ? (
@@ -219,48 +231,59 @@ function SideForkTab({
         minHeight: 0,
       }}
     >
-      {sessionId !== undefined && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            flex: 'none',
-            padding: '2px 8px',
-          }}
-        >
-          <button
-            type="button"
-            disabled={kept}
-            title={t('sideTask.keepHint')}
-            onClick={() => {
-              keepSideFork(sessionId)
-              showToast(t('sideTask.keptToast'), 3000)
-            }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              height: 22,
-              padding: '0 8px',
-              border: '1px solid currentColor',
-              borderRadius: 6,
-              background: 'transparent',
-              color: 'inherit',
-              font: 'inherit',
-              fontSize: 11,
-              opacity: kept ? 0.5 : 0.75,
-              cursor: kept ? 'default' : 'pointer',
-            }}
-          >
-            {kept ? t('sideTask.kept') : t('sideTask.keep')}
-          </button>
-        </div>
-      )}
       <div style={{ display: 'flex', flex: 1, minWidth: 0, minHeight: 0 }}>
         {body}
       </div>
     </div>
   )
+}
+
+/**
+ * The tab chip's live title. The host's title slot participates in the chip's
+ * flex row, so the keep action can sit beside the title without an extra
+ * overlay. It is offered only while this side fork is the visible tab and has
+ * not been kept yet.
+ */
+export function SideForkTabTitle({ useTabInfo, isActiveTab }: SideForkTabTitleProps): ReactNode {
+  const { tab } = useTabInfo()
+  const sessionId = sideForkSessionIdOfTab(tab)
+  const kept = useSyncExternalStore(
+    subscribeSideForkState,
+    () => sessionId !== undefined && isKeptSideFork(sessionId),
+    () => false,
+  )
+  const keep = (): void => {
+    if (sessionId === undefined) return
+    keepSideFork(sessionId)
+    showToast(t('sideTask.keptToast'), 3000)
+  }
+  const label = (tab.title ?? '').trim() || t('sideTask.title')
+  return (
+    <>
+      {sessionId !== undefined && tab.visible && isActiveTab?.(tab.id) === true && !kept ? (
+        <button
+          type="button"
+          className="dsq_keepTab"
+          draggable={false}
+          title={t('sideTask.keepHint')}
+          aria-label={t('sideTask.keep')}
+          onPointerDown={(event) => { event.stopPropagation() }}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            keep()
+          }}
+        >
+          <LucideIcon name="bookmark" size={13} />
+        </button>
+      ) : null}
+      {label}
+    </>
+  )
+}
+
+function KeepForkMenuIcon(): ReactNode {
+  return <LucideIcon name="bookmark" size={16} />
 }
 
 /**
@@ -314,9 +337,51 @@ export function installSideForkChat(ctx: Context): void {
       SideForkTab,
     ),
   )
+  ctx.slots.inject('sidebar.right.pane.tab.title', () =>
+    ctx.slots.register(
+      {
+        name: 'sidebar.right.pane.tab.title',
+        key: SIDE_FORK_TAB_ID,
+        inject: () => ({
+          isActiveTab: (tabId: string) => ctx.sidebarRight.active()?.id === tabId,
+        }),
+      },
+      SideForkTabTitle,
+    ),
+  )
   ctx.slots.inject(SIDE_FORK_SLOT, () =>
     ctx.slots.register({ name: SIDE_FORK_SLOT }, SideForkPanel),
   )
+  ctx.inject(['contextMenus', 'slots'], (scope) => {
+    scope.effect(
+      () =>
+        scope.contextMenus.register({
+          id: 'select-quote.keep-side-fork',
+          target: 'tab',
+          order: 50,
+          resolve: ({ tab }) => {
+            const sessionId = sideForkSessionIdOfTab(tab)
+            if (sessionId === undefined || isKeptSideFork(sessionId)) return []
+            return [{
+              id: 'keep',
+              label: t('sideTask.keep'),
+              icon: { key: KEEP_MENU_ICON },
+              run: () => {
+                keepSideFork(sessionId)
+                showToast(t('sideTask.keptToast'), 3000)
+              },
+            }]
+          },
+        }),
+      'dsh-select-quote: side fork keep menu',
+    )
+    scope.slots.inject('contextMenu.icon', () =>
+      scope.slots.register(
+        { name: 'contextMenu.icon', key: KEEP_MENU_ICON },
+        KeepForkMenuIcon,
+      ),
+    )
+  })
   ctx.slots.inject(HIDDEN_ROW_SLOT, () =>
     ctx.slots.register(
       {
