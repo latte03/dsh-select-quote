@@ -144,6 +144,9 @@ export const es: LocaleDict = {
   'settings.sideTaskModeHint': 'Reutilizar crea una sola conversación lateral; su contexto se detiene en la primera creación.',
   'settings.sideTaskMode.separate': 'Nuevo cada vez',
   'settings.sideTaskMode.reuse': 'Reutilizar uno',
+  'settings.sideForkRetention': 'Periodo de limpieza',
+  'settings.sideForkRetentionHint': 'Las preguntas laterales archivadas que superen estos días se eliminan automáticamente; 0 desactiva la limpieza.',
+  'settings.sideForkRetentionUnit': 'días',
 
   'toolbar.handoff': 'Enviar a otra conversación…',
   'toolbar.handoffTo': 'Enviar a {target}',

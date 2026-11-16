@@ -59,7 +59,11 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       'translatePrompt',
     ],
   },
-  { id: 'side', labelKey: 'settings.groupSide', fields: ['sideTaskMode'] },
+  {
+    id: 'side',
+    labelKey: 'settings.groupSide',
+    fields: ['sideTaskMode', 'sideForkRetentionDays'],
+  },
   { id: 'shortcut', labelKey: 'settings.groupShortcut', fields: ['shortcut'] },
 ]
 

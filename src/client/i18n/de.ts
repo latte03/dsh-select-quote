@@ -144,6 +144,9 @@ export const de: LocaleDict = {
   'settings.sideTaskModeHint': 'Wiederverwenden erstellt eine einzige Seitenunterhaltung; ihr Kontext endet bei der ersten Erstellung.',
   'settings.sideTaskMode.separate': 'Jedes Mal neu',
   'settings.sideTaskMode.reuse': 'Einen wiederverwenden',
+  'settings.sideForkRetention': 'Aufbewahrungsdauer',
+  'settings.sideForkRetentionHint': 'Archivierte Seitenfragen, die älter als diese Anzahl Tage sind, werden automatisch gelöscht; 0 deaktiviert die Bereinigung.',
+  'settings.sideForkRetentionUnit': 'Tage',
 
   'toolbar.handoff': 'An Unterhaltung senden…',
   'toolbar.handoffTo': 'An {target} senden',

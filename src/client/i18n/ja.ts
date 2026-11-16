@@ -142,6 +142,9 @@ export const ja: LocaleDict = {
   'settings.sideTaskModeHint': '使い回すとサイド会話は 1 つだけ作成され、文脈は最初の作成時点で止まります。',
   'settings.sideTaskMode.separate': '毎回新規',
   'settings.sideTaskMode.reuse': '同じものを使い回す',
+  'settings.sideForkRetention': 'クリーンアップ期間',
+  'settings.sideForkRetentionHint': 'この日数を過ぎたアーカイブ済みのサイド質問を自動で削除します。0 で無効になります。',
+  'settings.sideForkRetentionUnit': '日',
 
   'toolbar.handoff': '会話に送る…',
   'toolbar.handoffTo': '{target} に送る',

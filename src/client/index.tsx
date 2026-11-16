@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { QuoteCard } from './composer/AnnotationPanel.tsx'
-import { attachConfigForm, getConfig } from './config.ts'
+import { attachConfigForm, getConfig, isConfigReady, subscribeConfig } from './config.ts'
 import { SelectionToolbar } from './selection/SelectionToolbar.tsx'
 import { HostQuoteSurface } from './selection/HostQuoteSurface.tsx'
 import { ConfigRow } from './settings/ConfigRow.tsx'
@@ -36,6 +36,7 @@ import type { SelectionSnapshot } from './dom/selection.ts'
 import type { ModelChoice, ModelGroup } from './model/types.ts'
 import { installSideForkChat } from './side-question/fork-chat.tsx'
 import { isKnownSideFork } from './side-question/fork-state.ts'
+import { runSideForkRetention, type SideForkRetentionApi } from './side-question/retention.ts'
 import { runSideQuestion } from './side-question/runSideQuestion.ts'
 import { runtime, setHandoffHost } from './runtime.ts'
 import {
@@ -434,9 +435,9 @@ function applyBody(ctx: Context): void {
   })
 
   /**
-   * Translation runs one direct model call with no conversation context. The
-   * side question is client-side now (`sessions.fork` + the sidebar tab), so
-   * this Remote group only carries the translation namespace.
+   * Translation runs one direct model call with no conversation context, and
+   * side-fork retention asks the Host to unlink old archived forks. Both are
+   * direct Remote namespaces.
    *
    * `$mount` installs each namespace as its own dynamic service
    * (`remote.<namespace>`); the mount callback reads it back by that key, so
@@ -446,6 +447,13 @@ function applyBody(ctx: Context): void {
     scope.effect(() => {
       let dispose: (() => Promise<void>) | undefined
       let stopped = false
+      let stopConfig: (() => void) | undefined
+      let stopWorkspaces: (() => void) | undefined
+      let retentionKey = ''
+      let retentionRunning = false
+      let retentionPending = false
+      let retentionRetries = 0
+      let retentionTimer: ReturnType<typeof setTimeout> | undefined
       let publishedTranslate:
         | ((
             snapshot: SelectionSnapshot,
@@ -455,10 +463,73 @@ function applyBody(ctx: Context): void {
           ) => Promise<void>)
         | undefined
 
+      /**
+       * Archived forks are invisible, so their logs otherwise accumulate
+       * forever. Config readiness gates this because the defaults must not
+       * delete anything before the Host sent the form.
+       *
+       * The run is keyed on the period *and* the archive set: the workspace
+       * catalog hydrates after activation, so the startup pass can see an
+       * empty archive list. Keying on both makes that pass redo itself when
+       * the real set lands (the list subscription below) instead of retiring
+       * the period against empty data for the whole page life.
+       */
+      const runRetention = (): void => {
+        if (stopped || !isConfigReady()) return
+        const days = getConfig().sideForkRetentionDays
+        if (days <= 0) return
+        const api = scope.get('remote.selectQuoteSideForkRetention') as
+          | SideForkRetentionApi
+          | undefined
+        if (api === undefined || typeof api.prune !== 'function') return
+        // Retention is the only path that needs the catalog services. Looking
+        // them up here keeps translation mountable on a shell without them.
+        const sessions = scope.get('sessions') as Context['sessions'] | undefined
+        const workspaces = scope.get('workspaces') as Context['workspaces'] | undefined
+        if (sessions === undefined || workspaces === undefined) return
+        const archivedIds = workspaces.list.getSnapshot().archivedSessionIds ?? []
+        const key = `${days}|${archivedIds.join(',')}`
+        if (key === retentionKey) return
+        if (retentionRunning) {
+          retentionPending = true
+          return
+        }
+        retentionKey = key
+        retentionRunning = true
+        void runSideForkRetention({
+          days,
+          api,
+          archivedIds,
+          summaries: sessions.list.getSnapshot().byId,
+        }).then(() => {
+          retentionRetries = 0
+        }).catch((error) => {
+          // Boot can abort the first call while the gateway settles; retry a
+          // bounded number of times instead of leaving this period unapplied
+          // until the user happens to change a setting.
+          retentionKey = ''
+          console.warn('dsh-select-quote: side-fork retention failed', error)
+          if (!stopped && retentionRetries < 2 && retentionTimer === undefined) {
+            retentionRetries += 1
+            retentionTimer = setTimeout(() => {
+              retentionTimer = undefined
+              runRetention()
+            }, 5000)
+          }
+        }).finally(() => {
+          retentionRunning = false
+          if (retentionPending) {
+            retentionPending = false
+            runRetention()
+          }
+        })
+      }
+
       const publish = (): void => {
         const translateApi = scope.get('remote.selectQuoteTranslate') as
           | TranslateRemoteApi
           | undefined
+        runRetention()
         if (translateApi !== undefined) {
           const translate = async (
             snapshot: SelectionSnapshot,
@@ -515,6 +586,10 @@ function applyBody(ctx: Context): void {
         }
       }
 
+      stopConfig = subscribeConfig(runRetention)
+      // The archive set lands after activation; a change (including the first
+      // hydration) re-runs retention under the new key.
+      stopWorkspaces = scope.get('workspaces')?.list?.subscribe?.(runRetention)
       void scope.remote.$mount(pluginRemote).then(
         (value) => {
           if (stopped) {
@@ -531,6 +606,9 @@ function applyBody(ctx: Context): void {
 
       return () => {
         stopped = true
+        stopConfig?.()
+        stopWorkspaces?.()
+        if (retentionTimer !== undefined) clearTimeout(retentionTimer)
         if (publishedTranslate !== undefined && runtime.translate === publishedTranslate) {
           delete runtime.translate
         }

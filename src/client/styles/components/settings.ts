@@ -227,6 +227,45 @@ export const SETTINGS_CSS = `
   box-shadow: 0 0 0 2px var(--dsq-focus-ring-soft);
 }
 
+/* A compact number field with the unit outside the box: the input stays a
+   number input for native spin/keyboard behavior, the suffix only labels it. */
+.dsq_settingsNumber {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.dsq_settingsNumberInput {
+  box-sizing: border-box;
+  width: 84px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--dsq-line);
+  border-radius: 10px;
+  outline: none;
+  background: transparent;
+  color: var(--dsq-label);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  text-align: right;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.dsq_settingsNumberInput:focus-visible {
+  border-color: var(--dsq-focus-ring);
+  box-shadow: 0 0 0 2px var(--dsq-focus-ring-soft);
+}
+
+.dsq_settingsNumberUnit {
+  color: var(--dsq-label-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* Shortcut reference under the switch: the two commands and the keycaps the
    Host currently has in effect, so a rebind shows up here without a reload. */
 .dsq_settingsShortcuts {
@@ -379,6 +418,7 @@ export const SETTINGS_CSS = `
   }
 
   .dsq_settingsInput,
+  .dsq_settingsNumberInput,
   .dsq_settingsSelect {
     transition: none;
   }

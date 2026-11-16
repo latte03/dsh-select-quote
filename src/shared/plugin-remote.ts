@@ -12,6 +12,36 @@ import { PACKAGE_NAME } from './identity.ts'
 export const TRANSLATE_SERVICE = 'selectQuoteTranslate'
 export const TRANSLATE_METHOD = `${TRANSLATE_SERVICE}/translate`
 
+/** Host-side deletion of archived, unkept side-fork logs. */
+export const SIDE_FORK_RETENTION_SERVICE = 'selectQuoteSideForkRetention'
+export const SIDE_FORK_RETENTION_METHOD = `${SIDE_FORK_RETENTION_SERVICE}/prune`
+
+export interface SideForkPruneRequest {
+  /** Client-selected candidates; the Host validates every one again. */
+  readonly sessionIds: readonly string[]
+  /** Delete a fork whose log was last written at or before this time. */
+  readonly cutoffMs: number
+}
+
+export type SideForkPruneSkipReason =
+  | 'invalid-id'
+  | 'not-archived'
+  | 'live'
+  | 'missing'
+  | 'not-fork'
+  | 'no-path'
+  | 'unsafe-path'
+  | 'recent'
+  | 'io-error'
+
+export interface SideForkPruneResult {
+  readonly deleted: readonly string[]
+  readonly skipped: readonly {
+    readonly id: string
+    readonly reason: SideForkPruneSkipReason
+  }[]
+}
+
 /**
  * One frame of the translation stream. `text` is always the whole translation
  * so far, so a dropped or reordered frame cannot corrupt the painted result.
@@ -56,6 +86,60 @@ const translateJsonSchema = (additionalProperties: boolean) => ({
   required: ['text', 'target', 'prompt'],
   additionalProperties,
 })
+
+const pruneRequestShape = () => ({
+  sessionIds: z.array(z.string()).max(512),
+  cutoffMs: z.number(),
+})
+
+const pruneRequestSchema = () => z.object(pruneRequestShape())
+const strictPruneRequestSchema = () => z.strictObject(pruneRequestShape())
+
+const pruneJsonSchema = (additionalProperties: boolean) => ({
+  type: 'object',
+  properties: {
+    sessionIds: {
+      type: 'array',
+      items: { type: 'string' },
+      maxItems: 512,
+    },
+    cutoffMs: { type: 'number' },
+  },
+  required: ['sessionIds', 'cutoffMs'],
+  additionalProperties,
+})
+
+const pruneResultSchema = () =>
+  z.object({
+    deleted: z.array(z.string()),
+    skipped: z.array(
+      z.object({
+        id: z.string(),
+        reason: z.string(),
+      }),
+    ),
+  })
+
+const pruneResultJsonSchema = {
+  type: 'object',
+  properties: {
+    deleted: { type: 'array', items: { type: 'string' } },
+    skipped: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          reason: { type: 'string' },
+        },
+        required: ['id', 'reason'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['deleted', 'skipped'],
+  additionalProperties: false,
+} as const
 
 /** The owning live agent, resolved by the Gateway from the session id. */
 const agentParameter = () => ({
@@ -132,6 +216,39 @@ export function createPluginRemote() {
               required: ['type'],
               additionalProperties: false,
             },
+          },
+        },
+        [SIDE_FORK_RETENTION_METHOD]: {
+          service: SIDE_FORK_RETENTION_SERVICE,
+          description:
+            'Delete archived, unkept side-question fork logs that are older than the cutoff.',
+          invocation: { kind: 'direct' },
+          parameters: [
+            {
+              name: 'request',
+              description:
+                'candidate session ids from this client and the last-write cutoff in epoch milliseconds.',
+              source: 'json',
+              codec: {
+                mode: 'strict',
+                typeSymbol: 'dsh-select-quote#SideForkPruneRequest',
+                create: pruneRequestSchema,
+                jsonSchema: pruneJsonSchema(true),
+              },
+              strictCodec: {
+                mode: 'strict',
+                typeSymbol: 'dsh-select-quote#SideForkPruneRequest',
+                create: strictPruneRequestSchema,
+                jsonSchema: pruneJsonSchema(false),
+              },
+            },
+          ],
+          result: {
+            mode: 'strict',
+            typeSymbol: 'dsh-select-quote#SideForkPruneResult',
+            create: pruneResultSchema,
+            description: 'deleted session ids and per-id skip reasons.',
+            jsonSchema: pruneResultJsonSchema,
           },
         },
       },

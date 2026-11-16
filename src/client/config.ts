@@ -68,6 +68,8 @@ export interface SelectQuoteConfig {
   /** Count-tile motion on the annotation card; dots is the easter-egg level. */
   countAnimation: CountAnimation
   sideTaskMode: SideTaskMode
+  /** Days before an archived, unkept side fork is deleted; 0 disables cleanup. */
+  sideForkRetentionDays: number
   translateTarget: TranslateTarget
   /** Hide the translate entry when the selection already is the target language. */
   translateHideSameLanguage: boolean
@@ -90,6 +92,7 @@ export const DEFAULT_CONFIG: Readonly<SelectQuoteConfig> = Object.freeze({
   showButtonText: true,
   countAnimation: 'subtle',
   sideTaskMode: 'separate',
+  sideForkRetentionDays: 30,
   translateTarget: 'auto',
   translateHideSameLanguage: false,
   translateProvider: '',
@@ -149,6 +152,14 @@ function keepOneButton(
   return { ...switches, showAnnotate: true }
 }
 
+/** Bound the cleanup period; 0 disables it, fractions round down. */
+export function normalizeRetentionDays(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_CONFIG.sideForkRetentionDays
+  }
+  return Math.min(3650, Math.max(0, Math.trunc(value)))
+}
+
 /** Which entry points the current mode turns on. */
 export interface TriggerPlan {
   auto: boolean
@@ -190,6 +201,7 @@ export function normalizeConfig(value: unknown): SelectQuoteConfig {
     sideTaskMode: SIDE_TASK_MODES.has(record.sideTaskMode as string)
       ? (record.sideTaskMode as SideTaskMode)
       : DEFAULT_CONFIG.sideTaskMode,
+    sideForkRetentionDays: normalizeRetentionDays(record.sideForkRetentionDays),
     translateTarget: isTranslateTarget(record.translateTarget)
       ? record.translateTarget
       : DEFAULT_CONFIG.translateTarget,
@@ -223,7 +235,16 @@ export function resolveTriggers(
 }
 
 let current: SelectQuoteConfig = { ...DEFAULT_CONFIG }
+let ready = false
 const listeners = new Set<() => void>()
+
+/**
+ * True once a real form snapshot has landed. Destructive work waits for this:
+ * the defaults are not the user's choice until the Host says so.
+ */
+export function isConfigReady(): boolean {
+  return ready
+}
 
 export function getConfig(): SelectQuoteConfig {
   return current
@@ -275,7 +296,8 @@ export interface ConfigFormSource {
 export function attachConfigForm(form: ConfigFormSource): () => void {
   const publish = (): void => {
     const snapshot = form.getSnapshot()
-    if (snapshot.status === 'loading') return
+    if (snapshot.status === 'loading' || snapshot.status === 'unavailable') return
+    ready = true
     publishConfig(snapshot.value)
   }
   publish()

@@ -13,6 +13,7 @@ import {
   forgetHiddenSideFork,
   forgetSideFork,
   isKeptSideFork,
+  rememberArchivedSideFork,
   rememberSideFork,
 } from './fork-state.ts'
 import { SIDE_FORK_KIND, sideForkAddress } from './protocol.ts'
@@ -170,6 +171,7 @@ export async function runSideQuestion(
       try {
         await host.workspace.archiveSession(childId, { stopActivity: true })
         forgetHiddenSideFork(childId)
+        rememberArchivedSideFork(childId)
       } catch {
         // A running turn can refuse the archive. Keep the id hidden while the
         // Session exists; reopening the tab retries the restore.

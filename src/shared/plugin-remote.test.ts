@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { TRANSLATE_METHOD, createPluginRemote } from './plugin-remote.ts'
+import {
+  SIDE_FORK_RETENTION_METHOD,
+  TRANSLATE_METHOD,
+  createPluginRemote,
+} from './plugin-remote.ts'
 
 const translateEndpoint = createPluginRemote().methods[TRANSLATE_METHOD] as unknown as {
   input(options: { strict: boolean }): { create(): { parse(value: unknown): unknown } }
 }
 
 const translateSchema = translateEndpoint.input({ strict: true }).create()
+
+const pruneEndpoint = createPluginRemote().methods[SIDE_FORK_RETENTION_METHOD] as unknown as {
+  input(options: { strict: boolean }): { create(): { parse(value: unknown): unknown } }
+}
+
+const pruneSchema = pruneEndpoint.input({ strict: true }).create()
 
 describe('translate stream contract', () => {
   const descriptors = createPluginRemote().descriptors as unknown as {
@@ -20,6 +30,30 @@ describe('translate stream contract', () => {
   it('mounts a cancellable stream, not a unary call', () => {
     expect(descriptor?.mode).toBe('stream')
     expect(descriptor?.cancellation).toEqual({ parameter: 'signal' })
+  })
+})
+
+describe('side-fork prune contract', () => {
+  it('is a direct unary method with a strict request', () => {
+    const descriptor = createPluginRemote().descriptors.find(
+      (entry) => (entry as { method?: string }).method === 'prune',
+    ) as
+      | { mode?: string; invocation?: { kind?: string }; service?: string }
+      | undefined
+    expect(descriptor?.mode).toBeUndefined()
+    expect(descriptor?.invocation?.kind).toBe('direct')
+    expect(descriptor?.service).toBe('selectQuoteSideForkRetention')
+  })
+
+  it('carries candidate ids and a cutoff, and rejects extras', () => {
+    expect(
+      pruneSchema.parse({
+        request: { sessionIds: ['session-a'], cutoffMs: 1_700_000_000_000 },
+      }),
+    ).toEqual({ request: { sessionIds: ['session-a'], cutoffMs: 1_700_000_000_000 } })
+    expect(() =>
+      pruneSchema.parse({ request: { sessionIds: [], cutoffMs: 1, extra: true } }),
+    ).toThrow()
   })
 })
 

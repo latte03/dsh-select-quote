@@ -145,6 +145,9 @@ export const en: LocaleDict = {
   'settings.sideTaskModeHint': 'Reuse creates one side conversation; its context stays at first creation.',
   'settings.sideTaskMode.separate': 'New each time',
   'settings.sideTaskMode.reuse': 'Reuse one',
+  'settings.sideForkRetention': 'Cleanup period',
+  'settings.sideForkRetentionHint': 'Archived sidebar questions older than this are deleted automatically; 0 turns cleanup off.',
+  'settings.sideForkRetentionUnit': 'days',
 
   'toolbar.handoff': 'Send to session…',
   'toolbar.handoffTo': 'Send to {target}',

@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   addId,
+  forgetArchivedSideFork,
   forgetSideFork,
+  hasArchivedSideFork,
   isHiddenSideFork,
   isKeptSideFork,
   isKnownSideFork,
   keepSideFork,
+  listArchivedSideForks,
   loadIds,
+  normalizeArchivedSideForks,
   normalizeIds,
+  rememberArchivedSideFork,
   rememberSideFork,
   removeId,
   saveIds,
@@ -47,6 +52,61 @@ describe('side-fork id storage', () => {
     }
     saveIds(storage, 'test-key', ['session-a', 'session-b'])
     expect(loadIds(storage, 'test-key')).toEqual(['session-a', 'session-b'])
+  })
+})
+
+describe('archived side-fork ledger', () => {
+  it('drops malformed rows and keeps the last duplicate', () => {
+    expect(normalizeArchivedSideForks(null)).toEqual([])
+    expect(normalizeArchivedSideForks('session-a')).toEqual([])
+    expect(
+      normalizeArchivedSideForks([
+        { id: 'session-a', at: 1 },
+        { id: 'session-a', at: 2 },
+        { id: 'session-b', at: Number.NaN },
+        { id: '', at: 3 },
+        { id: 'session-c', at: 4 },
+      ]),
+    ).toEqual([
+      { id: 'session-a', at: 2 },
+      { id: 'session-c', at: 4 },
+    ])
+  })
+
+  it('tracks an archive until the fork is opened, kept, or forgotten', () => {
+    const remembered = 'session-ledger-remember'
+    const kept = 'session-ledger-kept'
+    const forgotten = 'session-ledger-forgotten'
+    try {
+      rememberSideFork(remembered)
+      rememberArchivedSideFork(remembered, 1_700_000_000_000)
+      expect(hasArchivedSideFork(remembered)).toBe(true)
+      expect(listArchivedSideForks()).toContainEqual({
+        id: remembered,
+        at: 1_700_000_000_000,
+      })
+
+      forgetArchivedSideFork(remembered)
+      expect(hasArchivedSideFork(remembered)).toBe(false)
+
+      rememberArchivedSideFork(remembered, 1_700_000_000_001)
+      keepSideFork(remembered)
+      expect(hasArchivedSideFork(remembered)).toBe(false)
+
+      rememberSideFork(kept)
+      rememberArchivedSideFork(kept, 1_700_000_000_002)
+      forgetSideFork(kept)
+      expect(hasArchivedSideFork(kept)).toBe(false)
+
+      rememberSideFork(forgotten)
+      rememberArchivedSideFork(forgotten, 1_700_000_000_003)
+      forgetSideFork(forgotten)
+      expect(hasArchivedSideFork(forgotten)).toBe(false)
+    } finally {
+      forgetSideFork(remembered)
+      forgetSideFork(kept)
+      forgetSideFork(forgotten)
+    }
   })
 })
 

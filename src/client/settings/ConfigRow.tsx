@@ -11,6 +11,7 @@ import {
 import {
   hasAnyButton,
   normalizeConfig,
+  normalizeRetentionDays,
   type ButtonSwitch,
   type CountAnimation,
   type SideTaskMode,
@@ -209,6 +210,25 @@ function ConfigSection({
     if (!promptFocused.current) setPrompt(current.translatePrompt)
   }, [current.translatePrompt])
 
+  // The number input edits a draft; the form only sees whole days on commit
+  // (blur or Enter), so partial typing cannot trigger a cleanup with 3 days.
+  const [retention, setRetention] = useState(String(current.sideForkRetentionDays))
+  const retentionFocused = useRef(false)
+  const retentionCancelled = useRef(false)
+  useEffect(() => {
+    if (!retentionFocused.current) setRetention(String(current.sideForkRetentionDays))
+  }, [current.sideForkRetentionDays])
+  const commitRetention = useCallback((): void => {
+    const trimmed = retention.trim()
+    const next = trimmed === ''
+      ? current.sideForkRetentionDays
+      : normalizeRetentionDays(Number(trimmed))
+    setRetention(String(next))
+    if (next !== current.sideForkRetentionDays) {
+      void form.set('sideForkRetentionDays', next)
+    }
+  }, [retention, current.sideForkRetentionDays, form])
+
   /**
    * True once the user tried to switch off the last button still on. The row
    * refuses and says why; `keepOneButton()` in `config.ts` is the same rule,
@@ -406,6 +426,48 @@ function ConfigSection({
               label={(mode) => t(`settings.sideTaskMode.${mode}`)}
               onChange={(mode) => void form.set('sideTaskMode', mode)}
             />
+          </SettingRow>
+          <SettingRow
+            label={t('settings.sideForkRetention')}
+            hint={t('settings.sideForkRetentionHint')}
+          >
+            <span className={styles.settingsNumber}>
+              <input
+                className={styles.settingsNumberInput}
+                type="number"
+                min={0}
+                max={3650}
+                step={1}
+                inputMode="numeric"
+                aria-label={t('settings.sideForkRetention')}
+                value={retention}
+                onFocus={() => {
+                  retentionFocused.current = true
+                  retentionCancelled.current = false
+                }}
+                onChange={(event) => setRetention(event.target.value)}
+                onBlur={() => {
+                  retentionFocused.current = false
+                  if (retentionCancelled.current) {
+                    retentionCancelled.current = false
+                    return
+                  }
+                  commitRetention()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.currentTarget.blur()
+                  } else if (event.key === 'Escape') {
+                    retentionCancelled.current = true
+                    setRetention(String(current.sideForkRetentionDays))
+                    event.currentTarget.blur()
+                  }
+                }}
+              />
+              <span className={styles.settingsNumberUnit} aria-hidden="true">
+                {t('settings.sideForkRetentionUnit')}
+              </span>
+            </span>
           </SettingRow>
         </SettingsPanel>
       ) : null}

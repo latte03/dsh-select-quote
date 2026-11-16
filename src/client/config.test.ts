@@ -32,6 +32,7 @@ describe('normalizeConfig', () => {
       showButtonText: true,
       countAnimation: 'subtle',
       sideTaskMode: 'separate',
+      sideForkRetentionDays: 30,
       translateTarget: 'auto',
       translateHideSameLanguage: false,
       translateProvider: '',
@@ -50,12 +51,22 @@ describe('normalizeConfig', () => {
       showButtonText: true,
       countAnimation: 'subtle',
       sideTaskMode: 'separate',
+      sideForkRetentionDays: 30,
       translateTarget: 'auto',
       translateHideSameLanguage: false,
       translateProvider: '',
       translateModel: '',
       translatePrompt: '',
     })
+  })
+
+  it('clamps the cleanup period to whole days on a fixed range', () => {
+    expect(normalizeConfig({ sideForkRetentionDays: 0 }).sideForkRetentionDays).toBe(0)
+    expect(normalizeConfig({ sideForkRetentionDays: 12.9 }).sideForkRetentionDays).toBe(12)
+    expect(normalizeConfig({ sideForkRetentionDays: -3 }).sideForkRetentionDays).toBe(0)
+    expect(normalizeConfig({ sideForkRetentionDays: 99999 }).sideForkRetentionDays).toBe(3650)
+    expect(normalizeConfig({ sideForkRetentionDays: '7' }).sideForkRetentionDays).toBe(30)
+    expect(normalizeConfig({ sideForkRetentionDays: Number.NaN }).sideForkRetentionDays).toBe(30)
   })
 
   it('accepts both side-task modes and rejects unknown ones', () => {
@@ -197,6 +208,7 @@ describe('publishConfig', () => {
     showButtonText: false,
     countAnimation: 'dots',
     sideTaskMode: 'reuse',
+    sideForkRetentionDays: 7,
     translateTarget: 'ja',
     translateHideSameLanguage: true,
     translateProvider: 'p',

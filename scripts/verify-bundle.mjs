@@ -2247,6 +2247,12 @@ function checkConfigWiring(code) {
   if (!code.includes('dsq-toolbar-placement')) {
     problems.push('the settings page has no toolbar-position control')
   }
+  if (!code.includes('sideForkRetentionDays') || !code.includes('dsq_settingsNumberInput')) {
+    problems.push('the settings page has no cleanup-period number input')
+  }
+  if (!code.includes('selectQuoteSideForkRetention')) {
+    problems.push('the built client never reads the retention Remote namespace')
+  }
   for (const token of [
     '--dsw-alias-brand-primary',
     '--dsw-alias-border-l3',
@@ -2280,9 +2286,14 @@ async function checkRemoteArtifact() {
   if (contribution?.package !== 'dsh-select-quote') {
     problems.push('lib/remote.js does not default-export a contribution for dsh-select-quote')
   }
-  if (!Array.isArray(contribution?.descriptors) || contribution.descriptors.length !== 1) {
-    problems.push('lib/remote.js does not carry the translation Remote descriptor')
+  if (!Array.isArray(contribution?.descriptors) || contribution.descriptors.length !== 2) {
+    problems.push('lib/remote.js does not carry both the translation and retention Remote descriptors')
     return problems
+  }
+  for (const method of ['translate', 'prune']) {
+    if (!contribution.descriptors.some((descriptor) => descriptor?.method === method)) {
+      problems.push(`lib/remote.js has no "${method}" Remote descriptor`)
+    }
   }
   for (const descriptor of contribution.descriptors) {
     for (const key of ['id', 'service', 'namespace', 'method']) {

@@ -146,6 +146,9 @@ export const fr: LocaleDict = {
   'settings.sideTaskModeHint': 'La réutilisation crée une seule conversation latérale ; son contexte s’arrête à la première création.',
   'settings.sideTaskMode.separate': 'Nouveau à chaque fois',
   'settings.sideTaskMode.reuse': 'Réutiliser un seul',
+  'settings.sideForkRetention': 'Période de nettoyage',
+  'settings.sideForkRetentionHint': 'Les questions latérales archivées au-delà de ce nombre de jours sont supprimées automatiquement ; 0 désactive le nettoyage.',
+  'settings.sideForkRetentionUnit': 'jours',
 
   'toolbar.handoff': 'Envoyer vers…',
   'toolbar.handoffTo': 'Envoyer vers {target}',

@@ -148,6 +148,9 @@ export const ru: LocaleDict = {
   'settings.sideTaskModeHint': 'При повторном использовании создаётся одна боковая беседа; её контекст фиксируется при создании.',
   'settings.sideTaskMode.separate': 'Новый каждый раз',
   'settings.sideTaskMode.reuse': 'Один общий',
+  'settings.sideForkRetention': 'Период очистки',
+  'settings.sideForkRetentionHint': 'Архивные боковые вопросы старше указанного числа дней удаляются автоматически; 0 отключает очистку.',
+  'settings.sideForkRetentionUnit': 'дн.',
 
   'toolbar.handoff': 'Отправить в диалог…',
   'toolbar.handoffTo': 'Отправить в «{target}»',

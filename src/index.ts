@@ -1,5 +1,6 @@
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { SelectQuoteSideForkRetention } from './side-fork-retention-service.ts'
 import { SelectQuoteTranslate } from './translate-service.ts'
 import { PACKAGE_NAME } from './shared/identity.ts'
 
@@ -28,6 +29,8 @@ export interface Config {
   /** Annotation-card count motion: still, the subtle rise, or a dot matrix. */
   countAnimation: Volatile<'none' | 'subtle' | 'dots'>
   sideTaskMode: Volatile<'separate' | 'reuse'>
+  /** Days before an archived, unkept side fork is deleted; 0 disables cleanup. */
+  sideForkRetentionDays: Volatile<number>
   translateTarget: Volatile<'auto' | 'zh' | 'en' | 'ja' | 'es' | 'fr' | 'de' | 'ru' | 'pt'>
   translateHideSameLanguage: Volatile<boolean>
   translateProvider: Volatile<string>
@@ -51,6 +54,9 @@ export const Config = z.object({
   // so it sits alone in its own settings tab (see settingsGroups.ts).
   countAnimation: z.union(['none', 'subtle', 'dots']).default('subtle').volatile(),
   sideTaskMode: z.union(['separate', 'reuse']).default('separate').volatile(),
+  // The client sends the cutoff only after its form reports ready, so a host
+  // that still runs this schema never gets a cleanup request it did not ask for.
+  sideForkRetentionDays: z.natural().max(3650).default(30).volatile(),
   translateTarget: z
     .union(['auto', 'zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'])
     .default('auto')
@@ -68,5 +74,10 @@ export function apply(ctx: Context, _config: Config): void {
   // context. A shell without `llm` simply never publishes the button's bridge.
   ctx.inject(['llm'], (scope) => {
     new SelectQuoteTranslate(scope)
+  })
+  // The browser chooses candidates from its own archive ledger; this service
+  // only executes the Host-validated deletion it is asked for.
+  ctx.inject(['sessionPersistence', 'workspaceRegistry'], (scope) => {
+    new SelectQuoteSideForkRetention(scope)
   })
 }

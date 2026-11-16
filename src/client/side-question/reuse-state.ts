@@ -110,3 +110,8 @@ export function forgetReusableFork(parentId: string): void {
   entries = next
   saveReuseEntries(storage, entries)
 }
+
+/** Every child still bound to a parent; cleanup must never delete one. */
+export function reuseChildIds(): string[] {
+  return entries.map(entry => entry.childId)
+}

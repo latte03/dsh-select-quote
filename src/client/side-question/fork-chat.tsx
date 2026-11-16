@@ -13,10 +13,12 @@ import { t } from '../i18n.ts'
 import { LucideIcon } from '../ui/icons.tsx'
 import { showToast } from '../ui/toast.ts'
 import {
+  forgetArchivedSideFork,
   forgetHiddenSideFork,
   isHiddenSideFork,
   isKeptSideFork,
   keepSideFork,
+  rememberArchivedSideFork,
   rememberSideFork,
   subscribeSideForkState,
 } from './fork-state.ts'
@@ -130,6 +132,8 @@ function sideForkResourceProvider(
       if ((workspaces.list.getSnapshot().archivedSessionIds ?? []).includes(sessionId)) {
         await workspace.unarchiveSession(sessionId)
       }
+      // Opening is activity: the retention clock restarts when the tab closes.
+      forgetArchivedSideFork(sessionId)
       if (signal.aborted) return
       const reference = sessions.retain(sessionId, { source: 'selectQuoteSideChat', signal })
       try {
@@ -143,9 +147,11 @@ function sideForkResourceProvider(
         try {
           await workspace.archiveSession(sessionId, { stopActivity: true })
           forgetHiddenSideFork(sessionId)
+          rememberArchivedSideFork(sessionId)
         } catch (error) {
           // A running turn can refuse the archive. Keep the id hidden so the
           // row stays out of the catalog; opening the tab retries the restore.
+          forgetArchivedSideFork(sessionId)
           if (sessions.list.getSnapshot().byId[sessionId] === undefined) {
             forgetHiddenSideFork(sessionId)
           } else {

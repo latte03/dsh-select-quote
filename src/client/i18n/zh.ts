@@ -142,6 +142,9 @@ export const zh: LocaleDict = {
   'settings.sideTaskModeHint': '复用只创建一个侧边会话，上下文停在首次创建时。',
   'settings.sideTaskMode.separate': '每次独立',
   'settings.sideTaskMode.reuse': '复用同一个',
+  'settings.sideForkRetention': '清理周期',
+  'settings.sideForkRetentionHint': '自动删除超过这个天数的已归档侧栏提问；0 表示不清理。',
+  'settings.sideForkRetentionUnit': '天',
 
   'toolbar.handoff': '放入会话…',
   'toolbar.handoffTo': '放入 {target}',
