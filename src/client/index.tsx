@@ -621,7 +621,7 @@ function applyBody(ctx: Context): void {
   // show its whole JSON payload in the bubble. Claim the protocol span here so
   // the durable bubble renders only the user's own words.
   //
-  // Required service: this plugin targets dsh 0.2.2-rc.1 and later, where the
+  // Required service: this plugin targets dsh 0.2.2-rc.2 and later, where the
   // rule registry is part of the client. A host without it would paint the raw
   // block, so the feature detection below is a guard, not a compatibility path.
   ctx.inject(['uiConversation'], (scope) => {

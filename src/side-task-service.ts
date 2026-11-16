@@ -14,7 +14,15 @@ const REMOTE_METHODS = Object.freeze({
   methods: Object.freeze([Object.freeze({ method: 'create', invocation: Object.freeze({ kind: 'direct' }) })]),
 })
 
-/** Structural slice of `@deepseek-ai/dsh-subagent` this plugin calls. */
+/**
+ * Structural slice of `@deepseek-ai/dsh-subagent` (0.2.2-rc.2+) this plugin calls.
+ *
+ * The activation spec is FLAT since rc.2: `parent` / `prompt` / `agentOptions`
+ * sit beside `provider` / `label` / `delivery`. rc.1 wrapped them in `request`;
+ * a nested spec reaches the Host with `spec.parent === undefined`, and it reads
+ * `spec.parent.id` before any other check, so every side task fails with
+ * "Cannot read properties of undefined (reading 'id')".
+ */
 interface SubagentService {
   startActivation(spec: {
     provider: string
@@ -23,15 +31,14 @@ interface SubagentService {
     /** Reserved identity; requires a local (continuable) backend. */
     childId?: string
     delivery: 'parent' | 'caller'
-    request: {
-      parent: unknown
-      prompt: readonly { type: 'text'; text: string }[]
-      /** Per-child route override merged over the parent's current options. */
-      agentOptions?: {
-        provider: string
-        model: string
-        reasoningEffort?: string
-      }
+    /** The spawning agent; the Host verifies it is the exact live parent. */
+    parent: unknown
+    prompt: readonly { type: 'text'; text: string }[]
+    /** Per-child route override merged over the parent's current options. */
+    agentOptions?: {
+      provider: string
+      model: string
+      reasoningEffort?: string
     }
     signal: AbortSignal
   }): Promise<{ childId: string }>
@@ -39,9 +46,7 @@ interface SubagentService {
   prompt(
     request: {
       requestId: string
-      parentSessionId: string
       childSessionId: string
-      mode: 'continuable'
       delivery: 'queue' | 'steer'
       content: readonly { type: 'text'; text: string }[]
     },
@@ -111,9 +116,7 @@ export class SelectQuoteSideTask extends Service {
         await subagents.prompt(
           {
             requestId: randomUUID(),
-            parentSessionId: agent.id,
             childSessionId: childId,
-            mode: 'continuable',
             delivery: 'queue',
             content: [{ type: 'text', text: prompt }],
           },
@@ -135,11 +138,9 @@ export class SelectQuoteSideTask extends Service {
       label: request.label?.trim() || SIDE_TASK_SERVICE,
       ...(childId === undefined ? {} : { childId }),
       delivery: 'caller',
-      request: {
-        parent: agent,
-        prompt: [{ type: 'text', text: prompt }],
-        ...(agentOptions === undefined ? {} : { agentOptions }),
-      },
+      parent: agent,
+      prompt: [{ type: 'text', text: prompt }],
+      ...(agentOptions === undefined ? {} : { agentOptions }),
       signal: new AbortController().signal,
     })
     return { childId: receipt.childId }

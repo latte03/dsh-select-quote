@@ -72,12 +72,14 @@ export function TranscriptQuoteCard({
   }, [quotes])
 
   // Chips in the assistant reply resolve their ordinal through this registry;
-  // keep it in sync with what this message's marks were built from.
+  // keep it in sync with what this message's marks were built from. A
+  // side-question card's robot badge lives in the parent transcript, so its
+  // entry must outlive the sidebar that owns the card.
   useEffect(() => {
     if (quotes.length === 0) return
     const ownerKey = stackRef.current?.closest('[data-chat-flow-key]')?.getAttribute('data-chat-flow-key')
     if (!ownerKey) return
-    return registerMessageQuotes(ownerKey, quotes)
+    return registerMessageQuotes(ownerKey, quotes, { retainWhenUnmounted: robot })
   }, [quotes])
 
   const markIdOf = useCallback((index: number): string | undefined => {

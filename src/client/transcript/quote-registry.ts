@@ -13,8 +13,14 @@ const quotesByOwner = new Map<string, readonly ParsedAnnotation[]>()
 export function registerMessageQuotes(
   ownerKey: string,
   quotes: readonly ParsedAnnotation[],
+  options: { retainWhenUnmounted?: boolean } = {},
 ): () => void {
   quotesByOwner.set(ownerKey, quotes)
+  // A side-question card owns the robot badge painted on the cited paragraph in
+  // the PARENT transcript. Closing the sidebar unmounts the card but leaves that
+  // badge in place, so deleting the entry would leave a clickable mark that
+  // silently opens nothing.
+  if (options.retainWhenUnmounted === true) return () => {}
   return () => {
     // A remount registers a new array; only remove the entry this call owns.
     if (quotesByOwner.get(ownerKey) === quotes) quotesByOwner.delete(ownerKey)
