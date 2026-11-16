@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.8](https://github.com/latte03/dsh-select-quote/compare/v0.4.7...v0.4.8) (2026-11-16)
+
+### Bug Fixes
+
+* 适配 dsh 0.2.2-rc.2 子代理契约并修复角标预览 ([fae1319](https://github.com/latte03/dsh-select-quote/commit/fae131917c9e4c14f0ac05f17ef221650c560fbf)), closes [#14](https://github.com/latte03/dsh-select-quote/issues/14)
+
 ## [0.4.7](https://github.com/latte03/dsh-select-quote/compare/v0.4.6...v0.4.7) (2026-11-13)
 
 ### Bug Fixes
