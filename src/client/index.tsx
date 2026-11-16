@@ -34,6 +34,7 @@ import type { TranslateStreamEvent } from '../shared/plugin-remote.ts'
 import { ensureToolbarStyles } from './styles.ts'
 import type { SelectionSnapshot } from './dom/selection.ts'
 import type { ModelChoice, ModelGroup } from './model/types.ts'
+import { installSidebarForkProbe } from './probe/sidebar-fork-probe.tsx'
 import { runtime, setHandoffHost } from './runtime.ts'
 import {
   MAX_TRANSLATE_CHARS,
@@ -181,6 +182,11 @@ function registerHistoryCard(ctx: Context): void {
 }
 function applyBody(ctx: Context): void {
   registerHistoryCard(ctx)
+
+  // Experimental branch: a normal session fork in the right Sidebar.
+  ctx.inject(['sessions', 'resources', 'sidebarRightTabs', 'sidebarRight'], (scope) => {
+    installSidebarForkProbe(scope)
+  })
 
 
   // Dictionary registrations are owned effects; the fallback chain must end at
