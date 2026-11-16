@@ -8,11 +8,55 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { ModelDirectoryFace } from './model/types.ts'
+import type { ModelChoice, ModelDirectoryFace } from './model/types.ts'
 import type {
   SessionListSnapshot,
   WorkspaceListSnapshot,
 } from './selection/session-targets.ts'
+
+/** One side-question Session reference; only the lifetime is needed by the tab. */
+export interface SessionReferenceFace {
+  readonly sessionId: string
+  readonly ready: Promise<unknown>
+  readonly binding: {
+    readonly session: {
+      rename(title: string): Promise<
+        | { ok: true; value: { title: string; seq: number } }
+        | { ok: false; error: { code: string; message: string } }
+      >
+      prompt(
+        content: readonly { readonly type: 'text'; readonly text: string }[],
+        mode: 'queue' | 'steer',
+        signal?: AbortSignal,
+        requestId?: string,
+      ): Promise<
+        | { ok: true; value: unknown }
+        | { ok: false; error: { code: string; message: string } }
+      >
+    }
+  }
+  release(): void
+}
+
+/** One right-sidebar resource provider. */
+export interface ResourceProviderFace {
+  protocol: string
+  open(
+    address: string,
+    context: { signal: AbortSignal },
+  ): AsyncIterable<{ ok: true; value: unknown }>
+}
+
+/** One right-sidebar tab type. */
+export interface SidebarRightTabDefinition {
+  id: string
+  kind: string
+  patterns?: readonly string[]
+  priority?: string
+  keepMounted?: boolean
+  canOpen?: (address: string) => boolean
+  title: (address: string) => string
+}
 
 /** One live slot entry as exposed by the registry inspection surface. */
 export interface SlotEntryInspection {
@@ -212,13 +256,14 @@ declare module '@deepseek-ai/cordis' {
     /** Typed Remote mount (`@deepseek-ai/dsh-api-gateway`, client face). */
     remote: {
       $mount(contribution: unknown): Promise<() => Promise<void>>
-      selectQuoteSideTask: {
-        create(input: {
-          agentId: string
-          prompt: string
-          label?: string
-        }): Promise<{ childId: string }>
-      }
+    }
+    /** Right-sidebar resource registry. */
+    resources: {
+      register(provider: ResourceProviderFace): () => void
+    }
+    /** Right-sidebar tab types. */
+    sidebarRightTabs: {
+      register(definition: SidebarRightTabDefinition): () => void
     }
     /** Right sidebar controller (`@deepseek-ai/dsh-client-ui-sidebar-right`). */
     sidebarRight: {
@@ -249,6 +294,19 @@ declare module '@deepseek-ai/cordis' {
         subscribe?(listener: () => void): () => void
       }
       create(request: { workspaceId?: string; cwd?: string; sessionId?: string }): Promise<string>
+      /** Fork an ordinary Session from the latest completed-turn prefix. */
+      fork(options: {
+        sessionId: string
+        atSeq?: number
+        allowMigration?: boolean
+        increaseTitle?: boolean
+        onCreated?: (sessionId: string) => void
+      }): Promise<string>
+      /** Retain one Session binding for the lifetime of the returned reference. */
+      retain(
+        id: string,
+        options: { source: string; signal?: AbortSignal },
+      ): SessionReferenceFace
     }
     /** Workspace catalog (`@deepseek-ai/dsh-client-ui-workspace`). */
     workspaces: {
@@ -260,13 +318,20 @@ declare module '@deepseek-ai/cordis' {
     /** Main-view navigation (`@deepseek-ai/dsh-client-ui-workspace`). */
     uiWorkspace: {
       openSession(sessionId: string): void
+      archiveSession(sessionId: string, options?: { stopActivity?: boolean }): Promise<void>
+      unarchiveSession(sessionId: string): Promise<void>
     }
     /**
      * Model catalog controller (`@deepseek-ai/dsh-client-ui-model-selection`).
      * Only the read face is used: the picker never switches the session route.
      */
     modelDirectories: {
-      directoryFor(sessionId: string): ModelDirectoryFace
+      directoryFor(sessionId: string): ModelDirectoryFace & {
+        select(selection: ModelChoice): Promise<
+          | { ok: true; value: unknown }
+          | { ok: false; error: { code: string; message: string } }
+        >
+      }
     }
   }
 }

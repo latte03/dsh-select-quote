@@ -62,8 +62,9 @@ export const runtime: {
   handoffHost?: HandoffHost
   selection?: SelectionBridge
   /**
-   * Opens a fork-backed side task for one latched selection and question.
-   * `model` overrides the child's route; `null` follows the main conversation.
+   * Opens a fork-backed side conversation for one latched selection and
+   * question. `model` overrides the child fork's route; `null` follows the
+   * main conversation.
    */
   sideTask?: (
     snapshot: SelectionSnapshot,
@@ -101,12 +102,19 @@ export const runtime: {
   /**
    * Whether a session belongs to a subagent conversation.
    *
-   * A sidebar subagent chat mounts the same composer overlay for its own child
-   * session; treating that child as the active session would retarget the root
-   * toolbar and make the next side task fork from a subagent session, which the
-   * host rejects ("owned by subagent routing").
+   * A subagent chat mounts the same composer overlay for its own child session;
+   * treating that child as the active session would retarget the root toolbar.
+   * Side forks are ordinary Sessions and are covered by the guard below.
    */
   isSubagentSession?: (sessionId: string) => boolean
+  /**
+   * Whether a session is a side-question fork.
+   *
+   * Side forks are ordinary Sessions, so they do not carry the subagent origin
+   * that the guard above reads. They still mount in the right sidebar and must
+   * not take over the main annotation binding.
+   */
+  isSidebarForkSession?: (sessionId: string) => boolean
   /**
    * Jumps to this plugin's page in the Host plugin panel, where the settings
    * section lives. Absent when the shell has no plugin manager, and the gear

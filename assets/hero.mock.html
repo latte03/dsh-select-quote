@@ -1,12 +1,14 @@
 <!--
   assets/hero.png 的源文件（README 头图）。左侧文案 + 右侧按产品真实设计 token
-  渲染的「主对话 + 侧边子代理」窗口示意。
+  渲染的「主对话 + 侧栏 fork」窗口示意。
 
   渲染：
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
       --headless=new --disable-gpu --hide-scrollbars \
       --force-device-scale-factor=1 --window-size=2560,1350 \
-      --screenshot=assets/hero.png "file://$PWD/assets/hero.mock.html"
+      --screenshot=/tmp/hero.png "file://$PWD/assets/hero.mock.html"
+    magick /tmp/hero.png -crop 2560x1061+0+158 +repage -strip \
+      -dither None -colors 256 -define png:compression-level=9 PNG8:assets/hero.png
 -->
 <!doctype html>
 <html lang="zh-CN">
@@ -341,7 +343,7 @@
         <h1>dsh-select-quote</h1>
         <p class="subtitle">
           选中原文，批注随消息交给模型。<br />
-          <b>也可以在侧边开启子代理，单独追问。</b>
+          <b>也可以在侧边 fork 主会话，单独追问。</b>
         </p>
         <div class="bar" aria-hidden="true">
           <span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span>
@@ -350,7 +352,7 @@
           <span class="chip">划词加批注</span>
           <span class="chip">正文标记</span>
           <span class="chip">模型回指</span>
-          <span class="chip hot">侧边子代理</span>
+          <span class="chip hot">侧栏会话</span>
         </div>
       </main>
 
@@ -359,7 +361,7 @@
           <div class="titlebar">
             <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
             <span>dsh-select-quote · 对话</span>
-            <span class="agent-count">2 个子智能体</span>
+            <span class="agent-count">1 个侧栏会话</span>
           </div>
           <div class="app-body">
             <div class="chat">
@@ -406,7 +408,7 @@
             <aside class="sidebar">
               <div class="side-head">
                 <div class="side-copy">
-                  <span class="side-tag">◈ 侧边子代理</span>
+                  <span class="side-tag">◈ 侧栏提问</span>
                   <div class="side-title">在侧边提问 · 原文怎么发送</div>
                   <div class="side-sub">继承主会话上下文 · 独立模型</div>
                 </div>
@@ -425,8 +427,8 @@
                 </div>
                 <div class="side-answer">
                   <p>它们会随下一条消息发送：原文与评论进入协议块，正文只剩一个 <span class="chip-ref">批注 1</span> 标记。</p>
-                  <p>我这边是 fork 出来的子代理，回答不会插回主会话。</p>
-                  <div class="side-meta"><span class="mdot"></span>子代理 · DeepSeek-V4-Flash</div>
+                  <p>我这边是 fork 出来的侧栏会话，回答不会插回主会话。</p>
+                  <div class="side-meta"><span class="mdot"></span>侧栏会话 · DeepSeek-V4-Flash</div>
                 </div>
               </div>
               <div class="side-composer">

@@ -662,9 +662,13 @@ export function bindAnnotationSession(sessionId: string | undefined): void {
   // session and silently overwrite the composer-provided real id.
   const id = usableSessionId(sessionId)
   if (!id || id === runtime.sessionId) return
-  // Embedded subagent conversations have their own session partition; they may
-  // read and write it explicitly, but must not take over the main binding.
-  if (runtime.isSubagentSession?.(id) === true) return
+  // Embedded conversations (subagent chats and side-question forks) have their
+  // own session partition; they may read and write it explicitly, but must not
+  // take over the main binding.
+  if (
+    runtime.isSubagentSession?.(id) === true
+    || runtime.isSidebarForkSession?.(id) === true
+  ) return
   setRuntimeSession(id)
   queueMicrotask(() => {
     if (runtime.sessionId !== id) return

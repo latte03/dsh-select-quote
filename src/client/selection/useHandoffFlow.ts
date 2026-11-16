@@ -16,6 +16,11 @@ import { getConfig, resolveTriggers } from '../config.ts'
 import { clearNativeSelection, type SelectionSnapshot } from '../dom/selection.ts'
 import { t } from '../i18n.ts'
 import { runtime, subscribeHandoffHost } from '../runtime.ts'
+import {
+  getSideForkStateVersion,
+  isKnownSideFork,
+  subscribeSideForkState,
+} from '../side-question/fork-state.ts'
 import { showToast } from '../ui/toast.ts'
 import { putHandoff } from './handoff-actions.ts'
 import { openConversation, sessionTitleOf } from './navigation.ts'
@@ -120,14 +125,21 @@ export function useHandoffFlow(input: HandoffFlowInput) {
     workspacesSnapshot,
     () => EMPTY_WORKSPACES,
   )
+  // Side forks are catalogued Sessions; they must not become handoff targets.
+  const sideForkVersion = useSyncExternalStore(
+    subscribeSideForkState,
+    getSideForkStateVersion,
+    () => 0,
+  )
   const directory: TargetDirectory = useMemo(
     () =>
       buildTargetDirectory({
         currentSessionId: activeSessionId,
         sessions: host ? sessions : undefined,
         workspaces: host ? workspaces : undefined,
+        excludeSessionId: isKnownSideFork,
       }),
-    [activeSessionId, host, sessions, workspaces],
+    [activeSessionId, host, sessions, sideForkVersion, workspaces],
   )
   const options = useMemo(() => {
     const defaultTarget = directory.defaultTarget

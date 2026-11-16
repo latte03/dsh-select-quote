@@ -10,7 +10,7 @@
 |---|---|
 | `pnpm run check` | typecheck + test + build + verify + verify:mirror，**提交前必跑** |
 | `pnpm run build` / `watch` | 产出 `lib/`（**不入库**，见 .gitignore；发布由 prepublishOnly 自动构建） |
-| `pnpm run verify` | 无头跑 `lib/client.js`：贡献注册、八语言词典、包元信息、`npm pack` 清单、Host 半 side-task activation 契约 |
+| `pnpm run verify` | 无头跑 `lib/client.js`：贡献注册、八语言词典、包元信息、`npm pack` 清单、Host 半翻译方法契约 |
 | `pnpm run verify:mirror` | 真实 React + headless Chrome 跑 `scripts/mirror-harness/`：批注镜像切分的 DOM 契约回归（需要 Chrome，可用 `CHROME_BIN` 指定） |
 | `pnpm run sync:desktop` / `sync:web` | 把 `lib/` 推到已安装副本；client 半热更，Host 半改动需重启 |
 | `pnpm run release` | check → CHANGELOG → 版本 + tag（`<1.0.0` 时 `feat:`/`fix:` 都只跳 patch） |

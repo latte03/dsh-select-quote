@@ -51,8 +51,9 @@ export interface ModelCatalogSnapshot {
 /**
  * The read-only slice of one session directory the picker needs.
  *
- * Selection is deliberately absent: the side task overrides its child model,
- * it never switches the main conversation's route.
+ * Selection is deliberately absent from this face: the picker reads the main
+ * route, while the side flow selects the child fork's route through the Host
+ * model-directory service.
  */
 export interface ModelDirectoryFace {
   readonly store: {

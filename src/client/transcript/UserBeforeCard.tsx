@@ -103,11 +103,16 @@ export function UserBeforeCard({
     return scanned.annotations.length > 0 ? scanned.annotations : null
   }, [text])
 
-  // A forked child copies the parent's transcript verbatim. Those rows still
+  // A subagent child copies the parent's transcript verbatim. Those rows still
   // carry the parent's rpcId, so their cards would show up a second time inside
   // the child — the parent's annotations leaking into a conversation that never
-  // wrote them. Keep the decoration to the child's own question.
+  // wrote them. Keep the decoration to the child's own question. A side fork is
+  // also a verbatim copy, but its own question has a fresh rpcId, so suppress
+  // inherited cards only for the subagent origin; the side fork keeps the
+  // copied context visible and still marks its quote as a side question.
   const isSubagent = sessionId !== undefined && runtime.isSubagentSession?.(sessionId) === true
+  const isSideFork = sessionId !== undefined && runtime.isSidebarForkSession?.(sessionId) === true
+  const embedded = isSubagent || isSideFork
   const inherited = isSubagent && rpcId !== undefined
 
   return (
@@ -115,7 +120,7 @@ export function UserBeforeCard({
       {quotes !== null && !inherited ? (
         // In a side session the quote was taken by the sidebar agent, so its
         // mark wears a bot glyph instead of an ordinal.
-        <TranscriptQuoteCard node={{ data: { quotes } }} robot={isSubagent} running={running} />
+        <TranscriptQuoteCard node={{ data: { quotes } }} robot={embedded} running={running} />
       ) : null}
     </span>
   )

@@ -1,6 +1,5 @@
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { SelectQuoteSideTask } from './side-task-service.ts'
 import { SelectQuoteTranslate } from './translate-service.ts'
 import { PACKAGE_NAME } from './shared/identity.ts'
 
@@ -65,12 +64,6 @@ export const Config = z.object({
 export const name = PACKAGE_NAME
 
 export function apply(ctx: Context, _config: Config): void {
-  // Optional: the side-task entry point only exists where the subagent
-  // service does. Waiting on it at the top level would turn a shell without
-  // subagents into an activation failure instead of a missing button.
-  ctx.inject(['subagents'], (scope) => {
-    new SelectQuoteSideTask(scope)
-  })
   // Translation calls the provider directly; no subagent, no conversation
   // context. A shell without `llm` simply never publishes the button's bridge.
   ctx.inject(['llm'], (scope) => {

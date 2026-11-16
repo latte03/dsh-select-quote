@@ -2146,146 +2146,6 @@ async function checkHostConfig() {
   return problems
 }
 
-/**
- * The side-task activation spec must stay FLAT.
- *
- * dsh 0.2.2-rc.2 flattened `SubagentActivationSpec`: `parent` / `prompt` /
- * `agentOptions` sit beside `provider` / `label` / `delivery`. The Host reads
- * `spec.parent.id` before anything else, so the rc.1 `request` wrapper makes
- * every side task die with "Cannot read properties of undefined (reading
- * 'id')" — and nothing compile-checks it, because this plugin only consumes
- * the Host service structurally at runtime. Drive the built Host half through
- * a fake Cordis scope and assert what the real service would receive.
- */
-async function checkSideTaskHost() {
-  const problems = []
-  const host = await import(pathToFileURL(resolve(root, 'lib/index.js')).href)
-  const { reusableChildId } = await import(
-    new URL('../src/shared/side-task-reuse.ts', import.meta.url).href
-  )
-  const agent = { id: 'session-main' }
-  const calls = { activation: [], prompt: [] }
-  let promptFailure
-  const subagents = {
-    startActivation(spec) {
-      calls.activation.push(spec)
-      return Promise.resolve({ childId: 'child-1' })
-    },
-    prompt(request) {
-      calls.prompt.push(request)
-      return promptFailure === undefined
-        ? Promise.resolve({ messageId: 'message-1' })
-        : Promise.reject(promptFailure)
-    },
-  }
-  const services = new Map()
-  const scope = {
-    subagents,
-    reflect: {
-      provide(name, self) {
-        services.set(name, self)
-      },
-    },
-  }
-  host.apply({ inject: (_deps, callback) => callback(scope) }, {})
-  const service = services.get('selectQuoteSideTask')
-  if (service === undefined) {
-    problems.push('the Host half never registered ctx.selectQuoteSideTask')
-    return problems
-  }
-
-  // Separate mode (the default): one flat activation.
-  const receipt = await service.create(agent, { prompt: '为什么？', label: '侧边提问 · 为什么' })
-  if (receipt.childId !== 'child-1') problems.push('create() did not return the activation child id')
-  const spec = calls.activation[0]
-  if (spec === undefined) {
-    problems.push('create() never called subagents.startActivation')
-  } else {
-    if (spec.parent !== agent) {
-      problems.push('activation spec has no top-level parent — the Host would read spec.parent.id off undefined')
-    }
-    if (!Array.isArray(spec.prompt) || spec.prompt[0]?.text !== '为什么？') {
-      problems.push('activation spec has no top-level prompt')
-    }
-    if ('request' in spec) {
-      problems.push('activation spec nests parent/prompt under request — dsh 0.2.2-rc.2 flattened SubagentActivationSpec')
-    }
-    if (spec.provider !== 'fork' || spec.delivery !== 'caller') {
-      problems.push('activation is not a caller-delivered fork')
-    }
-    if (spec.label !== '侧边提问 · 为什么') {
-      problems.push(`activation label is ${JSON.stringify(spec.label)}`)
-    }
-    if (!(spec.signal instanceof AbortSignal)) problems.push('activation has no cancellation signal')
-  }
-
-  // Model override rides as top-level agentOptions; a missing label falls back.
-  calls.activation.length = 0
-  await service.create(agent, {
-    prompt: '换个模型',
-    model: { provider: 'deepseek-account', model: 'deepseek-v4-pro', reasoningEffort: 'high' },
-  })
-  const modelled = calls.activation[0]
-  if (modelled?.agentOptions?.provider !== 'deepseek-account' || modelled?.agentOptions?.model !== 'deepseek-v4-pro') {
-    problems.push('a model override did not reach agentOptions on the activation spec')
-  }
-  if (modelled?.agentOptions?.reasoningEffort !== 'high') {
-    problems.push('the chosen reasoning effort did not reach agentOptions')
-  }
-  if (modelled?.label !== 'selectQuoteSideTask') {
-    problems.push(`a missing label fell back to ${JSON.stringify(modelled?.label)}`)
-  }
-
-  // Reuse mode: continuation first, then reserve the same id when the Host
-  // reports there is no child yet. rc.2 reads only childSessionId / delivery /
-  // content, so the rc.1 parentSessionId / mode pair must be gone.
-  promptFailure = { code: 'subagent/not-resumable' }
-  calls.activation.length = 0
-  await service.create(agent, { prompt: '接着问', reuse: true })
-  const continuation = calls.prompt[0]
-  if (continuation === undefined) {
-    problems.push('reuse mode never called subagents.prompt')
-  } else {
-    if (continuation.childSessionId !== reusableChildId(agent.id)) {
-      problems.push('reuse continuation does not address the deterministic child')
-    }
-    if (continuation.delivery !== 'queue') problems.push('reuse continuation is not queued')
-    if (!Array.isArray(continuation.content) || continuation.content[0]?.text !== '接着问') {
-      problems.push('reuse continuation lost its content')
-    }
-    if ('parentSessionId' in continuation || 'mode' in continuation) {
-      problems.push('reuse continuation sends fields the rc.2 Host ignores')
-    }
-  }
-  if (calls.activation[0]?.childId !== reusableChildId(agent.id)) {
-    problems.push('a not-resumable reuse did not reserve the deterministic child id')
-  }
-
-  // A live child continues without a second activation.
-  promptFailure = undefined
-  calls.activation.length = 0
-  const continued = await service.create(agent, { prompt: '继续', reuse: true })
-  if (continued.childId !== reusableChildId(agent.id)) {
-    problems.push('reuse continuation returned the wrong child id')
-  }
-  if (calls.activation.length !== 0) {
-    problems.push('reuse mode activated a second child although the continuation succeeded')
-  }
-
-  // A real refusal must surface instead of silently forking a parallel child.
-  promptFailure = { code: 'subagent/delivery-unavailable' }
-  calls.activation.length = 0
-  let refused = false
-  try {
-    await service.create(agent, { prompt: '再来', reuse: true })
-  } catch {
-    refused = true
-  }
-  if (!refused) problems.push('a non-resumable refusal silently forked a parallel side child')
-  if (calls.activation.length !== 0) problems.push('a refused reuse activated a second child')
-  return problems
-}
-
 /** The settings page and config binding must survive as built, not just in source. */
 function checkConfigWiring(code) {
   const problems = []
@@ -2364,8 +2224,8 @@ async function checkRemoteArtifact() {
   if (contribution?.package !== 'dsh-select-quote') {
     problems.push('lib/remote.js does not default-export a contribution for dsh-select-quote')
   }
-  if (!Array.isArray(contribution?.descriptors) || contribution.descriptors.length !== 2) {
-    problems.push('lib/remote.js does not carry both Remote descriptors')
+  if (!Array.isArray(contribution?.descriptors) || contribution.descriptors.length !== 1) {
+    problems.push('lib/remote.js does not carry the translation Remote descriptor')
     return problems
   }
   for (const descriptor of contribution.descriptors) {
@@ -2670,7 +2530,6 @@ const menuWiringProblems = checkMenuWiring(code)
 const menuTriggerProblems = await checkMenuTrigger()
 const shortcutCommandProblems = await checkShortcutCommands()
 const hostConfigProblems = await checkHostConfig()
-const sideTaskProblems = await checkSideTaskHost()
 const patchIdentityProblems = await checkPatchIdentity()
 
 for (const entry of record) console.log(`  ${entry.kind.padEnd(16)} ${entry.label}`)
@@ -2727,7 +2586,6 @@ if (
   shortcutCommandProblems.length > 0 ||
   shortcutProblems.length > 0 ||
   hostConfigProblems.length > 0 ||
-  sideTaskProblems.length > 0 ||
   patchIdentityProblems.length > 0 ||
   userTextProblems.length > 0 ||
   surfaceProblems.length > 0
@@ -2763,7 +2621,6 @@ if (
   for (const problem of shortcutCommandProblems) console.error(`SHORTCUT COMMAND: ${problem}`)
   for (const problem of shortcutProblems) console.error(`SHORTCUT SWITCH: ${problem}`)
   for (const problem of hostConfigProblems) console.error(`HOST CONFIG: ${problem}`)
-  for (const problem of sideTaskProblems) console.error(`SIDE TASK: ${problem}`)
   for (const problem of patchIdentityProblems) console.error(`ROW IDENTITY: ${problem}`)
   for (const problem of surfaceProblems) console.error(`TRANSCRIPT SURFACE: ${problem}`)
   for (const problem of userTextProblems) console.error(`USER TEXT RULE: ${problem}`)
@@ -2775,7 +2632,6 @@ console.log(
     `decoration-seat body resolution replayed, send gestures replayed, draft writes stay in place on a Lexical host, composed annotation blocks read back, ` +
     `echo strip replayed, transcript summary single-block, mark preview wired, ` +
     `host config + bundle settings section wired (defaults, live update, invalid-value fallback, no-service fallback), ` +
-    `side-task activation spec replayed (flat 0.2.2-rc.2 shape, model override, reuse continuation), ` +
     `right-click ownership + shortcut commands replayed (two actions, defaults, selection gating, live registration, catalog mirror), ` +
     `user-text rule hides the annotation block (0.2.2 bubble pipeline), ` +
     `package metadata (locale + icon) resolved and packed`,

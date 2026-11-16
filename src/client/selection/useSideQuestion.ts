@@ -1,7 +1,7 @@
 /**
  * Side-question flow: the composer that asks a forked child about the quote,
- * its model seat and the send gesture. The transcript surface is the toolbar's;
- * this hook owns the question, its route and the host call.
+ * its model seat and the send gesture. The transcript surface is the sidebar's;
+ * this hook owns the question, its route and the fork call.
  */
 
 import {
@@ -108,8 +108,8 @@ export function useSideQuestion(input: SideQuestionInput) {
   )
 
   /**
-   * Send the typed question to the client root, which asks the Host for a
-   * fork-backed subagent and opens its conversation in the right sidebar.
+   * Send the typed question to the client root, which forks the main session,
+   * seeds the child and opens its native conversation in the right sidebar.
    * The composer stays open (with the text) if the call fails.
    */
   const send = useCallback(() => {

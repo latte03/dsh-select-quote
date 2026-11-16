@@ -46,4 +46,12 @@ img[src*="cdn.dsh.so/badge/dsh-select-quote"] {
   margin: 0 4px 2px 0;
   vertical-align: middle;
 }
+
+/* Side-question forks: the marker rides the public
+   sidebar.session.row.trailing seat; hide only the catalog row carrying it.
+   The Session stays writable, so search results and the collapsed-group
+   counter can still see it. */
+[role="treeitem"][data-row-key^="session:"]:has([data-dsq-hidden-fork]) {
+  display: none !important;
+}
 `

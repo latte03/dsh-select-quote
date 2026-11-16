@@ -103,7 +103,7 @@ scope: dsh-select-quote 0.4+
 
 - **默认选中**：当前工作区中排除当前会话后，`updatedAt` 最近的一条。
 - **没有其他会话时**：默认选中「新会话」；如果连工作区/cwd 都没有，则隐藏入口。
-- **排除**：当前会话、`origin === 'subagent'`、`archivedSessionIds`。
+- **排除**：当前会话、`origin === 'subagent'`、已知侧栏 fork（`isKnownSideFork`）、`archivedSessionIds`。
 - **空白会话**：不单独列出，统一由「新会话」表达；否则侧栏会出现多个同名“新会话”。
 - **排序**：严格按 `updatedAt` 倒序。不要用侧栏手动顺序，避免“最近”语义漂移。
 - **分组**：当前工作区、其他工作区、未分组；每行显示标题 + 工作区名 + 相对时间。
@@ -465,7 +465,7 @@ source 放入（一个目标一条 outbound，同一选区共享 selectionKey）
 
 ### 纯逻辑单测
 
-- 目标目录：工作区分组、`updatedAt` 排序、排除当前/子代理/归档、默认目标、无其他会话时的默认“新会话”。
+- 目标目录：工作区分组、`updatedAt` 排序、排除当前/子代理/已知侧栏 fork/归档、默认目标、无其他会话时的默认“新会话”。
 - 新会话：复用空白、无空白时创建、无工作区时用 cwd、都不可用时禁用。
 - handoff store：目标写入 + 源 outbound；编辑/删除/清空/发送/撤回/取消的同步矩阵；去重；幂等；删除一个目标后同 `selectionKey` 组仍保留。
 - 保留：本地 pending 按 20/7；未发送 handoff 的目标 pending 与源 outbound 成对按 20/7 淘汰；`sent` outbound 永久保留；只清一侧的异常由兜底对账修复。

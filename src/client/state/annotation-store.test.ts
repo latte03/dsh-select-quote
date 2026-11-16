@@ -155,4 +155,27 @@ describe('bindAnnotationSession', () => {
     expect(store.getAnnotations('session-child').map((item) => item.text)).toEqual(['子会话的划词'])
     delete runtime.isSubagentSession
   })
+
+  it('never lets a side-question fork take over the main binding', async () => {
+    const storage = memoryStorage()
+    const store = await freshStore(storage)
+    const { runtime } = await import('../runtime.ts')
+    store.bindAnnotationSession('session-main')
+    await flush()
+    store.saveAnnotation(undefined, { text: '主会话的划词', sources: [{ text: '主会话的划词' }] })
+
+    runtime.isSidebarForkSession = (id) => id === 'session-side'
+    store.bindAnnotationSession('session-side')
+    await flush()
+
+    // A side fork is an ordinary Session, so the origin-based guard does not
+    // catch it; the side-fork guard keeps the root toolbar on the parent.
+    expect(runtime.sessionId).toBe('session-main')
+    expect(store.getAnnotations().map((item) => item.text)).toEqual(['主会话的划词'])
+
+    // The side Session still reads and writes its own explicit partition.
+    store.saveAnnotation('session-side', { text: '侧会话的划词', sources: [{ text: '侧会话的划词' }] })
+    expect(store.getAnnotations('session-side').map((item) => item.text)).toEqual(['侧会话的划词'])
+    delete runtime.isSidebarForkSession
+  })
 })

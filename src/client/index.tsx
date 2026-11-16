@@ -34,7 +34,9 @@ import type { TranslateStreamEvent } from '../shared/plugin-remote.ts'
 import { ensureToolbarStyles } from './styles.ts'
 import type { SelectionSnapshot } from './dom/selection.ts'
 import type { ModelChoice, ModelGroup } from './model/types.ts'
-import { installSidebarForkProbe } from './probe/sidebar-fork-probe.tsx'
+import { installSideForkChat } from './side-question/fork-chat.tsx'
+import { isKnownSideFork } from './side-question/fork-state.ts'
+import { runSideQuestion } from './side-question/runSideQuestion.ts'
 import { runtime, setHandoffHost } from './runtime.ts'
 import {
   MAX_TRANSLATE_CHARS,
@@ -83,17 +85,6 @@ import { sessionIdOfKey } from './state/annotation-persistence.ts'
  */
 export const inject = ['slots', 'locale']
 
-/** Shape of the dynamic `remote.selectQuoteSideTask` namespace service. */
-interface SideTaskRemoteApi {
-  create(
-    agentId: string,
-    request: { prompt: string; label?: string; model?: ModelChoice },
-  ): Promise<
-    | { ok: true; value: { childId: string } }
-    | { ok: false; error: { message: string } }
-  >
-}
-
 /** Shape of the dynamic `remote.selectQuoteTranslate` namespace service. */
 interface TranslateRemoteApi {
   translate(
@@ -107,11 +98,6 @@ interface TranslateRemoteApi {
     },
     signal?: AbortSignal,
   ): AsyncIterable<unknown>
-}
-
-/** The right sidebar's resource entry point. */
-interface SidebarRightApi {
-  openResource(address: string, options: { kind: string }): void
 }
 
 /** The Host-generation model catalog, not tied to one session. */
@@ -183,10 +169,77 @@ function registerHistoryCard(ctx: Context): void {
 function applyBody(ctx: Context): void {
   registerHistoryCard(ctx)
 
-  // Experimental branch: a normal session fork in the right Sidebar.
-  ctx.inject(['sessions', 'resources', 'sidebarRightTabs', 'sidebarRight'], (scope) => {
-    installSidebarForkProbe(scope)
-  })
+  // The side question is an ordinary Session fork with a native sidebar chat;
+  // the fork row stays out of the catalog until the user keeps it.
+  ctx.inject(
+    ['sessions', 'resources', 'sidebarRightTabs', 'sidebarRight', 'workspaces', 'uiWorkspace'],
+    (scope) => {
+      installSideForkChat(scope)
+      const modelDirectories = scope.get('modelDirectories') as
+        | Context['modelDirectories']
+        | undefined
+      const openSideTask = async (
+        snapshot: SelectionSnapshot,
+        question: string,
+        model: ModelChoice | null,
+      ): Promise<void> => {
+        const sessionId = runtime.sessionId
+        if (!sessionId) throw new Error('no active session')
+        const source = snapshot.source
+        const prompt = composeQuotedMessage(question, {
+          text: snapshot.text,
+          ...(source === undefined
+            ? {}
+            : {
+                source: {
+                  text: snapshot.text,
+                  messageId: source.messageId,
+                  messageKind: source.messageKind,
+                  startOffset: source.startOffset,
+                  endOffset: source.endOffset,
+                },
+              }),
+        })
+        const excerpt = previewTitle(question, 24)
+        const label = excerpt
+          ? `${t('toolbar.askInSide')} · ${excerpt}`
+          : t('toolbar.askInSide')
+        const reuse = getConfig().sideTaskMode === 'reuse'
+        await runSideQuestion(
+          {
+            sessions: scope.sessions,
+            workspaces: scope.workspaces,
+            workspace: scope.uiWorkspace,
+            modelDirectories,
+            sidebar: scope.sidebarRight,
+          },
+          {
+            parentSessionId: sessionId,
+            prompt,
+            label,
+            model: reuse ? null : model,
+            reuse,
+          },
+        )
+      }
+      runtime.sideTask = openSideTask
+      scope.effect(
+        () => () => {
+          if (runtime.sideTask === openSideTask) delete runtime.sideTask
+        },
+        'dsh-select-quote: side task',
+      )
+    },
+  )
+
+  // A side fork is an ordinary Session rendered in the sidebar; it must not
+  // steal the main binding from the root selection toolbar.
+  ctx.effect(() => {
+    runtime.isSidebarForkSession = isKnownSideFork
+    return () => {
+      delete runtime.isSidebarForkSession
+    }
+  }, 'dsh-select-quote: side fork session guard')
 
 
   // Dictionary registrations are owned effects; the fallback chain must end at
@@ -381,27 +434,18 @@ function applyBody(ctx: Context): void {
   })
 
   /**
-   * Side task and translation share one Remote descriptor group. The side task
-   * asks the Host to start a fork-backed subagent for the live session; the
-   * translation runs one direct model call with no conversation context. Only a
-   * subagent session carries `origin: "subagent"` — which is what keeps it out
-   * of the ordinary list.
+   * Translation runs one direct model call with no conversation context. The
+   * side question is client-side now (`sessions.fork` + the sidebar tab), so
+   * this Remote group only carries the translation namespace.
    *
    * `$mount` installs each namespace as its own dynamic service
-   * (`remote.<namespace>`); the mount callback reads them back by that key, so
-   * each entry point only exists once its namespace is actually callable.
+   * (`remote.<namespace>`); the mount callback reads it back by that key, so
+   * the entry point only exists once its namespace is actually callable.
    */
   ctx.inject(['remote'], (scope) => {
     scope.effect(() => {
       let dispose: (() => Promise<void>) | undefined
       let stopped = false
-      let publishedSide:
-        | ((
-            snapshot: SelectionSnapshot,
-            question: string,
-            model: ModelChoice | null,
-          ) => Promise<void>)
-        | undefined
       let publishedTranslate:
         | ((
             snapshot: SelectionSnapshot,
@@ -412,69 +456,6 @@ function applyBody(ctx: Context): void {
         | undefined
 
       const publish = (): void => {
-        const api = scope.get('remote.selectQuoteSideTask') as SideTaskRemoteApi | undefined
-        // Only the Remote namespace decides whether the action exists. The
-        // sidebar is resolved when the question is actually sent: requiring it
-        // here made publication depend on service arrival order — the mount
-        // resolves asynchronously, and a sidebar that activated a moment later
-        // would leave the action permanently missing even though the Remote
-        // was ready.
-        if (api !== undefined) {
-          const openSideTask = async (
-            snapshot: SelectionSnapshot,
-            question: string,
-            model: ModelChoice | null,
-          ): Promise<void> => {
-            const sessionId = runtime.sessionId
-            if (!sessionId) throw new Error('no active session')
-            const sidebar = scope.get('sidebarRight') as SidebarRightApi | undefined
-            if (sidebar === undefined) throw new Error('the right sidebar is unavailable')
-            // Same wire format as the main conversation: the Host copies the
-            // prompt into the child's transcript, so the quote must be a parsed
-            // annotation block there, not prose the user never typed.
-            const source = snapshot.source
-            const prompt = composeQuotedMessage(question, {
-              text: snapshot.text,
-              ...(source === undefined
-                ? {}
-                : {
-                    source: {
-                      text: snapshot.text,
-                      messageId: source.messageId,
-                      messageKind: source.messageKind,
-                      startOffset: source.startOffset,
-                      endOffset: source.endOffset,
-                    },
-                  }),
-            })
-            // The Host uses this label for both the sidebar tab title and the
-            // parent's subagent catalog row, so repeated side questions stay
-            // distinguishable without opening each child.
-            const excerpt = previewTitle(question, 24)
-            const label = excerpt
-              ? `${t('toolbar.askInSide')} · ${excerpt}`
-              : t('toolbar.askInSide')
-            // The mounted namespace returns the gateway envelope; the child id
-            // only exists inside `value`.
-            // Reuse mode keeps one side child per main session, so it has no
-            // per-question route choice: the child keeps the model it was born
-            // with (the parent's, unless the first question overrode it).
-            const reuse = getConfig().sideTaskMode === 'reuse'
-            const outcome = await api.create(sessionId, {
-              label,
-              prompt,
-              ...(reuse ? { reuse: true } : model === null ? {} : { model }),
-            })
-            if (!outcome.ok) throw new Error(outcome.error.message)
-            const { childId } = outcome.value
-            const address = `dsh-resource://subagentchat/session/${encodeURIComponent(childId)}?parent=${encodeURIComponent(sessionId)}&mode=continuable`
-            sidebar.openResource(address, { kind: 'subagentchat' })
-          }
-
-          publishedSide = openSideTask
-          runtime.sideTask = openSideTask
-        }
-
         const translateApi = scope.get('remote.selectQuoteTranslate') as
           | TranslateRemoteApi
           | undefined
@@ -550,9 +531,6 @@ function applyBody(ctx: Context): void {
 
       return () => {
         stopped = true
-        if (publishedSide !== undefined && runtime.sideTask === publishedSide) {
-          delete runtime.sideTask
-        }
         if (publishedTranslate !== undefined && runtime.translate === publishedTranslate) {
           delete runtime.translate
         }

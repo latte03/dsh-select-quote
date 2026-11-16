@@ -5,13 +5,10 @@ import { PACKAGE_NAME } from './identity.ts'
 /**
  * Wire contract shared by the two halves.
  *
- * The Host owns the implementations (`ctx.selectQuoteSideTask`,
- * `ctx.selectQuoteTranslate`); the browser mounts the same descriptor group
- * through `ctx.remote.$mount(...)`. Both schemas are written here so the
- * argument shapes cannot drift apart.
+ * The Host owns the implementation (`ctx.selectQuoteTranslate`); the browser
+ * mounts the same descriptor group through `ctx.remote.$mount(...)`. The
+ * request schema is written here so the two sides cannot drift apart.
  */
-export const SIDE_TASK_SERVICE = 'selectQuoteSideTask'
-export const SIDE_TASK_METHOD = `${SIDE_TASK_SERVICE}/create`
 export const TRANSLATE_SERVICE = 'selectQuoteTranslate'
 export const TRANSLATE_METHOD = `${TRANSLATE_SERVICE}/translate`
 
@@ -24,40 +21,6 @@ export type TranslateStreamEvent =
   | { readonly type: 'reasoning'; readonly text: string }
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'done'; readonly text: string }
-
-const modelShape = () => ({
-  provider: z.string(),
-  model: z.string(),
-  reasoningEffort: z.string().optional(),
-})
-
-const sideRequestSchema = () =>
-  z.object({
-    prompt: z.string(),
-    label: z.string().optional(),
-    model: z.object(modelShape()).optional(),
-    /** Continue the parent's one side-task child instead of forking a new one. */
-    reuse: z.boolean().optional(),
-  })
-
-const strictSideRequestSchema = () =>
-  z.strictObject({
-    prompt: z.string(),
-    label: z.string().optional(),
-    model: z.strictObject(modelShape()).optional(),
-    reuse: z.boolean().optional(),
-  })
-
-const modelJsonSchema = (additionalProperties: boolean) => ({
-  type: 'object',
-  properties: {
-    provider: { type: 'string' },
-    model: { type: 'string' },
-    reasoningEffort: { type: 'string' },
-  },
-  required: ['provider', 'model'],
-  additionalProperties,
-})
 
 const translateRouteShape = () => ({
   provider: z.string().optional(),
@@ -120,65 +83,6 @@ export function createPluginRemote() {
     {
       package: PACKAGE_NAME,
       methods: {
-        [SIDE_TASK_METHOD]: {
-          service: SIDE_TASK_SERVICE,
-          description: 'Start a fork-backed side task for one live agent.',
-          invocation: { kind: 'direct' },
-          scope: { context: 'agent', wire: 'agentId' },
-          parameters: [
-            agentParameter(),
-            {
-              name: 'request',
-              description:
-                'initial prompt, display label, optional child model, and whether to reuse the side child.',
-              source: 'json',
-              codec: {
-                mode: 'strict',
-                typeSymbol: 'dsh-select-quote#SideTaskRequest',
-                create: sideRequestSchema,
-                jsonSchema: {
-                  type: 'object',
-                  properties: {
-                    prompt: { type: 'string' },
-                    label: { type: 'string' },
-                    model: modelJsonSchema(true),
-                    reuse: { type: 'boolean' },
-                  },
-                  required: ['prompt'],
-                  additionalProperties: true,
-                },
-              },
-              strictCodec: {
-                mode: 'strict',
-                typeSymbol: 'dsh-select-quote#SideTaskRequest',
-                create: strictSideRequestSchema,
-                jsonSchema: {
-                  type: 'object',
-                  properties: {
-                    prompt: { type: 'string' },
-                    label: { type: 'string' },
-                    model: modelJsonSchema(false),
-                    reuse: { type: 'boolean' },
-                  },
-                  required: ['prompt'],
-                  additionalProperties: false,
-                },
-              },
-            },
-          ],
-          result: {
-            mode: 'strict',
-            typeSymbol: 'dsh-select-quote#SideTaskCreateResult',
-            create: () => z.object({ childId: z.string() }),
-            description: 'the created child session id.',
-            jsonSchema: {
-              type: 'object',
-              properties: { childId: { type: 'string' } },
-              required: ['childId'],
-              additionalProperties: false,
-            },
-          },
-        },
         [TRANSLATE_METHOD]: {
           service: TRANSLATE_SERVICE,
           description: 'Stream one translation of a selected passage with a direct model call.',

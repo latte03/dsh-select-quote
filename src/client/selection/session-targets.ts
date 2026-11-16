@@ -105,8 +105,9 @@ function workspaceOf(
 /**
  * Build the picker's directory.
  *
- * Excluded: the current session, subagent conversations, archived sessions and
- * blank sessions (the "new session" row represents all of them). Ordering is
+ * Excluded: the current session, subagent conversations, archived sessions,
+ * blank sessions (the "new session" row represents all of them), and any id
+ * the caller filters out (the plugin's side-question forks). Ordering is
  * strictly `updatedAt` descending — never the sidebar's manual order, so
  * "recent" cannot drift between the two surfaces.
  */
@@ -114,8 +115,10 @@ export function buildTargetDirectory(input: {
   readonly currentSessionId?: string
   readonly sessions: SessionListSnapshot | undefined
   readonly workspaces: WorkspaceListSnapshot | undefined
+  /** Extra ids that must not become handoff targets. */
+  readonly excludeSessionId?: (sessionId: string) => boolean
 }): TargetDirectory {
-  const { currentSessionId, sessions, workspaces } = input
+  const { currentSessionId, sessions, workspaces, excludeSessionId } = input
   if (!sessions || !workspaces) return EMPTY_DIRECTORY
   const archived = new Set(workspaces.archivedSessionIds ?? [])
   const source = currentSessionId ? sessions.byId[currentSessionId] : undefined
@@ -132,6 +135,7 @@ export function buildTargetDirectory(input: {
   for (const id of sessions.ids) {
     if (!id || id === currentSessionId || seen.has(id)) continue
     seen.add(id)
+    if (excludeSessionId?.(id) === true) continue
     const summary = sessions.byId[id]
     if (!summary) continue
     if (summary.origin === 'subagent') continue

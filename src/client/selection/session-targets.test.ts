@@ -91,6 +91,32 @@ describe('buildTargetDirectory', () => {
     expect(directory.current.map((target) => target.sessionId)).toEqual(['kept'])
   })
 
+  it('lets the caller exclude side-question forks', () => {
+    const snapshot = sessions([
+      { id: 'src', at: now },
+      { id: 'side', at: now - 1 },
+      { id: 'normal', at: now - 2 },
+    ])
+    const directory = buildTargetDirectory({
+      currentSessionId: 'src',
+      sessions: snapshot,
+      workspaces: {
+        items: [
+          {
+            workspaceId: 'w1',
+            title: 'Project A',
+            path: '/a',
+            sessionIds: ['src', 'side', 'normal'],
+          },
+        ],
+        archivedSessionIds: [],
+      },
+      excludeSessionId: id => id === 'side',
+    })
+    expect(directory.current.map((target) => target.sessionId)).toEqual(['normal'])
+    expect(flattenTargets(directory).some((target) => target.sessionId === 'side')).toBe(false)
+  })
+
   it('falls back to the new-session row when nothing else exists', () => {
     const snapshot = sessions([{ id: 'src', at: now }])
     const directory = buildTargetDirectory({

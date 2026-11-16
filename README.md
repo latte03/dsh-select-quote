@@ -1,6 +1,6 @@
 # dsh-select-quote · [English](README.en.md)
 
-[DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) 客户端插件：划词批注与引用、就地翻译、侧边子代理提问。选中的原文连同评论随下一条消息交给模型，正文留下高亮与角标、可跳回原文。
+[DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart) 客户端插件：划词批注与引用、就地翻译、侧边提问（fork 主会话）。选中的原文连同评论随下一条消息交给模型，正文留下高亮与角标、可跳回原文。
 
 [![开放插件市场](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-select-quote.json)](https://dshopen.org/zh/plugins/dsh-select-quote/)
 [![awesome-dsh-plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com/)
@@ -16,7 +16,7 @@
 - **批注与放入**：「批注 当前会话」是主键，右侧下拉送其他会话；源留箭头角标，目标显示「来自：<会话>」，可双向跳回
 - **标记与摘要**：正文留底色与角标，输入框上方的批注卡可编辑、删除、跳回，发送后清除；只有一条批注时卡上直接显示引文与评论，两条起才数「N 条批注」
 - **只发批注**：有批注时输入框空着也能直接发，消息只带批注、不带正文
-- **侧边子代理**：就某段原文单独追问，不打断主会话，可独立选模型，也可复用同一个
+- **侧边提问**：就某段原文 fork 主会话，在右侧栏单独追问，不打断主会话；可独立选模型、复用同一个侧栏会话，也可保留到会话列表
 - **八种界面语言**：简体中文 / English / 日本語 / Español / Français / Deutsch / Русский / Português
 
 ## 使用
