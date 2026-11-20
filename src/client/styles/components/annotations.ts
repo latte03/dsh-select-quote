@@ -371,6 +371,10 @@ export const ANNOTATIONS_CSS = `
   overflow-y: auto;
   overscroll-behavior: contain;
   max-height: min(412px, calc(100vh - 128px));
+  /* Do NOT add will-change/layer promotion here. It looked like the cure for
+     the first-scroll flash, but in the real client it made the list unscrollable
+     by wheel (dragging the scrollbar still worked). The flash was the re-place
+     style writes during scroll, handled in AnnotationSummary instead. */
 }
 
 /* Same entrance as the chip preview and the settings dropdowns: grows out of the
@@ -407,6 +411,12 @@ export const ANNOTATIONS_CSS = `
   /* The confirm pill overlays the row; clip it to the card so a very narrow
      summary can never push content outside the visible surface. */
   overflow: hidden;
+  /* Never shrink. overflow: hidden zeroes this flex item's automatic minimum
+     height, so with the list capped by max-height the rows used to be squeezed
+     into the cap and clip their own text — every annotation visible but each
+     one cut in half. Keeping the natural height makes the list overflow into
+     its scrollbar instead. */
+  flex: none;
   transition: background-color 0.12s;
 }
 

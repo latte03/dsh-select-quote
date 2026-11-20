@@ -381,11 +381,19 @@ export function AnnotationSummary({
         }, SETTLE_DELAY)
       })
     }
+    // Scrolling the list itself cannot move the anchor, so it must not trigger
+    // a re-place: the style writes during a wheel tick repaint the frosted
+    // panel and show up as a flash.
+    const onScroll = (event: Event): void => {
+      const target = event.target
+      if (target instanceof Node && popRef.current?.contains(target)) return
+      onViewportChange()
+    }
     window.addEventListener('resize', onViewportChange)
-    document.addEventListener('scroll', onViewportChange, true)
+    document.addEventListener('scroll', onScroll, true)
     return () => {
       window.removeEventListener('resize', onViewportChange)
-      document.removeEventListener('scroll', onViewportChange, true)
+      document.removeEventListener('scroll', onScroll, true)
       if (frame !== 0) window.cancelAnimationFrame(frame)
       if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current)
     }
