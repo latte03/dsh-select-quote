@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.10](https://github.com/latte03/dsh-select-quote/compare/v0.4.9...v0.4.10) (2026-11-20)
+
+### Bug Fixes
+
+* 批注预览列表支持滚动并消除首滚闪烁 ([99140d4](https://github.com/latte03/dsh-select-quote/commit/99140d4b8642a07a19b8638212fb106a1ee2c1fe))
+
 ## [0.4.9](https://github.com/latte03/dsh-select-quote/compare/v0.4.8...v0.4.9) (2026-11-16)
 
 ### Features
